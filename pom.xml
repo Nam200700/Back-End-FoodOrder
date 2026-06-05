@@ -85,6 +85,12 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!-- Spring Mail Starter for sending real emails -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
         <!-- Google OAuth2 Login (enabled only when a client registration is configured) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
