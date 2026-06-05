@@ -1,5 +1,5 @@
 -- ============================================================
---  AntiGravity Food — Full Schema (V2)
+--  Fresh Delivery — Full Schema (V2)
 --  Bao gồm: V1 gốc + tất cả migration cải tiến
 --  Thứ tự: CREATE TABLE → UNIQUE → INDEX → FK → MIGRATION
 -- ============================================================
