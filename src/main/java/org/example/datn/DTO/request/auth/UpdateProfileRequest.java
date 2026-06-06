@@ -11,4 +11,5 @@ public class UpdateProfileRequest {
     private Double longitude;
     private String vehicleType;
     private String licensePlate;
+    private String avatar;
 }
