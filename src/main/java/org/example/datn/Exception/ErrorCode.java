@@ -34,6 +34,9 @@ public enum ErrorCode {
     ORDER_NOT_FOUND(404, "Không tìm thấy đơn hàng"),
     ORDER_STATUS_INVALID(422, "Trạng thái đơn hàng không hợp lệ"),
     ORDER_ALREADY_TAKEN(409, "Đơn đã được shipper khác nhận"),
+    ORDER_ALREADY_CANCELLED(409, "Đơn hàng đã được hủy trước đó"),
+    ORDER_ALREADY_COMPLETED(400, "Đơn đã hoàn tất, vui lòng dùng chức năng khiếu nại/hoàn tiền"),
+    ORDER_CANCEL_STAGE_INVALID(400, "Đơn đang được chuẩn bị/giao, không thể hủy"),
 
     // Review
     REVIEW_NOT_ALLOWED(422, "Không thể đánh giá lúc này"),
