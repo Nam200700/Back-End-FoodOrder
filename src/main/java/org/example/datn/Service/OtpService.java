@@ -62,12 +62,23 @@ public class OtpService {
         Otp otp = otpRepository.findFirstByPhoneAndPurposeAndIsUsedFalseOrderByCreatedAtDesc(phone, purpose)
                 .orElseThrow(() -> new AppException(ErrorCode.OTP_INVALID));
 
+        if (otp.getFailCount() >= maxFailAttempts) {
+            LocalDateTime lockUntil = otp.getCreatedAt().plusMinutes(lockoutMinutes);
+            if (LocalDateTime.now().isBefore(lockUntil)) {
+                throw new AppException(ErrorCode.OTP_LOCKED, "Tài khoản tạm khóa đến " + lockUntil);
+            }
+        }
+
         if (otp.getExpiredAt().isBefore(LocalDateTime.now())) {
             throw new AppException(ErrorCode.OTP_EXPIRED);
         }
         if (!otp.getCode().equals(code)) {
             otp.setFailCount(otp.getFailCount() + 1);
             otpRepository.save(otp);
+            if (otp.getFailCount() >= maxFailAttempts) {
+                LocalDateTime lockUntil = otp.getCreatedAt().plusMinutes(lockoutMinutes);
+                throw new AppException(ErrorCode.OTP_LOCKED, "Tài khoản tạm khóa đến " + lockUntil);
+            }
             throw new AppException(ErrorCode.OTP_WRONG_CODE);
         }
         otp.setIsUsed(true);
