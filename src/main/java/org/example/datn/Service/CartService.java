@@ -5,10 +5,7 @@ import org.example.datn.DTO.request.cart.AddCartItemRequest;
 import org.example.datn.DTO.response.cart.CartResponse;
 import org.example.datn.Exception.AppException;
 import org.example.datn.Exception.ErrorCode;
-import org.example.datn.Repository.CartRepository;
-import org.example.datn.Repository.FoodRepository;
-import org.example.datn.Repository.RestaurantRepository;
-import org.example.datn.Repository.UserRepository;
+import org.example.datn.Repository.*;
 import org.example.datn.domain.Cart;
 import org.example.datn.domain.CartItem;
 import org.example.datn.domain.Food;
@@ -27,7 +24,7 @@ public class CartService {
 
     private final CartRepository cartRepository;
     private final FoodRepository foodRepository;
-    private final RestaurantRepository restaurantRepository;
+    private final CartItemRepository cartItemRepository;
     private final UserRepository userRepository;
     private final CartMapper cartMapper;
 
@@ -75,27 +72,20 @@ public class CartService {
 
     @Transactional
     public CartResponse removeItem(Long customerId, Long cartItemId) {
-        List<Cart> carts = cartRepository.findByCustomerUserId(customerId);
-        Cart targetCart = null;
-        for (Cart c : carts) {
-            boolean hasItem = c.getItems().stream().anyMatch(i -> i.getCartItemId().equals(cartItemId));
-            if (hasItem) {
-                targetCart = c;
-                break;
-            }
-        }
-
-        if (targetCart == null) {
+        CartItem item = cartItemRepository.findByIdOrThrow(cartItemId, ErrorCode.CART_ITEM_NOT_FOUND);
+        Cart cart = item.getCart();
+        if (!cart.getCustomer().getUserId().equals(customerId)) {
             throw new AppException(ErrorCode.CART_ITEM_NOT_FOUND);
         }
 
-        targetCart.getItems().removeIf(i -> i.getCartItemId().equals(cartItemId));
-        if (targetCart.getItems().isEmpty()) {
-            cartRepository.delete(targetCart);
-            return cartMapper.toEmptyResponse(targetCart.getRestaurant());
+        cart.getItems().remove(item);
+        if (cart.getItems().isEmpty()) {
+            Restaurant restaurant = cart.getRestaurant();
+            cartRepository.delete(cart);
+            return cartMapper.toEmptyResponse(restaurant);
         }
-        cartRepository.save(targetCart);
-        return cartMapper.toResponse(targetCart);
+        cartRepository.save(cart);
+        return cartMapper.toResponse(cart);
     }
 
     @Transactional
