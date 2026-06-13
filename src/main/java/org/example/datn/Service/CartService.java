@@ -34,7 +34,7 @@ public class CartService {
     @Transactional(readOnly = true)
     public List<CartResponse> getCart(Long customerId) {
         return cartRepository.findByCustomerUserId(customerId).stream()
-                .map(this::buildResponse)
+                .map(cartMapper::toResponse)
                 .collect(java.util.stream.Collectors.toList());
     }
 
@@ -50,14 +50,7 @@ public class CartService {
             addOrUpdateItem(cart, food, req);
         } else {
             if (req.getQuantity() <= 0) {
-                return CartResponse.builder()
-                        .restaurantId(newRestaurant.getRestaurantId())
-                        .restaurantName(newRestaurant.getRestaurantName())
-                        .items(List.of())
-                        .subtotal(BigDecimal.ZERO)
-                        .latitude(newRestaurant.getLatitude())
-                        .longitude(newRestaurant.getLongitude())
-                        .build();
+                return cartMapper.toEmptyResponse(newRestaurant);
             }
             cart = Cart.builder()
                     .customer(userRepository.getReferenceById(customerId))
@@ -68,16 +61,9 @@ public class CartService {
         }
 
         if (cart.getItems().isEmpty()) {
-            return CartResponse.builder()
-                    .restaurantId(newRestaurant.getRestaurantId())
-                    .restaurantName(newRestaurant.getRestaurantName())
-                    .items(List.of())
-                    .subtotal(BigDecimal.ZERO)
-                    .latitude(newRestaurant.getLatitude())
-                    .longitude(newRestaurant.getLongitude())
-                    .build();
+            return cartMapper.toEmptyResponse(newRestaurant);
         }
-        return buildResponse(cart);
+        return cartMapper.toResponse(cart);
     }
 
     /** Used by FE after the customer confirms replacing a conflicting cart. */
@@ -105,17 +91,10 @@ public class CartService {
         targetCart.getItems().removeIf(i -> i.getCartItemId().equals(cartItemId));
         if (targetCart.getItems().isEmpty()) {
             cartRepository.delete(targetCart);
-            return CartResponse.builder()
-                    .restaurantId(targetCart.getRestaurant().getRestaurantId())
-                    .restaurantName(targetCart.getRestaurant().getRestaurantName())
-                    .items(List.of())
-                    .subtotal(BigDecimal.ZERO)
-                    .latitude(targetCart.getRestaurant().getLatitude())
-                    .longitude(targetCart.getRestaurant().getLongitude())
-                    .build();
+            return cartMapper.toEmptyResponse(targetCart.getRestaurant());
         }
         cartRepository.save(targetCart);
-        return buildResponse(targetCart);
+        return cartMapper.toResponse(targetCart);
     }
 
     @Transactional
@@ -160,12 +139,12 @@ public class CartService {
         }
     }
 
-    private CartResponse buildResponse(Cart cart) {
-        CartResponse response = cartMapper.toResponse(cart);
-        BigDecimal subtotal = cart.getItems().stream()
-                .map(i -> i.getFood().getPrice().multiply(BigDecimal.valueOf(i.getQuantity())))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        response.setSubtotal(subtotal);
-        return response;
-    }
+//    private CartResponse buildResponse(Cart cart) {
+//        CartResponse response = cartMapper.toResponse(cart);
+//        BigDecimal subtotal = cart.getItems().stream()
+//                .map(i -> i.getFood().getPrice().multiply(BigDecimal.valueOf(i.getQuantity())))
+//                .reduce(BigDecimal.ZERO, BigDecimal::add);
+//        response.setSubtotal(subtotal);
+//        return response;
+//    }
 }
