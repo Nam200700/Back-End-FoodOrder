@@ -4,24 +4,45 @@ import org.example.datn.DTO.response.cart.CartItemResponse;
 import org.example.datn.DTO.response.cart.CartResponse;
 import org.example.datn.domain.Cart;
 import org.example.datn.domain.CartItem;
+import org.example.datn.domain.Restaurant;
+import org.mapstruct.AfterMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 
-@Mapper(componentModel = "spring")
+import java.math.BigDecimal;
+import java.util.List;
+
+@Mapper(componentModel = "spring",
+        uses = CartItemMapper.class
+)
 public interface CartMapper {
 
-    @Mapping(source = "restaurant.restaurantId", target = "restaurantId")
-    @Mapping(source = "restaurant.restaurantName", target = "restaurantName")
-    @Mapping(source = "restaurant.latitude", target = "latitude")
-    @Mapping(source = "restaurant.longitude", target = "longitude")
-    @Mapping(target = "subtotal", ignore = true)
+    @Mapping(target = "restaurantId",   source = "restaurant.restaurantId")
+    @Mapping(target = "restaurantName", source = "restaurant.restaurantName")
+    @Mapping(target = "latitude",       source = "restaurant.latitude")
+    @Mapping(target = "longitude",      source = "restaurant.longitude")
+    @Mapping(target = "subtotal",       ignore = true)
     CartResponse toResponse(Cart cart);
 
-    @Mapping(source = "food.foodId", target = "foodId")
-    @Mapping(source = "food.foodName", target = "foodName")
-    @Mapping(source = "food.price", target = "price")
-    @Mapping(source = "food.imageUrl", target = "foodImageUrl")
-    @Mapping(target = "lineTotal",
-            expression = "java(item.getFood().getPrice().multiply(java.math.BigDecimal.valueOf(item.getQuantity())))")
-    CartItemResponse toItemResponse(CartItem item);
+    @AfterMapping
+    default void setSubtotal(Cart cart, @MappingTarget CartResponse response) {
+        BigDecimal subtotal = cart.getItems()
+                .stream()
+                .map(i -> i.getFood().getPrice().multiply(BigDecimal.valueOf(i.getQuantity())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        response.setSubtotal(subtotal);
+    }
+
+    default CartResponse toEmptyResponse(Restaurant restaurant) {
+        return CartResponse.builder()
+                .restaurantId(restaurant.getRestaurantId())
+                .restaurantName(restaurant.getRestaurantName())
+                .items(List.of())
+                .subtotal(BigDecimal.ZERO)
+                .latitude(restaurant.getLatitude())
+                .longitude(restaurant.getLongitude())
+                .build();
+    }
 }
