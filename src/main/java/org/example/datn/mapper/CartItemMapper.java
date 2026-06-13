@@ -4,6 +4,9 @@ import org.example.datn.DTO.response.cart.CartItemResponse;
 import org.example.datn.domain.CartItem;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.Named;
+
+import java.math.BigDecimal;
 
 @Mapper(componentModel = "spring")
 public interface CartItemMapper {
@@ -14,7 +17,13 @@ public interface CartItemMapper {
     @Mapping(target = "foodImageUrl", source = "food.imageUrl")
     @Mapping(
             target = "lineTotal",
-            expression = "java(item.getFood().getPrice().multiply(java.math.BigDecimal.valueOf(item.getQuantity())))"
+            source = ".",
+            qualifiedByName = "calculateLineTotal"
     )
     CartItemResponse toResponse(CartItem item);
+
+    @Named("calculateLineTotal")
+    default BigDecimal calculateLineTotal(CartItem item) {
+        return item.getFood().getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
+    }
 }
