@@ -56,13 +56,14 @@ public class CartService {
                     .customer(userRepository.getReferenceById(customerId))
                     .restaurant(newRestaurant)
                     .build();
-            cartRepository.save(cart);
             addOrUpdateItem(cart, food, req);
         }
 
         if (cart.getItems().isEmpty()) {
+            cartRepository.delete(cart);
             return cartMapper.toEmptyResponse(newRestaurant);
         }
+        cartRepository.save(cart);
         return cartMapper.toResponse(cart);
     }
 
@@ -132,11 +133,11 @@ public class CartService {
                     .build());
         }
 
-        if (cart.getItems().isEmpty()) {
-            cartRepository.delete(cart);
-        } else {
-            cartRepository.save(cart);
-        }
+//        if (cart.getItems().isEmpty()) {
+//            cartRepository.delete(cart);
+//        } else {
+//            cartRepository.save(cart);
+//        }
     }
 
 //    private CartResponse buildResponse(Cart cart) {
