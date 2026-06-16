@@ -3,6 +3,7 @@ package org.example.datn.Controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.datn.DTO.request.cart.AddCartItemRequest;
+import org.example.datn.DTO.request.cart.UpdateCartItemNoteRequest;
 import org.example.datn.DTO.response.cart.CartResponse;
 import org.example.datn.Service.CartService;
 import org.example.datn.common.ApiResponse;
@@ -54,5 +55,12 @@ public class CartController {
             @RequestParam(required = false) Long restaurantId) {
         cartService.clearCart(user.getUserId(), restaurantId);
         return ResponseEntity.ok(ApiResponse.ok(null, "Đã xóa giỏ hàng"));
+    }
+
+    @PutMapping("/items/note")
+    public ResponseEntity<ApiResponse<CartResponse>> updateItemNote(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @Valid @RequestBody UpdateCartItemNoteRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(cartService.updateItemNote(user.getUserId(), req)));
     }
 }
