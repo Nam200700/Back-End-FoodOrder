@@ -2,13 +2,11 @@ package org.example.datn.Service;
 
 import lombok.RequiredArgsConstructor;
 import org.example.datn.DTO.request.cart.AddCartItemRequest;
+import org.example.datn.DTO.request.cart.UpdateCartItemNoteRequest;
 import org.example.datn.DTO.response.cart.CartResponse;
 import org.example.datn.Exception.AppException;
 import org.example.datn.Exception.ErrorCode;
-import org.example.datn.Repository.CartRepository;
-import org.example.datn.Repository.FoodRepository;
-import org.example.datn.Repository.RestaurantRepository;
-import org.example.datn.Repository.UserRepository;
+import org.example.datn.Repository.*;
 import org.example.datn.domain.Cart;
 import org.example.datn.domain.CartItem;
 import org.example.datn.domain.Food;
@@ -27,14 +25,14 @@ public class CartService {
 
     private final CartRepository cartRepository;
     private final FoodRepository foodRepository;
-    private final RestaurantRepository restaurantRepository;
+    private final CartItemRepository cartItemRepository;
     private final UserRepository userRepository;
     private final CartMapper cartMapper;
 
     @Transactional(readOnly = true)
     public List<CartResponse> getCart(Long customerId) {
         return cartRepository.findByCustomerUserId(customerId).stream()
-                .map(this::buildResponse)
+                .map(cartMapper::toResponse)
                 .collect(java.util.stream.Collectors.toList());
     }
 
@@ -50,34 +48,21 @@ public class CartService {
             addOrUpdateItem(cart, food, req);
         } else {
             if (req.getQuantity() <= 0) {
-                return CartResponse.builder()
-                        .restaurantId(newRestaurant.getRestaurantId())
-                        .restaurantName(newRestaurant.getRestaurantName())
-                        .items(List.of())
-                        .subtotal(BigDecimal.ZERO)
-                        .latitude(newRestaurant.getLatitude())
-                        .longitude(newRestaurant.getLongitude())
-                        .build();
+                return cartMapper.toEmptyResponse(newRestaurant);
             }
             cart = Cart.builder()
                     .customer(userRepository.getReferenceById(customerId))
                     .restaurant(newRestaurant)
                     .build();
-            cartRepository.save(cart);
             addOrUpdateItem(cart, food, req);
         }
 
         if (cart.getItems().isEmpty()) {
-            return CartResponse.builder()
-                    .restaurantId(newRestaurant.getRestaurantId())
-                    .restaurantName(newRestaurant.getRestaurantName())
-                    .items(List.of())
-                    .subtotal(BigDecimal.ZERO)
-                    .latitude(newRestaurant.getLatitude())
-                    .longitude(newRestaurant.getLongitude())
-                    .build();
+            cartRepository.delete(cart);
+            return cartMapper.toEmptyResponse(newRestaurant);
         }
-        return buildResponse(cart);
+        cartRepository.save(cart);
+        return cartMapper.toResponse(cart);
     }
 
     /** Used by FE after the customer confirms replacing a conflicting cart. */
@@ -88,34 +73,20 @@ public class CartService {
 
     @Transactional
     public CartResponse removeItem(Long customerId, Long cartItemId) {
-        List<Cart> carts = cartRepository.findByCustomerUserId(customerId);
-        Cart targetCart = null;
-        for (Cart c : carts) {
-            boolean hasItem = c.getItems().stream().anyMatch(i -> i.getCartItemId().equals(cartItemId));
-            if (hasItem) {
-                targetCart = c;
-                break;
-            }
-        }
-
-        if (targetCart == null) {
+        CartItem item = cartItemRepository.findByIdOrThrow(cartItemId, ErrorCode.CART_ITEM_NOT_FOUND);
+        Cart cart = item.getCart();
+        if (!cart.getCustomer().getUserId().equals(customerId)) {
             throw new AppException(ErrorCode.CART_ITEM_NOT_FOUND);
         }
 
-        targetCart.getItems().removeIf(i -> i.getCartItemId().equals(cartItemId));
-        if (targetCart.getItems().isEmpty()) {
-            cartRepository.delete(targetCart);
-            return CartResponse.builder()
-                    .restaurantId(targetCart.getRestaurant().getRestaurantId())
-                    .restaurantName(targetCart.getRestaurant().getRestaurantName())
-                    .items(List.of())
-                    .subtotal(BigDecimal.ZERO)
-                    .latitude(targetCart.getRestaurant().getLatitude())
-                    .longitude(targetCart.getRestaurant().getLongitude())
-                    .build();
+        cart.getItems().remove(item);
+        if (cart.getItems().isEmpty()) {
+            Restaurant restaurant = cart.getRestaurant();
+            cartRepository.delete(cart);
+            return cartMapper.toEmptyResponse(restaurant);
         }
-        cartRepository.save(targetCart);
-        return buildResponse(targetCart);
+        cartRepository.save(cart);
+        return cartMapper.toResponse(cart);
     }
 
     @Transactional
@@ -149,23 +120,28 @@ public class CartService {
                     .cart(cart)
                     .food(food)
                     .quantity(req.getQuantity())
-                    .note(req.getNote())
+                    .note(req.getNote() != null ? req.getNote() : "")
                     .build());
         }
-
-        if (cart.getItems().isEmpty()) {
-            cartRepository.delete(cart);
-        } else {
-            cartRepository.save(cart);
-        }
     }
 
-    private CartResponse buildResponse(Cart cart) {
-        CartResponse response = cartMapper.toResponse(cart);
-        BigDecimal subtotal = cart.getItems().stream()
-                .map(i -> i.getFood().getPrice().multiply(BigDecimal.valueOf(i.getQuantity())))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        response.setSubtotal(subtotal);
-        return response;
+    @Transactional
+    public CartResponse updateItemNote(Long customerId, UpdateCartItemNoteRequest req) {
+        Cart cart = cartRepository.findByCustomerUserId(customerId).stream()
+                .filter(c -> c.getItems().stream().anyMatch(i -> i.getFood().getFoodId().equals(req.getFoodId())))
+                .findFirst()
+                .orElseThrow(() -> new AppException(ErrorCode.CART_ITEM_NOT_FOUND));
+
+        CartItem item = cart.getItems().stream()
+                .filter(i -> i.getFood().getFoodId().equals(req.getFoodId()))
+                .findFirst()
+                .orElseThrow(() -> new AppException(ErrorCode.CART_ITEM_NOT_FOUND));
+
+        item.setNote(req.getNote());
+
+        cartRepository.save(cart);
+        return cartMapper.toResponse(cart);
     }
+
+
 }

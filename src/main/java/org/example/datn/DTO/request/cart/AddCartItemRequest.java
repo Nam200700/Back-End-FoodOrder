@@ -11,7 +11,7 @@ public class AddCartItemRequest {
     private Long foodId;
 
     @NotNull(message = "Số lượng không được để trống")
-    @Min(value = 1, message = "Số lượng tối thiểu là 1")
+    //@Min(value = 1, message = "Số lượng tối thiểu là 1")
     private Integer quantity;
 
     private String note;
