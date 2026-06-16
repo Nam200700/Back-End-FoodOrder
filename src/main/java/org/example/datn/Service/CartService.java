@@ -2,6 +2,7 @@ package org.example.datn.Service;
 
 import lombok.RequiredArgsConstructor;
 import org.example.datn.DTO.request.cart.AddCartItemRequest;
+import org.example.datn.DTO.request.cart.UpdateCartItemNoteRequest;
 import org.example.datn.DTO.response.cart.CartResponse;
 import org.example.datn.Exception.AppException;
 import org.example.datn.Exception.ErrorCode;
@@ -119,23 +120,28 @@ public class CartService {
                     .cart(cart)
                     .food(food)
                     .quantity(req.getQuantity())
-                    .note(req.getNote())
+                    .note(req.getNote() != null ? req.getNote() : "")
                     .build());
         }
-
-//        if (cart.getItems().isEmpty()) {
-//            cartRepository.delete(cart);
-//        } else {
-//            cartRepository.save(cart);
-//        }
     }
 
-//    private CartResponse buildResponse(Cart cart) {
-//        CartResponse response = cartMapper.toResponse(cart);
-//        BigDecimal subtotal = cart.getItems().stream()
-//                .map(i -> i.getFood().getPrice().multiply(BigDecimal.valueOf(i.getQuantity())))
-//                .reduce(BigDecimal.ZERO, BigDecimal::add);
-//        response.setSubtotal(subtotal);
-//        return response;
-//    }
+    @Transactional
+    public CartResponse updateItemNote(Long customerId, UpdateCartItemNoteRequest req) {
+        Cart cart = cartRepository.findByCustomerUserId(customerId).stream()
+                .filter(c -> c.getItems().stream().anyMatch(i -> i.getFood().getFoodId().equals(req.getFoodId())))
+                .findFirst()
+                .orElseThrow(() -> new AppException(ErrorCode.CART_ITEM_NOT_FOUND));
+
+        CartItem item = cart.getItems().stream()
+                .filter(i -> i.getFood().getFoodId().equals(req.getFoodId()))
+                .findFirst()
+                .orElseThrow(() -> new AppException(ErrorCode.CART_ITEM_NOT_FOUND));
+
+        item.setNote(req.getNote());
+
+        cartRepository.save(cart);
+        return cartMapper.toResponse(cart);
+    }
+
+
 }
