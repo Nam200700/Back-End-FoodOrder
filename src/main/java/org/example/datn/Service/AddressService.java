@@ -3,6 +3,7 @@ package org.example.datn.Service;
 import lombok.RequiredArgsConstructor;
 import org.example.datn.DTO.request.address.AddressRequest;
 import org.example.datn.DTO.response.address.AddressResponse;
+import org.example.datn.Exception.AppException;
 import org.example.datn.Exception.ErrorCode;
 import org.example.datn.Repository.CustomerAddressRepository;
 import org.example.datn.Repository.UserRepository;
@@ -42,7 +43,7 @@ public class AddressService {
         CustomerAddress addressEntity = addressRepository.findById(addressId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy địa chỉ!"));
         if (!addressEntity.getCustomer().getUserId().equals(customerId)) {
-            throw new RuntimeException("Bạn không có quyền chỉnh sửa địa chỉ này!");
+            throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
         if (Boolean.TRUE.equals(request.getIsDefault())) {
@@ -59,6 +60,6 @@ public class AddressService {
         List<CustomerAddress> addresses = addressRepository.findByCustomerUserId(customerId);
         return addresses.stream()
                 .map(addressMapper::toResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
 }
