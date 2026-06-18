@@ -1,18 +1,20 @@
 package org.example.datn.Controller;
 
 import lombok.RequiredArgsConstructor;
-import org.example.datn.common.ApiResponse;
-import org.example.datn.common.PageResponse;
 import org.example.datn.DTO.response.food.FoodResponse;
 import org.example.datn.DTO.response.restaurant.CategoryResponse;
 import org.example.datn.DTO.response.restaurant.RestaurantResponse;
 import org.example.datn.Service.CategoryService;
-import org.example.datn.security.CustomUserDetails;
 import org.example.datn.Service.FoodService;
 import org.example.datn.Service.RestaurantService;
+import org.example.datn.common.ApiResponse;
+import org.example.datn.common.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
