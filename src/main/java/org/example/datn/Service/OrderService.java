@@ -112,8 +112,8 @@ public class OrderService {
     @Transactional(readOnly = true)
     public Page<OrderResponse> getCustomerOrders(Long customerId, OrderStatus status, Pageable pageable) {
         Page<Order> page = (status == null)
-                ? orderRepository.findByCustomerUserId(customerId, pageable)
-                : orderRepository.findByCustomerUserIdAndOrderStatus(customerId, status, pageable);
+                ? orderRepository.findByCustomerUserIdOrderByCreatedAtDesc(customerId, pageable)
+                : orderRepository.findByCustomerUserIdAndOrderStatusOrderByCreatedAtDesc(customerId, status, pageable);
         return page.map(orderMapper::toResponse).map(this::enrichOrderResponse);
     }
 
