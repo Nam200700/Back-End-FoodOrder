@@ -272,6 +272,7 @@ public class OrderService {
         validateTransition(order.getOrderStatus(), CANCELLED);
         order.setOrderStatus(CANCELLED);
         order.setCancelReason(reason);
+        order.setCancelledBy(order.getRestaurant().getOwner());
         orderRepository.save(order);
 
         // Refund if already paid (e.g. VNPay prepaid order).
@@ -288,6 +289,7 @@ public class OrderService {
         Order order = getOrderForMerchant(merchantId, orderId);
         validateTransition(order.getOrderStatus(), PREPARING);
         order.setOrderStatus(PREPARING);
+        order.setPreparingAt(LocalDateTime.now());
         orderRepository.save(order);
 
         notificationService.notifyUser(order.getCustomer().getUserId(),
@@ -301,6 +303,7 @@ public class OrderService {
         Order order = getOrderForMerchant(merchantId, orderId);
         validateTransition(order.getOrderStatus(), READY_FOR_PICKUP);
         order.setOrderStatus(READY_FOR_PICKUP);
+        order.setReadyAt(LocalDateTime.now());
         orderRepository.save(order);
 
         notificationService.broadcastToShippers(order.getOrderId(), NotificationType.ORDER_READY_PICKUP);
@@ -350,6 +353,7 @@ public class OrderService {
         Order order = getOrderForShipper(shipperId, orderId);
         validateTransition(order.getOrderStatus(), PICKED_UP);
         order.setOrderStatus(PICKED_UP);
+        order.setPickedUpAt(LocalDateTime.now());
         orderRepository.save(order);
         webSocketService.broadcastOrderStatus(order);
         return enrichOrderResponse(orderMapper.toResponse(order));
