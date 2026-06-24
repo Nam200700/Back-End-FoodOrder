@@ -20,9 +20,9 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
 
     Page<Order> findByCustomerUserIdAndOrderStatusOrderByCreatedAtDesc(Long customerId, OrderStatus status, Pageable pageable);
 
-    Page<Order> findByRestaurantRestaurantId(Long restaurantId, Pageable pageable);
+    Page<Order> findByRestaurantRestaurantIdOrderByCreatedAtDesc(Long restaurantId, Pageable pageable);
 
-    Page<Order> findByRestaurantRestaurantIdAndOrderStatus(Long restaurantId, OrderStatus status, Pageable pageable);
+    Page<Order> findByRestaurantRestaurantIdAndOrderStatusOrderByCreatedAtDesc(Long restaurantId, OrderStatus status, Pageable pageable);
 
     Page<Order> findByRestaurantRestaurantIdAndOrderStatusIn(Long restaurantId, List<OrderStatus> statuses, Pageable pageable);
 
