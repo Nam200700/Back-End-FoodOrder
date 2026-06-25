@@ -14,4 +14,5 @@ public class OrderItemResponse {
     private Integer quantity;
     private BigDecimal priceAtOrder;
     private String note;
+    private String foodImageUrl;
 }
