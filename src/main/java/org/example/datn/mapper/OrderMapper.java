@@ -10,16 +10,17 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface OrderMapper {
 
-    @Mapping(source = "customer.userId", target = "customerId")
-    @Mapping(source = "customer.fullName", target = "customerName")
-    @Mapping(source = "customer.phone", target = "customerPhone")
-    @Mapping(source = "restaurant.restaurantId", target = "restaurantId")
-    @Mapping(source = "restaurant.restaurantName", target = "restaurantName")
-    @Mapping(source = "shipper.userId", target = "shipperId")
-    @Mapping(source = "shipper.fullName", target = "shipperName")
-    @Mapping(source = "shipper.phone", target = "shipperPhone")
+    @Mapping(target = "customerId", source = "customer.userId")
+    @Mapping(target = "customerName", source = "customer.fullName")
+    @Mapping(target = "customerPhone", source = "customer.phone")
+    @Mapping(target = "restaurantId", source = "restaurant.restaurantId")
+    @Mapping(target = "restaurantName", source = "restaurant.restaurantName")
+    @Mapping(target = "shipperId", source = "shipper.userId")
+    @Mapping(target = "shipperName", source = "shipper.fullName")
+    @Mapping(target = "shipperPhone", source = "shipper.phone")
     OrderResponse toResponse(Order order);
 
-    @Mapping(source = "food.foodId", target = "foodId")
+    @Mapping(target = "foodId", source = "food.foodId")
+    @Mapping(target = "foodImageUrl", source = "food.imageUrl")
     OrderItemResponse toItemResponse(OrderItem item);
 }
