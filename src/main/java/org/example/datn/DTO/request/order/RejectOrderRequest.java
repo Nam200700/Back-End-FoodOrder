@@ -7,5 +7,5 @@ import lombok.Data;
 public class RejectOrderRequest {
 
     @NotBlank(message = "Lý do từ chối không được để trống")
-    private String cancelReason;
+    private String rejectReason;
 }

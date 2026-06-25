@@ -52,7 +52,7 @@ public class MerchantOrderController {
             @PathVariable Long id,
             @Valid @RequestBody RejectOrderRequest req) {
         return ResponseEntity.ok(ApiResponse.ok(
-                orderService.rejectOrder(user.getUserId(), id, req.getCancelReason())));
+                orderService.rejectOrder(user.getUserId(), id, req.getRejectReason())));
     }
 
     @PatchMapping("/{id}/preparing")
