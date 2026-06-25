@@ -16,13 +16,13 @@ import java.util.Optional;
 @Repository
 public interface OrderRepository extends BaseRepository<Order, Long> {
 
-    Page<Order> findByCustomerUserId(Long customerId, Pageable pageable);
+    Page<Order> findByCustomerUserIdOrderByCreatedAtDesc(Long customerId, Pageable pageable);
 
-    Page<Order> findByCustomerUserIdAndOrderStatus(Long customerId, OrderStatus status, Pageable pageable);
+    Page<Order> findByCustomerUserIdAndOrderStatusOrderByCreatedAtDesc(Long customerId, OrderStatus status, Pageable pageable);
 
-    Page<Order> findByRestaurantRestaurantId(Long restaurantId, Pageable pageable);
+    Page<Order> findByRestaurantRestaurantIdOrderByCreatedAtDesc(Long restaurantId, Pageable pageable);
 
-    Page<Order> findByRestaurantRestaurantIdAndOrderStatus(Long restaurantId, OrderStatus status, Pageable pageable);
+    Page<Order> findByRestaurantRestaurantIdAndOrderStatusOrderByCreatedAtDesc(Long restaurantId, OrderStatus status, Pageable pageable);
 
     Page<Order> findByRestaurantRestaurantIdAndOrderStatusIn(Long restaurantId, List<OrderStatus> statuses, Pageable pageable);
 
