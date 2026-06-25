@@ -112,8 +112,8 @@ public class OrderService {
     @Transactional(readOnly = true)
     public Page<OrderResponse> getCustomerOrders(Long customerId, OrderStatus status, Pageable pageable) {
         Page<Order> page = (status == null)
-                ? orderRepository.findByCustomerUserId(customerId, pageable)
-                : orderRepository.findByCustomerUserIdAndOrderStatus(customerId, status, pageable);
+                ? orderRepository.findByCustomerUserIdOrderByCreatedAtDesc(customerId, pageable)
+                : orderRepository.findByCustomerUserIdAndOrderStatusOrderByCreatedAtDesc(customerId, status, pageable);
         return page.map(orderMapper::toResponse).map(this::enrichOrderResponse);
     }
 
@@ -227,21 +227,23 @@ public class OrderService {
         ownershipGuard.checkRestaurantOwner(restaurant, merchantId);
         Page<Order> page;
         if (status == null) {
-            page = orderRepository.findByRestaurantRestaurantId(restaurantId, pageable);
-        } else if (status == OrderStatus.PREPARING) {
-            page = orderRepository.findByRestaurantRestaurantIdAndOrderStatusIn(
-                    restaurantId,
-                    List.of(OrderStatus.CONFIRMED, OrderStatus.PREPARING),
-                    pageable
-            );
-        } else if (status == OrderStatus.DELIVERING) {
-            page = orderRepository.findByRestaurantRestaurantIdAndOrderStatusIn(
-                    restaurantId,
-                    List.of(OrderStatus.READY_FOR_PICKUP, OrderStatus.PICKED_UP, OrderStatus.DELIVERING),
-                    pageable
-            );
-        } else {
-            page = orderRepository.findByRestaurantRestaurantIdAndOrderStatus(restaurantId, status, pageable);
+            page = orderRepository.findByRestaurantRestaurantIdOrderByCreatedAtDesc(restaurantId, pageable);
+        }
+//        else if (status == OrderStatus.PREPARING) {
+//            page = orderRepository.findByRestaurantRestaurantIdAndOrderStatusIn(
+//                    restaurantId,
+//                    List.of(OrderStatus.CONFIRMED, OrderStatus.PREPARING),
+//                    pageable
+//            );
+//        } else if (status == OrderStatus.DELIVERING) {
+//            page = orderRepository.findByRestaurantRestaurantIdAndOrderStatusIn(
+//                    restaurantId,
+//                    List.of(OrderStatus.READY_FOR_PICKUP, OrderStatus.PICKED_UP, OrderStatus.DELIVERING),
+//                    pageable
+//            );
+//        }
+        else {
+            page = orderRepository.findByRestaurantRestaurantIdAndOrderStatusOrderByCreatedAtDesc(restaurantId, status, pageable);
         }
         return page.map(orderMapper::toResponse).map(this::enrichOrderResponse);
     }
@@ -272,6 +274,7 @@ public class OrderService {
         validateTransition(order.getOrderStatus(), CANCELLED);
         order.setOrderStatus(CANCELLED);
         order.setCancelReason(reason);
+        order.setCancelledBy(order.getRestaurant().getOwner());
         orderRepository.save(order);
 
         // Refund if already paid (e.g. VNPay prepaid order).
@@ -288,6 +291,7 @@ public class OrderService {
         Order order = getOrderForMerchant(merchantId, orderId);
         validateTransition(order.getOrderStatus(), PREPARING);
         order.setOrderStatus(PREPARING);
+        order.setPreparingAt(LocalDateTime.now());
         orderRepository.save(order);
 
         notificationService.notifyUser(order.getCustomer().getUserId(),
@@ -301,6 +305,7 @@ public class OrderService {
         Order order = getOrderForMerchant(merchantId, orderId);
         validateTransition(order.getOrderStatus(), READY_FOR_PICKUP);
         order.setOrderStatus(READY_FOR_PICKUP);
+        order.setReadyAt(LocalDateTime.now());
         orderRepository.save(order);
 
         notificationService.broadcastToShippers(order.getOrderId(), NotificationType.ORDER_READY_PICKUP);
@@ -350,6 +355,7 @@ public class OrderService {
         Order order = getOrderForShipper(shipperId, orderId);
         validateTransition(order.getOrderStatus(), PICKED_UP);
         order.setOrderStatus(PICKED_UP);
+        order.setPickedUpAt(LocalDateTime.now());
         orderRepository.save(order);
         webSocketService.broadcastOrderStatus(order);
         return enrichOrderResponse(orderMapper.toResponse(order));
