@@ -48,6 +48,10 @@ public class OrderResponse {
     private LocalDateTime confirmedAt;
     private LocalDateTime completedAt;
 
+    private LocalDateTime preparingAt;
+    private LocalDateTime readyAt;
+    private LocalDateTime pickedUpAt;
+
     private Boolean reviewed;
     private Integer restaurantRating;
     private Integer shipperRating;
