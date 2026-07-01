@@ -43,6 +43,7 @@ public class GoogleOAuth2UserService extends DefaultOAuth2UserService {
                         .googleId(googleId)
                         .role(Role.CUSTOMER)
                         .status(true)
+                        .emailVerified(true)   // đăng nhập Google = email đã được Google xác thực
                         .build()));
 
         if (user.getGoogleId() == null) {
