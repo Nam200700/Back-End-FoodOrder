@@ -57,4 +57,9 @@ public class User extends BaseEntity {
     @Builder.Default
     @Column(nullable = false)
     private Boolean status = true;
+
+    /** Dành cho xác thực mã otp check khi tk ko xác thực hoặc bị fail */
+    @Builder.Default
+    @Column(name = "email_verified", nullable = false)
+    private Boolean emailVerified = false;
 }

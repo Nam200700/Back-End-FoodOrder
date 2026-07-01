@@ -14,6 +14,7 @@ public enum ErrorCode {
     TOKEN_EXPIRED(401, "Token đã hết hạn"),
     TOKEN_INVALID(401, "Token không hợp lệ"),
     BAD_CREDENTIALS(401, "Sai số điện thoại hoặc mật khẩu"),
+    EMAIL_NOT_VERIFIED(403, "Tài khoản chưa xác thực OTP/email"),
 
     // User
     USER_NOT_FOUND(404, "Không tìm thấy người dùng"),

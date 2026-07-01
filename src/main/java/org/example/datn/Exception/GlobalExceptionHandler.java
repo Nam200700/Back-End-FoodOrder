@@ -42,6 +42,18 @@ public class GlobalExceptionHandler {
                         .build());
     }
 
+    /** Đúng sđt và mk trả về như dưới rồi tự động sang trang FE otp để xác thực kích hoạt */
+    @ExceptionHandler(EmailNotVerifiedException.class)
+    public ResponseEntity<ApiResponse<?>> handleEmailNotVerified(EmailNotVerifiedException ex) {
+        return ResponseEntity.status(ErrorCode.EMAIL_NOT_VERIFIED.getHttpStatus())
+                .body(ApiResponse.builder()
+                        .success(false)
+                        .errorCode(ErrorCode.EMAIL_NOT_VERIFIED.name())
+                        .message("Tài khoản chưa xác thực OTP/email. Vui lòng xác thực để đăng nhập.")
+                        .data(Map.of("email", ex.getEmail()))
+                        .build());
+    }
+
     /** 422 — review business rule violated. */
     @ExceptionHandler(ReviewNotAllowedException.class)
     public ResponseEntity<ApiResponse<?>> handleReviewNotAllowed(ReviewNotAllowedException ex) {

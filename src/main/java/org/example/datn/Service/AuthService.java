@@ -16,6 +16,7 @@ import org.example.datn.DTO.response.auth.AuthResponse;
 import org.example.datn.DTO.response.auth.RefreshResponse;
 import org.example.datn.Exception.AppException;
 import org.example.datn.Exception.ErrorCode;
+import org.example.datn.Exception.EmailNotVerifiedException;
 import org.example.datn.mapper.UserMapper;
 import org.example.datn.Repository.UserRepository;
 import org.example.datn.Repository.RestaurantRegisterRepository;
@@ -68,7 +69,8 @@ public class AuthService {
             }
         }
 
-        // Đăng ký mới luôn bắt đầu bằng status = false cho đến khi verify OTP thành công
+        // Đăng ký mới luôn bắt đầu bằng status set false cho đến khi verify OTP thành công.
+        // emailVerified set false: chưa xác thực OTP khi login() sẽ chặn cho tới khi verify.
         User user = User.builder()
                 .fullName(req.getFullName())
                 .phone(req.getPhone())
@@ -76,6 +78,7 @@ public class AuthService {
                 .password(passwordEncoder.encode(req.getPassword()))
                 .role(userRole)
                 .status(false)
+                .emailVerified(false)
                 .build();
         user = userRepository.save(user);
 
@@ -112,7 +115,7 @@ public class AuthService {
             shipperRegisterRepository.save(reg);
         }
 
-        // Tạo mã OTP 6 số ngẫu nhiên
+        // Tạo mã OTP có 6 dãy số ngẫu nhiên
         java.security.SecureRandom random = new java.security.SecureRandom();
         StringBuilder codeBuilder = new StringBuilder(6);
         for (int i = 0; i < 6; i++) {
@@ -175,6 +178,9 @@ public class AuthService {
         // Đánh dấu OTP đã dùng
         otp.setIsUsed(true);
         otpRepository.save(otp);
+
+        // Verify OTP thành công = đã xác thực email cho MỌI role -> cho phép login
+        user.setEmailVerified(true);
 
         // Kích hoạt tài khoản
         if (user.getRole() == org.example.datn.domain.enums.Role.CUSTOMER) {
@@ -244,7 +250,14 @@ public class AuthService {
             String reason = user.getLockedReason() != null ? user.getLockedReason() : "Không có lý do cụ thể";
             throw new AppException(ErrorCode.FORBIDDEN, "Tài khoản của bạn đã bị khóa. Lý do: " + reason);
         }
- 
+
+        // Chặn login khi chưa xác thực OTP/email. Đặt SAU khi mật khẩu đã đúng nên chỉ
+        // chính chủ mới nhận được mã lỗi kèm email -> FE tự chuyển sang trang OTP; người
+        // lạ dò tài khoản (không có mật khẩu) vẫn chỉ nhận BAD_CREDENTIALS chung chung.
+        if (!Boolean.TRUE.equals(user.getEmailVerified())) {
+            throw new EmailNotVerifiedException(user.getEmail());
+        }
+
         return buildAuthResponse(user);
     }
 

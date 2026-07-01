@@ -8,6 +8,7 @@
 
 CREATE TABLE users (
                        status          BIT NOT NULL,
+                       email_verified  BIT NOT NULL DEFAULT 0,         -- đã xác thực OTP/email chưa; chặn login nếu =0
                        created_at      DATETIME(6),
                        updated_at      DATETIME(6),
                        deleted_at      DATETIME(6)                 NULL,           -- [V2] soft delete
