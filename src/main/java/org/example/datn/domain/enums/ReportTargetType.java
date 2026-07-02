@@ -1,5 +1,5 @@
 package org.example.datn.domain.enums;
 
 public enum ReportTargetType {
-    RESTAURANT, ORDER, USER, REVIEW
+    RESTAURANT, ORDER, USER, REVIEW, SHIPPER
 }
