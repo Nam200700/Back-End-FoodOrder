@@ -9,5 +9,6 @@ import org.mapstruct.Mapping;
 public interface ReportMapper {
 
     @Mapping(source = "reporter.userId", target = "reporterId")
+    @Mapping(source = "reporter.fullName", target = "reporterName")
     ReportResponse toResponse(Report report);
 }

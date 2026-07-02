@@ -12,8 +12,10 @@ import java.time.LocalDateTime;
 public class ReportResponse {
     private Long reportId;
     private Long reporterId;
+    private String reporterName;   // tên người gửi báo cáo (để admin xem trực tiếp thay vì #id)
     private ReportTargetType targetType;
     private Long targetId;
+    private String targetName;     // tên đối tượng bị báo cáo (quán/tài xế/người dùng...), tra theo targetType
     private String reason;
     private ReportStatus status;
     private LocalDateTime createdAt;
