@@ -299,7 +299,7 @@ CREATE TABLE reports (
                          updated_at      DATETIME(6),
                          reason          VARCHAR(500) NOT NULL,
                          status          ENUM('PENDING','REJECTED','RESOLVED') NOT NULL,
-                         target_type     ENUM('ORDER','RESTAURANT','REVIEW','USER') NOT NULL,
+                         target_type     ENUM('ORDER','RESTAURANT','REVIEW','USER', 'SHIPPER') NOT NULL,
                          PRIMARY KEY (report_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
