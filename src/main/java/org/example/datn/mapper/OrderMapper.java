@@ -18,6 +18,7 @@ public interface OrderMapper {
     @Mapping(target = "shipperId", source = "shipper.userId")
     @Mapping(target = "shipperName", source = "shipper.fullName")
     @Mapping(target = "shipperPhone", source = "shipper.phone")
+    @Mapping(target = "shipperAvatar", source = "shipper.avatar")
     OrderResponse toResponse(Order order);
 
     @Mapping(target = "foodId", source = "food.foodId")
