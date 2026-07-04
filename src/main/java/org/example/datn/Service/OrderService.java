@@ -2,6 +2,7 @@ package org.example.datn.Service;
 
 import lombok.RequiredArgsConstructor;
 import org.example.datn.DTO.request.order.CancelOrderRequest;
+import org.example.datn.DTO.request.order.CreateBulkOrderRequest;
 import org.example.datn.DTO.request.order.CreateOrderRequest;
 import org.example.datn.DTO.response.order.OrderResponse;
 import org.example.datn.Exception.AppException;
@@ -107,6 +108,63 @@ public class OrderService {
                 NotificationType.ORDER_NEW, saved.getOrderId());
         webSocketService.broadcastOrderStatus(saved);
         return enrichOrderResponse(orderMapper.toResponse(saved));
+    }
+
+    @Transactional
+    public List<OrderResponse> createOrders(Long customerId, CreateBulkOrderRequest request) {
+        User customer = userRepository.getReferenceById(customerId);
+
+        List<Order> savedOrders = request.getRestaurantIds().stream().map(restaurantId -> {
+            Cart cart = cartRepository.findByCustomerUserIdAndRestaurantRestaurantId(customerId, restaurantId)
+                    .orElseThrow(() -> new AppException(ErrorCode.CART_EMPTY));
+
+            if (cart.getItems().isEmpty()) {
+                throw new AppException(ErrorCode.CART_EMPTY);
+            }
+
+            Order order = Order.builder()
+                    .customer(customer)
+                    .restaurant(cart.getRestaurant())
+                    .deliveryAddress(request.getDeliveryAddress())
+                    .deliveryLat(request.getDeliveryLat())
+                    .deliveryLng(request.getDeliveryLng())
+                    .paymentMethod(request.getPaymentMethod())
+                    .shippingFee(request.getShippingFee())
+                    .discountAmount(BigDecimal.ZERO)
+                    .orderStatus(PENDING)
+                    .note(request.getNote())
+                    .build();
+
+            List<OrderItem> items = cart.getItems().stream().map(ci ->
+                    OrderItem.builder()
+                            .order(order)
+                            .food(ci.getFood())
+                            .foodName(ci.getFood().getFoodName())
+                            .quantity(ci.getQuantity())
+                            .priceAtOrder(ci.getFood().getPrice())
+                            .note(ci.getNote())
+                            .build()).toList();
+
+            order.getItems().addAll(items);
+
+            BigDecimal subtotal = items.stream()
+                    .map(i -> i.getPriceAtOrder().multiply(BigDecimal.valueOf(i.getQuantity())))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            order.setSubtotalAmount(subtotal);
+            order.setTotalAmount(subtotal.add(request.getShippingFee()));
+
+            Order saved = orderRepository.save(order);
+            cartRepository.delete(cart);
+            paymentService.createForOrder(saved);
+
+            notificationService.notifyUser(saved.getRestaurant().getOwner().getUserId(),
+                    NotificationType.ORDER_NEW, saved.getOrderId());
+            webSocketService.broadcastOrderStatus(saved);
+
+            return saved;
+        }).toList();
+
+        return savedOrders.stream().map(orderMapper::toResponse).toList();
     }
 
     @Transactional(readOnly = true)
