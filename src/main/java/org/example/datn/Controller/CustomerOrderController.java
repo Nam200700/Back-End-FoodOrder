@@ -3,6 +3,7 @@ package org.example.datn.Controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.datn.DTO.request.order.CancelOrderRequest;
+import org.example.datn.DTO.request.order.CreateBulkOrderRequest;
 import org.example.datn.DTO.request.order.CreateOrderRequest;
 import org.example.datn.DTO.response.order.OrderResponse;
 import org.example.datn.Service.OrderService;
@@ -17,6 +18,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/orders")
 @PreAuthorize("hasRole('CUSTOMER')")
@@ -26,11 +29,11 @@ public class CustomerOrderController {
     private final OrderService orderService;
 
     @PostMapping
-    public ResponseEntity<ApiResponse<OrderResponse>> create(
+    public ResponseEntity<ApiResponse<List<OrderResponse>>> create(
             @AuthenticationPrincipal CustomUserDetails user,
-            @Valid @RequestBody CreateOrderRequest req) {
+            @Valid @RequestBody CreateBulkOrderRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.created(orderService.createOrder(user.getUserId(), req)));
+                .body(ApiResponse.created(orderService.createOrders(user.getUserId(), req)));
     }
 
     @GetMapping
