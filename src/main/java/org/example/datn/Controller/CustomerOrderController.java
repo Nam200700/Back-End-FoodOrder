@@ -3,7 +3,6 @@ package org.example.datn.Controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.datn.DTO.request.order.CancelOrderRequest;
-import org.example.datn.DTO.request.order.CreateBulkOrderRequest;
 import org.example.datn.DTO.request.order.CreateOrderRequest;
 import org.example.datn.DTO.response.order.OrderResponse;
 import org.example.datn.Service.OrderService;
@@ -31,9 +30,9 @@ public class CustomerOrderController {
     @PostMapping
     public ResponseEntity<ApiResponse<List<OrderResponse>>> create(
             @AuthenticationPrincipal CustomUserDetails user,
-            @Valid @RequestBody CreateBulkOrderRequest req) {
+            @Valid @RequestBody CreateOrderRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.created(orderService.createOrders(user.getUserId(), req)));
+                .body(ApiResponse.created(orderService.createOrder(user.getUserId(), req)));
     }
 
     @GetMapping
