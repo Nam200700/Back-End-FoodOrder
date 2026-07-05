@@ -84,14 +84,25 @@ public class OrderService {
                     .build();
 
             // Snapshot price + name at order time.
-            List<OrderItem> items = cart.getItems().stream().map(ci -> OrderItem.builder()
-                    .order(order)
-                    .food(ci.getFood())
-                    .foodName(ci.getFood().getFoodName())
-                    .quantity(ci.getQuantity())
-                    .priceAtOrder(ci.getFood().getPrice())
-                    .note(ci.getNote())
-                    .build()).toList();
+            List<OrderItem> items = cart.getItems().stream().map(ci -> {
+                Food food = ci.getFood();
+                if (!Boolean.TRUE.equals(food.getStatus())) {
+                    throw new AppException(ErrorCode.FOOD_NOT_FOUND, "Món " + food.getFoodName() + " đã ngừng bán.");
+                }
+                if (!Boolean.TRUE.equals(food.getIsAvailable())) {
+                    throw new AppException(ErrorCode.FOOD_NOT_FOUND, "Món " + food.getFoodName() + " hiện đã tạm hết hàng.");
+                }
+
+                return OrderItem.builder()
+                        .order(order)
+                        .food(food)
+                        .foodName(food.getFoodName())
+                        .quantity(ci.getQuantity())
+                        .priceAtOrder(food.getPrice())
+                        .note(ci.getNote())
+                        .build();
+            }).toList();
+
             order.getItems().addAll(items);
 
             double distance = HaversineCalculator.distanceKm(
