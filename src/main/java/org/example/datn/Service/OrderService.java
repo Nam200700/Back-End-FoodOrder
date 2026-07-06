@@ -284,11 +284,16 @@ public class OrderService {
         order.setOrderStatus(CANCELLED);
         order.setCancelReason(reason);
         order.setCancelledBy(order.getRestaurant().getOwner());
+        order.setPaymentStatus(PaymentStatus.FAILED);
         orderRepository.save(order);
 
         // Refund if already paid (e.g. VNPay prepaid order).
-        paymentService.refundIfPaid(order);
-
+        //paymentService.refundIfPaid(order);
+        Payment payment = paymentRepository.findByOrderOrderId(orderId).orElse(null);
+        if (payment != null) {
+            payment.setStatus(PaymentStatus.FAILED);
+            paymentRepository.save(payment);
+        }
         notificationService.notifyUser(order.getCustomer().getUserId(),
                 NotificationType.ORDER_CANCELLED, order.getOrderId());
         webSocketService.broadcastOrderStatus(order);
