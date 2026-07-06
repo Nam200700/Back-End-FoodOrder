@@ -17,6 +17,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/orders")
 @PreAuthorize("hasRole('CUSTOMER')")
@@ -26,7 +28,7 @@ public class CustomerOrderController {
     private final OrderService orderService;
 
     @PostMapping
-    public ResponseEntity<ApiResponse<OrderResponse>> create(
+    public ResponseEntity<ApiResponse<List<OrderResponse>>> create(
             @AuthenticationPrincipal CustomUserDetails user,
             @Valid @RequestBody CreateOrderRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED)

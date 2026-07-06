@@ -6,6 +6,7 @@ import lombok.Data;
 import org.example.datn.domain.enums.PaymentMethod;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Data
 public class CreateOrderRequest {
@@ -14,7 +15,7 @@ public class CreateOrderRequest {
     private String deliveryAddress;
 
     @NotNull(message = "ID nhà hàng không được để trống")
-    private Long restaurantId;
+    private List<Long> restaurantId;
 
     private BigDecimal deliveryLat;
 
@@ -22,9 +23,6 @@ public class CreateOrderRequest {
 
     @NotNull(message = "Phương thức thanh toán không được để trống")
     private PaymentMethod paymentMethod;
-
-    @NotNull(message = "Phí ship không được để trống")
-    private BigDecimal shippingFee;
 
     private String note;
 }

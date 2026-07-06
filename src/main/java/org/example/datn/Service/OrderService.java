@@ -8,7 +8,6 @@ import org.example.datn.Exception.AppException;
 import org.example.datn.Exception.ErrorCode;
 import org.example.datn.Exception.OrderStatusException;
 import org.example.datn.Repository.*;
-import org.example.datn.Service.RefundService;
 import org.example.datn.domain.*;
 import org.example.datn.domain.enums.NotificationType;
 import org.example.datn.domain.enums.OrderStatus;
@@ -16,6 +15,8 @@ import org.example.datn.domain.enums.PaymentStatus;
 import org.example.datn.domain.enums.Role;
 import org.example.datn.mapper.OrderMapper;
 import org.example.datn.security.OwnershipGuard;
+import org.example.datn.util.HaversineCalculator;
+import org.example.datn.util.ShippingFeeCalculator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -62,51 +63,73 @@ public class OrderService {
 
     // ─── Customer ────────────────────────────────────────────
     @Transactional
-    public OrderResponse createOrder(Long customerId, CreateOrderRequest req) {
-        Cart cart = cartRepository.findByCustomerUserIdAndRestaurantRestaurantId(customerId, req.getRestaurantId())
-                .orElseThrow(() -> new AppException(ErrorCode.CART_EMPTY));
-        if (cart.getItems().isEmpty()) {
-            throw new AppException(ErrorCode.CART_EMPTY);
-        }
+    public List<OrderResponse> createOrder(Long customerId, CreateOrderRequest req) {
+        User customer = userRepository.getReferenceById(customerId);
+        List<Order> savedOrders = req.getRestaurantId().stream().map(restaurantId -> {
+            Cart cart = cartRepository.findByCustomerUserIdAndRestaurantRestaurantId(customerId, restaurantId)
+                    .orElseThrow(() -> new AppException(ErrorCode.CART_EMPTY));
+            if (cart.getItems().isEmpty()) {
+                throw new AppException(ErrorCode.CART_EMPTY);
+            }
+            Order order = Order.builder()
+                    .customer(customer)
+                    .restaurant(cart.getRestaurant())
+                    .deliveryAddress(req.getDeliveryAddress())
+                    .deliveryLat(req.getDeliveryLat())
+                    .deliveryLng(req.getDeliveryLng())
+                    .paymentMethod(req.getPaymentMethod())
+                    .discountAmount(BigDecimal.ZERO)
+                    .orderStatus(PENDING)
+                    .note(req.getNote())
+                    .build();
 
-        Order order = Order.builder()
-                .customer(userRepository.getReferenceById(customerId))
-                .restaurant(cart.getRestaurant())
-                .deliveryAddress(req.getDeliveryAddress())
-                .deliveryLat(req.getDeliveryLat())
-                .deliveryLng(req.getDeliveryLng())
-                .paymentMethod(req.getPaymentMethod())
-                .shippingFee(req.getShippingFee())
-                .discountAmount(BigDecimal.ZERO)
-                .orderStatus(PENDING)
-                .note(req.getNote())
-                .build();
+            // Snapshot price + name at order time.
+            List<OrderItem> items = cart.getItems().stream().map(ci -> {
+                Food food = ci.getFood();
+                if (!Boolean.TRUE.equals(food.getStatus())) {
+                    throw new AppException(ErrorCode.FOOD_NOT_FOUND, "Món " + food.getFoodName() + " đã ngừng bán.");
+                }
+                if (!Boolean.TRUE.equals(food.getIsAvailable())) {
+                    throw new AppException(ErrorCode.FOOD_NOT_FOUND, "Món " + food.getFoodName() + " hiện đã tạm hết hàng.");
+                }
 
-        // Snapshot price + name at order time.
-        List<OrderItem> items = cart.getItems().stream().map(ci -> OrderItem.builder()
-                .order(order)
-                .food(ci.getFood())
-                .foodName(ci.getFood().getFoodName())
-                .quantity(ci.getQuantity())
-                .priceAtOrder(ci.getFood().getPrice())
-                .note(ci.getNote())
-                .build()).toList();
-        order.getItems().addAll(items);
+                return OrderItem.builder()
+                        .order(order)
+                        .food(food)
+                        .foodName(food.getFoodName())
+                        .quantity(ci.getQuantity())
+                        .priceAtOrder(food.getPrice())
+                        .note(ci.getNote())
+                        .build();
+            }).toList();
 
-        BigDecimal subtotal = items.stream()
-                .map(i -> i.getPriceAtOrder().multiply(BigDecimal.valueOf(i.getQuantity())))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        order.setSubtotalAmount(subtotal);
-        order.setTotalAmount(subtotal.add(req.getShippingFee()));
+            order.getItems().addAll(items);
 
-        Order saved = orderRepository.save(order);
-        cartRepository.delete(cart);
-        paymentService.createForOrder(saved);
+            double distance = HaversineCalculator.distanceKm(
+                    cart.getRestaurant().getLatitude().doubleValue(),
+                    cart.getRestaurant().getLongitude().doubleValue(),
+                    req.getDeliveryLat().doubleValue(),
+                    req.getDeliveryLng().doubleValue()
+            );
+            long shippingFee = ShippingFeeCalculator.calculate(distance);
+            BigDecimal shippingFeeBd = BigDecimal.valueOf(shippingFee);
+            order.setShippingFee(shippingFeeBd);
+            BigDecimal subtotal = items.stream()
+                    .map(i -> i.getPriceAtOrder().multiply(BigDecimal.valueOf(i.getQuantity())))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            order.setSubtotalAmount(subtotal);
+            order.setTotalAmount(subtotal.add(shippingFeeBd));
 
-        notificationService.notifyUser(saved.getRestaurant().getOwner().getUserId(),
-                NotificationType.ORDER_NEW, saved.getOrderId());
-        webSocketService.broadcastOrderStatus(saved);
-        return enrichOrderResponse(orderMapper.toResponse(saved));
+            Order saved = orderRepository.save(order);
+            cartRepository.delete(cart);
+            paymentService.createForOrder(saved);
+
+            notificationService.notifyUser(saved.getRestaurant().getOwner().getUserId(),
+                    NotificationType.ORDER_NEW, saved.getOrderId());
+            webSocketService.broadcastOrderStatus(saved);
+            return saved;
+        }).toList();
+        return savedOrders.stream().map(orderMapper::toResponse).toList();
     }
 
     @Transactional(readOnly = true)
@@ -228,21 +251,7 @@ public class OrderService {
         Page<Order> page;
         if (status == null) {
             page = orderRepository.findByRestaurantRestaurantIdOrderByCreatedAtDesc(restaurantId, pageable);
-        }
-//        else if (status == OrderStatus.PREPARING) {
-//            page = orderRepository.findByRestaurantRestaurantIdAndOrderStatusIn(
-//                    restaurantId,
-//                    List.of(OrderStatus.CONFIRMED, OrderStatus.PREPARING),
-//                    pageable
-//            );
-//        } else if (status == OrderStatus.DELIVERING) {
-//            page = orderRepository.findByRestaurantRestaurantIdAndOrderStatusIn(
-//                    restaurantId,
-//                    List.of(OrderStatus.READY_FOR_PICKUP, OrderStatus.PICKED_UP, OrderStatus.DELIVERING),
-//                    pageable
-//            );
-//        }
-        else {
+        } else {
             page = orderRepository.findByRestaurantRestaurantIdAndOrderStatusOrderByCreatedAtDesc(restaurantId, status, pageable);
         }
         return page.map(orderMapper::toResponse).map(this::enrichOrderResponse);
@@ -275,11 +284,16 @@ public class OrderService {
         order.setOrderStatus(CANCELLED);
         order.setCancelReason(reason);
         order.setCancelledBy(order.getRestaurant().getOwner());
+        order.setPaymentStatus(PaymentStatus.FAILED);
         orderRepository.save(order);
 
         // Refund if already paid (e.g. VNPay prepaid order).
-        paymentService.refundIfPaid(order);
-
+        //paymentService.refundIfPaid(order);
+        Payment payment = paymentRepository.findByOrderOrderId(orderId).orElse(null);
+        if (payment != null) {
+            payment.setStatus(PaymentStatus.FAILED);
+            paymentRepository.save(payment);
+        }
         notificationService.notifyUser(order.getCustomer().getUserId(),
                 NotificationType.ORDER_CANCELLED, order.getOrderId());
         webSocketService.broadcastOrderStatus(order);
