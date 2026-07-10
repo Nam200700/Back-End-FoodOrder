@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -76,5 +77,31 @@ public class ShippingService {
             );
         }
         return result;
+    }
+
+    public List<List<Double>> getRouteCoordinates(double startLat, double startLng, double endLat, double endLng) {
+        try {
+            // Lưu ý: OpenRouteService nhận tọa độ theo thứ tự (lng, lat)
+            String url = String.format("https://api.openrouteservice.org/v2/directions/driving-car?api_key=%s&start=%f,%f&end=%f,%f",
+                    openRouteServiceApiKey, startLng, startLat, endLng, endLat);
+
+            ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                List<Map<String, Object>> features = (List<Map<String, Object>>) response.getBody().get("features");
+                if (features != null && !features.isEmpty()) {
+                    Map<String, Object> geometry = (Map<String, Object>) features.get(0).get("geometry");
+                    List<List<Number>> coordinates = (List<List<Number>>) geometry.get("coordinates");
+
+                    // API trả về [lng, lat], nhưng Leaflet của Frontend vẽ cần [lat, lng]
+                    // Ta đảo ngược lại luôn ở Backend cho tiện
+                    return coordinates.stream()
+                            .map(coord -> Arrays.asList(coord.get(1).doubleValue(), coord.get(0).doubleValue()))
+                            .toList();
+                }
+            }
+        } catch (Exception e) {
+            log.error("Lỗi khi lấy toạ độ đường đi từ OpenRouteService: {}", e.getMessage());
+        }
+        return List.of(); // Trả về mảng rỗng nếu lỗi
     }
 }
