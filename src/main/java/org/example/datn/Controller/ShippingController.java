@@ -25,4 +25,15 @@ public class ShippingController {
         return ResponseEntity.ok(ApiResponse.ok(
                 shippingService.calculate(request.getRestaurantIds(), request.getDeliveryLat(), request.getDeliveryLng())));
     }
+
+    @GetMapping("/route")
+    public ResponseEntity<ApiResponse<List<List<Double>>>> getRoute(
+            @RequestParam("start_lat") double startLat,
+            @RequestParam("start_lng") double startLng,
+            @RequestParam("end_lat") double endLat,
+            @RequestParam("end_lng") double endLng) {
+
+        List<List<Double>> routeCoordinates = shippingService.getRouteCoordinates(startLat, startLng, endLat, endLng);
+        return ResponseEntity.ok(ApiResponse.ok(routeCoordinates));
+    }
 }
