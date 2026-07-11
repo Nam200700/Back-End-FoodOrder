@@ -2,6 +2,7 @@ package org.example.datn.Controller;
 
 import lombok.RequiredArgsConstructor;
 import org.example.datn.DTO.request.shipping.ShippingCalculateRequest;
+import org.example.datn.DTO.response.shipping.ShippingRouteResponse;
 import org.example.datn.common.ApiResponse;
 import org.example.datn.DTO.response.shipping.ShippingCalculateResponse;
 import org.example.datn.Service.ShippingService;
@@ -27,13 +28,11 @@ public class ShippingController {
     }
 
     @GetMapping("/route")
-    public ResponseEntity<ApiResponse<List<List<Double>>>> getRoute(
-            @RequestParam("start_lat") double startLat,
-            @RequestParam("start_lng") double startLng,
-            @RequestParam("end_lat") double endLat,
-            @RequestParam("end_lng") double endLng) {
+    public ResponseEntity<ApiResponse<ShippingRouteResponse>> getRoute(
+            @RequestParam double startLat, @RequestParam double startLng,
+            @RequestParam double endLat, @RequestParam double endLng) {
 
-        List<List<Double>> routeCoordinates = shippingService.getRouteCoordinates(startLat, startLng, endLat, endLng);
-        return ResponseEntity.ok(ApiResponse.ok(routeCoordinates));
+        return ResponseEntity.ok(ApiResponse.ok(
+                shippingService.getRouteCoordinates(startLat, startLng, endLat, endLng)));
     }
 }
