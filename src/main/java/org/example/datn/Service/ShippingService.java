@@ -2,6 +2,8 @@ package org.example.datn.Service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.datn.DTO.response.shipping.RouteInfoResponse;
+import org.example.datn.DTO.response.shipping.ShippingRouteResponse;
 import org.example.datn.domain.Restaurant;
 import org.example.datn.DTO.response.shipping.ShippingCalculateResponse;
 import org.example.datn.Exception.AppException;
@@ -32,76 +34,89 @@ public class ShippingService {
 
     @Transactional(readOnly = true)
     public List<ShippingCalculateResponse> calculate(List<Long> restaurantIds, double deliveryLat, double deliveryLng) {
-        List<ShippingCalculateResponse> result = new ArrayList<>();
+        List<ShippingCalculateResponse> result = new ArrayList<>(restaurantIds.size());
         for (Long restaurantId : restaurantIds) {
             Restaurant restaurant = restaurantRepository.findByIdOrThrow(restaurantId, ErrorCode.RESTAURANT_NOT_FOUND);
             if (restaurant.getLatitude() == null || restaurant.getLongitude() == null) {
                 throw new AppException(ErrorCode.RESTAURANT_NOT_FOUND, "Quán chưa có tọa độ để tính phí ship");
             }
 
-            double resLat = restaurant.getLatitude().doubleValue();
-            double resLng = restaurant.getLongitude().doubleValue();
-            double distanceKm = 0;
-            double durationMinutes = 0;
+            RouteInfoResponse routeInfo = getRouteInfo(
+                    restaurant.getLatitude().doubleValue(), restaurant.getLongitude().doubleValue(),
+                    deliveryLat, deliveryLng
+            );
 
-            try {
-                // OpenRouteService yêu cầu format tọa độ là: start=lng,lat & end=lng,lat
-                String url = String.format("https://api.openrouteservice.org/v2/directions/driving-car?api_key=%s&start=%f,%f&end=%f,%f",
-                        openRouteServiceApiKey, resLng, resLat, deliveryLng, deliveryLat);
-
-                ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
-                if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                    List<Map<String, Object>> features = (List<Map<String, Object>>) response.getBody().get("features");
-                    if (features != null && !features.isEmpty()) {
-                        Map<String, Object> properties = (Map<String, Object>) features.get(0).get("properties");
-                        Map<String, Object> summary = (Map<String, Object>) properties.get("summary");
-
-                        double distanceMeters = ((Number) summary.get("distance")).doubleValue();
-                        double durationSeconds = ((Number) summary.get("duration")).doubleValue();
-
-                        distanceKm = distanceMeters / 1000.0;
-                        durationMinutes = durationSeconds / 60.0;
-                    }
-                }
-            } catch (Exception e) {
-                log.error("Lỗi khi gọi API OpenRouteService: {}", e.getMessage());
-                throw new AppException(ErrorCode.VALIDATION_FAILED, "Không thể tính toán quãng đường lúc này");
-            }
-            long fee = ShippingFeeCalculator.calculate(distanceKm);
-            result.add(ShippingCalculateResponse.builder()
-                    .restaurantId(restaurantId)
-                    .distanceKm(distanceKm)
-                    .shippingFee(fee)
-                    .durationMinutes(durationMinutes)
-                    .build()
+            long shippingFee = ShippingFeeCalculator.calculate(routeInfo.getDistanceKm());
+            result.add(
+                    ShippingCalculateResponse.builder()
+                            .restaurantId(restaurantId)
+                            .distanceKm(routeInfo.getDistanceKm())
+                            .durationMinutes(routeInfo.getDurationMinutes())
+                            .shippingFee(shippingFee)
+                            .build()
             );
         }
         return result;
     }
 
-    public List<List<Double>> getRouteCoordinates(double startLat, double startLng, double endLat, double endLng) {
+    public ShippingRouteResponse getRouteCoordinates(double startLat, double startLng, double endLat, double endLng) {
+        RouteInfoResponse routeInfo = getRouteInfo(
+                startLat, startLng,
+                endLat, endLng
+        );
+        return ShippingRouteResponse.builder()
+                .distanceKm(routeInfo.getDistanceKm())
+                .durationMinutes(routeInfo.getDurationMinutes())
+                .coordinates(routeInfo.getCoordinates())
+                .build();
+    }
+
+    public double getDistanceKm(double startLat, double startLng, double endLat, double endLng) {
+        return getRouteInfo(startLat, startLng, endLat, endLng).getDistanceKm();
+    }
+
+    private RouteInfoResponse getRouteInfo(double startLat, double startLng, double endLat, double endLng) {
         try {
-            // Lưu ý: OpenRouteService nhận tọa độ theo thứ tự (lng, lat)
             String url = String.format("https://api.openrouteservice.org/v2/directions/driving-car?api_key=%s&start=%f,%f&end=%f,%f",
-                    openRouteServiceApiKey, startLng, startLat, endLng, endLat);
+                    openRouteServiceApiKey, startLng, startLat, endLng, endLat
+            );
 
             ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                List<Map<String, Object>> features = (List<Map<String, Object>>) response.getBody().get("features");
-                if (features != null && !features.isEmpty()) {
-                    Map<String, Object> geometry = (Map<String, Object>) features.get(0).get("geometry");
-                    List<List<Number>> coordinates = (List<List<Number>>) geometry.get("coordinates");
 
-                    // API trả về [lng, lat], nhưng Leaflet của Frontend vẽ cần [lat, lng]
-                    // Ta đảo ngược lại luôn ở Backend cho tiện
-                    return coordinates.stream()
-                            .map(coord -> Arrays.asList(coord.get(1).doubleValue(), coord.get(0).doubleValue()))
-                            .toList();
-                }
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                throw new AppException(ErrorCode.INTERNAL_ERROR,"Không nhận được dữ liệu từ OpenRouteService");
             }
+
+            List<Map<String, Object>> features = (List<Map<String, Object>>) response.getBody().get("features");
+            if (features == null || features.isEmpty()) {
+                throw new AppException(ErrorCode.INTERNAL_ERROR, "Không tìm thấy tuyến đường");
+            }
+
+            Map<String, Object> feature = features.get(0);
+            Map<String, Object> properties = (Map<String, Object>) feature.get("properties");
+            Map<String, Object> summary = (Map<String, Object>) properties.get("summary");
+            double distanceKm = ((Number) summary.get("distance")).doubleValue() / 1000.0;
+            double durationMinutes = ((Number) summary.get("duration")).doubleValue() / 60.0;
+
+            Map<String, Object> geometry = (Map<String, Object>) feature.get("geometry");
+            List<List<Number>> coordinates = (List<List<Number>>) geometry.get("coordinates");
+
+            List<List<Double>> routeCoordinates = coordinates.stream()
+                    .map(coord -> Arrays.asList(
+                            coord.get(1).doubleValue(), coord.get(0).doubleValue()))
+                    .toList();
+
+            return new RouteInfoResponse(
+                    distanceKm,
+                    durationMinutes,
+                    routeCoordinates
+            );
+
+        } catch (AppException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("Lỗi khi lấy toạ độ đường đi từ OpenRouteService: {}", e.getMessage());
+            log.error("Lỗi khi gọi OpenRouteService", e);
+            throw new AppException(ErrorCode.INTERNAL_ERROR, "Không thể lấy dữ liệu từ OpenRouteService");
         }
-        return List.of(); // Trả về mảng rỗng nếu lỗi
     }
 }
