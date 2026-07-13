@@ -3,7 +3,6 @@ package org.example.datn.Service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.datn.DTO.response.shipping.RouteInfoResponse;
-import org.example.datn.DTO.response.shipping.ShippingRouteResponse;
 import org.example.datn.domain.Restaurant;
 import org.example.datn.DTO.response.shipping.ShippingCalculateResponse;
 import org.example.datn.Exception.AppException;
@@ -59,12 +58,13 @@ public class ShippingService {
         return result;
     }
 
-    public ShippingRouteResponse getRouteCoordinates(double startLat, double startLng, double endLat, double endLng) {
+    public RouteInfoResponse getRouteCoordinates(double startLat, double startLng, double endLat, double endLng) {
         RouteInfoResponse routeInfo = getRouteInfo(
                 startLat, startLng,
                 endLat, endLng
         );
-        return ShippingRouteResponse.builder()
+
+        return RouteInfoResponse.builder()
                 .distanceKm(routeInfo.getDistanceKm())
                 .durationMinutes(routeInfo.getDurationMinutes())
                 .coordinates(routeInfo.getCoordinates())
@@ -106,11 +106,11 @@ public class ShippingService {
                             coord.get(1).doubleValue(), coord.get(0).doubleValue()))
                     .toList();
 
-            return new RouteInfoResponse(
-                    distanceKm,
-                    durationMinutes,
-                    routeCoordinates
-            );
+            return RouteInfoResponse.builder()
+                    .distanceKm(distanceKm)
+                    .durationMinutes(durationMinutes)
+                    .coordinates(routeCoordinates)
+                    .build();
 
         } catch (AppException e) {
             throw e;
