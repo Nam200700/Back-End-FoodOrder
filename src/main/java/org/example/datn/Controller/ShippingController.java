@@ -1,8 +1,9 @@
 package org.example.datn.Controller;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.datn.DTO.request.shipping.ShippingCalculateRequest;
-import org.example.datn.DTO.response.shipping.ShippingRouteResponse;
+import org.example.datn.DTO.response.shipping.RouteInfoResponse;
 import org.example.datn.common.ApiResponse;
 import org.example.datn.DTO.response.shipping.ShippingCalculateResponse;
 import org.example.datn.Service.ShippingService;
@@ -17,6 +18,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/shipping")
 @RequiredArgsConstructor
+@Slf4j
 public class ShippingController {
 
     private final ShippingService shippingService;
@@ -28,7 +30,7 @@ public class ShippingController {
     }
 
     @GetMapping("/route")
-    public ResponseEntity<ApiResponse<ShippingRouteResponse>> getRoute(
+    public ResponseEntity<ApiResponse<RouteInfoResponse>> getRoute(
             @RequestParam double startLat, @RequestParam double startLng,
             @RequestParam double endLat, @RequestParam double endLng) {
 
