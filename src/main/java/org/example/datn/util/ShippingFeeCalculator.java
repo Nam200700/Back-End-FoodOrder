@@ -21,10 +21,10 @@ public final class ShippingFeeCalculator {
         if (distanceKm <= 0) {
             return 0L;
         }
-        if (distanceKm > MAX_DISTANCE) {
-            throw new AppException(ErrorCode.DISTANCE_TOO_FAR,
-                    "Khoảng cách vượt quá " + MAX_DISTANCE + "km");
-        }
+//        if (distanceKm > MAX_DISTANCE) {
+//            throw new AppException(ErrorCode.DISTANCE_TOO_FAR,
+//                    "Khoảng cách vượt quá " + MAX_DISTANCE + "km");
+//        }
         if (distanceKm <= BASE_KM) {
             return BASE_FEE;
         }

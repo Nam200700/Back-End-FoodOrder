@@ -71,6 +71,8 @@ app:
     cloud-name: ${CLOUDINARY_CLOUD_NAME:}
     api-key: ${CLOUDINARY_API_KEY:}
     api-secret: ${CLOUDINARY_API_SECRET:}
+  openrouteservice:
+    api-key: ${OPENROUTESERVICE_API_KEY}
 
 platform:
   commission-rate: 0.10

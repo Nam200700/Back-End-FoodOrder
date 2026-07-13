@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.datn.DTO.request.order.CancelOrderRequest;
 import org.example.datn.DTO.request.order.CreateOrderRequest;
 import org.example.datn.DTO.response.order.OrderResponse;
+import org.example.datn.DTO.response.shipping.ShippingCalculateResponse;
 import org.example.datn.Exception.AppException;
 import org.example.datn.Exception.ErrorCode;
 import org.example.datn.Exception.OrderStatusException;
@@ -51,6 +52,7 @@ public class OrderService {
     private final ShipperRepository shipperRepository;
     private final PaymentRepository paymentRepository;
     private final RefundService refundService;
+    private final ShippingService shippingService;
 
     private static final Map<OrderStatus, Set<OrderStatus>> VALID_TRANSITIONS = Map.of(
             PENDING, Set.of(CONFIRMED, CANCELLED),
@@ -105,12 +107,11 @@ public class OrderService {
 
             order.getItems().addAll(items);
 
-            double distance = HaversineCalculator.distanceKm(
-                    cart.getRestaurant().getLatitude().doubleValue(),
-                    cart.getRestaurant().getLongitude().doubleValue(),
-                    req.getDeliveryLat().doubleValue(),
-                    req.getDeliveryLng().doubleValue()
+            double distance = shippingService.getDistanceKm(
+                    cart.getRestaurant().getLatitude().doubleValue(), cart.getRestaurant().getLongitude().doubleValue(),
+                    req.getDeliveryLat().doubleValue(), req.getDeliveryLng().doubleValue()
             );
+
             long shippingFee = ShippingFeeCalculator.calculate(distance);
             BigDecimal shippingFeeBd = BigDecimal.valueOf(shippingFee);
             order.setShippingFee(shippingFeeBd);
