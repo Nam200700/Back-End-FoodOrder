@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalTime;
 
 @Data
 @Builder
@@ -23,5 +24,7 @@ public class RestaurantResponse {
     private Double rating;
     private Integer reviewsCount;
     private Integer orderCount;
+    private LocalTime opensAt;
+    private LocalTime closesAt;
 }
 
