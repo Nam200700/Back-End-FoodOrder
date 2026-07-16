@@ -53,6 +53,8 @@ public class RestaurantMapper {
                 .rating(avgRating)
                 .reviewsCount((int) count)
                 .orderCount((int) ordersCount)
+                .opensAt(r.getOpensAt())
+                .closesAt(r.getClosesAt())
                 .build();
     }
 
