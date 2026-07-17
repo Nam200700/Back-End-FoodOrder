@@ -20,6 +20,9 @@ public enum ErrorCode {
     USER_NOT_FOUND(404, "Không tìm thấy người dùng"),
     PHONE_EXISTS(409, "Số điện thoại đã được đăng ký"),
     EMAIL_EXISTS(409, "Email đã được đăng ký"),
+    //Them phan thong bao cho CCCD và Bien so xe neu bi trung hoac da co
+    ID_CARD_EXISTS(409, "Số CCCD/CMND đã được đăng ký"),
+    LICENSE_PLATE_EXISTS(409, "Biển số xe đã được đăng ký"),
 
     // Restaurant / Food / Category
     RESTAURANT_NOT_FOUND(404, "Không tìm thấy quán ăn"),
