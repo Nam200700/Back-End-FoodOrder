@@ -13,4 +13,6 @@ public interface ShipperRegisterRepository extends BaseRepository<ShipperRegiste
     Page<ShipperRegister> findByStatus(RegisterStatus status, Pageable pageable);
     Optional<ShipperRegister> findByUserUserId(Long userId);
     Optional<ShipperRegister> findTopByUserUserIdOrderByRegisterIdDesc(Long userId);
+    boolean existsByIdCard(String idCard);
+    boolean existsByLicensePlate(String licensePlate);
 }

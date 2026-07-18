@@ -59,6 +59,18 @@ public class AuthService {
                 && userRepository.existsByEmail(req.getEmail())) {
             throw new AppException(ErrorCode.EMAIL_EXISTS);
         }
+        // Check trùng CCCD/CMND và biển số xe (chỉ áp dụng khi đăng ký SHIPPER)
+        if ("SHIPPER".equalsIgnoreCase(req.getRole())) {
+            if (req.getIdCard() != null && !req.getIdCard().isBlank()
+                    && shipperRegisterRepository.existsByIdCard(req.getIdCard())) {
+                throw new AppException(ErrorCode.ID_CARD_EXISTS);
+            }
+            if (req.getLicensePlate() != null && !req.getLicensePlate().isBlank()
+                    && shipperRegisterRepository.existsByLicensePlate(req.getLicensePlate())) {
+                throw new AppException(ErrorCode.LICENSE_PLATE_EXISTS);
+            }
+        }
+
 
         org.example.datn.domain.enums.Role userRole = org.example.datn.domain.enums.Role.CUSTOMER;
         if (req.getRole() != null && !req.getRole().isBlank()) {
