@@ -11,7 +11,7 @@ import java.util.Optional;
 public interface CartRepository extends BaseRepository<Cart, Long> {
 
     @EntityGraph(attributePaths = {"items", "items.food", "restaurant"})
-    java.util.List<Cart> findByCustomerUserId(Long customerId);
+    java.util.List<Cart> findByCustomerUserIdOrderByCreatedAtDesc(Long customerId);
 
     @EntityGraph(attributePaths = {"items", "items.food", "restaurant"})
     Optional<Cart> findByCustomerUserIdAndRestaurantRestaurantId(Long customerId, Long restaurantId);
