@@ -34,6 +34,8 @@ public class UserResponse {
     private Integer activeDelivery;
     private Integer totalDelivery;
     private java.math.BigDecimal avgRating;
+
+    private Boolean isOnline;
 }
 
 

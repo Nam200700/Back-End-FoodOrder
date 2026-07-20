@@ -94,33 +94,40 @@ public class UserService {
         userRepository.save(user);
 
         if (user.getRole() == Role.SHIPPER) {
-            shipperRegisterRepository.findByUserUserId(userId).ifPresent(reg -> {
+            shipperRepository.findByUserUserId(userId).ifPresent(shipper -> {
                 if (req.getLicensePlate() != null && !req.getLicensePlate().trim().isEmpty()) {
-                    reg.setLicensePlate(req.getLicensePlate().trim());
+                    shipper.setLicensePlate(req.getLicensePlate().trim());
                 }
                 if (req.getVehicleType() != null && !req.getVehicleType().trim().isEmpty()) {
                     try {
-                        reg.setVehicleType(VehicleType.valueOf(req.getVehicleType().trim().toUpperCase()));
+                        shipper.setVehicleType(VehicleType.valueOf(req.getVehicleType().trim().toUpperCase()));
                     } catch (Exception e) {
                         // ignore invalid vehicle type
                     }
                 }
-                shipperRegisterRepository.save(reg);
+
+                if (req.getIsOnline() != null) {
+                    shipper.setIsOnline(req.getIsOnline());
+                    if (req.getIsOnline()) {
+                        shipper.setLastOnlineAt(java.time.LocalDateTime.now());
+                    }
+                }
+
+                shipperRepository.save(shipper);
             });
         }
 
         UserResponse response = userMapper.toResponse(user);
         if (user.getRole() == Role.SHIPPER) {
-            shipperRegisterRepository.findByUserUserId(userId).ifPresent(reg -> {
-                response.setVehicleType(reg.getVehicleType() != null ? reg.getVehicleType().name() : null);
-                response.setLicensePlate(reg.getLicensePlate());
-                response.setIdCard(reg.getIdCard());
-            });
             shipperRepository.findByUserUserId(userId).ifPresent(shipper -> {
+                response.setVehicleType(shipper.getVehicleType() != null ? shipper.getVehicleType().name() : null);
+                response.setLicensePlate(shipper.getLicensePlate());
                 response.setActiveDelivery(shipper.getActiveDelivery());
                 response.setTotalDelivery(shipper.getTotalDelivery());
+                response.setIsOnline(shipper.getIsOnline());
             });
         }
+
         return response;
     }
 

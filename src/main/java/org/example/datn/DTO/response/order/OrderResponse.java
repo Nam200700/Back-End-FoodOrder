@@ -21,11 +21,12 @@ public class OrderResponse {
 
     private Long restaurantId;
     private String restaurantName;
+    private String restaurantAddress;
 
     private Long shipperId;
     private String shipperName;
     private String shipperPhone;
-    private String shipperAvatar;   // avatar tài xế; FE tự dùng ảnh mặc định nếu null
+    private String shipperAvatar;
     private String shipperVehicleType;
     private String shipperLicensePlate;
 
