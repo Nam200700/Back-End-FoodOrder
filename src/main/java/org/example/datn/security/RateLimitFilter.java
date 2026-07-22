@@ -55,6 +55,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest req) {
-        return !req.getServletPath().startsWith("/api/v1/auth/");
+        String path = req.getServletPath();
+        return !path.startsWith("/api/v1/auth/") || path.startsWith("/api/v1/auth/chatbot");
     }
 }
