@@ -3,8 +3,11 @@ package org.example.datn.Controller;
 import lombok.RequiredArgsConstructor;
 import org.example.datn.common.ApiResponse;
 import org.example.datn.DTO.response.order.OrderResponse;
+import org.example.datn.common.PageResponse;
+import org.example.datn.domain.enums.OrderStatus;
 import org.example.datn.security.CustomUserDetails;
 import org.example.datn.Service.OrderService;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -50,10 +53,11 @@ public class ShipperOrderController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<org.example.datn.common.PageResponse<OrderResponse>>> getMyOrders(
+    public ResponseEntity<ApiResponse<PageResponse<OrderResponse>>> getMyOrders(
             @AuthenticationPrincipal CustomUserDetails user,
-            org.springframework.data.domain.Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.ok(org.example.datn.common.PageResponse.from(
-                orderService.getShipperOrders(user.getUserId(), pageable))));
+            @RequestParam(required = false) OrderStatus status,
+            Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(
+                orderService.getShipperOrders(user.getUserId(), status, pageable))));
     }
 }
