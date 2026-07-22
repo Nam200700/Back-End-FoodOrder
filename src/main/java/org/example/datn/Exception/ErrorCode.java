@@ -41,6 +41,7 @@ public enum ErrorCode {
     ORDER_ALREADY_CANCELLED(409, "Đơn hàng đã được hủy trước đó"),
     ORDER_ALREADY_COMPLETED(400, "Đơn đã hoàn tất, vui lòng dùng chức năng khiếu nại/hoàn tiền"),
     ORDER_CANCEL_STAGE_INVALID(400, "Đơn đang được chuẩn bị/giao, không thể hủy"),
+    ORDER_NOT_READY_FOR_PICKUP(409, "Đơn chưa sẵn sàng để nhận"),
 
     // Review
     REVIEW_NOT_ALLOWED(422, "Không thể đánh giá lúc này"),
@@ -55,6 +56,9 @@ public enum ErrorCode {
     // Shipping / Payment
     DISTANCE_TOO_FAR(400, "Khoảng cách vượt quá phạm vi giao hàng"),
     VNPAY_INVALID_SIGNATURE(400, "Chữ ký VNPay không hợp lệ"),
+
+    SHIPPER_OFFLINE(409, "Tài xế đang ngoại tuyến, không thể nhận đơn"),
+    SHIPPER_BUSY(409, "Tài xế đang giao đơn khác"),
 
     // Generic
     VALIDATION_FAILED(400, "Dữ liệu không hợp lệ"),
