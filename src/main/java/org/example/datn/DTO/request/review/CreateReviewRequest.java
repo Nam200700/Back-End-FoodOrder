@@ -5,13 +5,15 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 public class CreateReviewRequest {
 
     @NotNull(message = "orderId không được để trống")
     private Long orderId;
 
-    @NotNull(message = "Đánh giá quán không được để trống")
+//    @NotNull(message = "Đánh giá quán không được để trống")
     @Min(value = 1, message = "Đánh giá từ 1 đến 5")
     @Max(value = 5, message = "Đánh giá từ 1 đến 5")
     private Integer restaurantRating;
@@ -23,4 +25,6 @@ public class CreateReviewRequest {
     private Integer shipperRating;
 
     private String shipperComment;
+
+    private List<String> images;
 }

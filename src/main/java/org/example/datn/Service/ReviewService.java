@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.datn.common.PageResponse;
 import org.example.datn.domain.Order;
 import org.example.datn.domain.Review;
+import org.example.datn.domain.ReviewImage;
 import org.example.datn.domain.enums.OrderStatus;
 import org.example.datn.DTO.request.review.CreateReviewRequest;
 import org.example.datn.DTO.response.review.ReviewResponse;
@@ -21,6 +22,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -36,20 +39,21 @@ public class ReviewService {
 
     @Transactional
     public ReviewResponse createReview(Long customerId, CreateReviewRequest req) {
+        
         Order order = orderRepository.findByIdOrThrow(req.getOrderId(), ErrorCode.ORDER_NOT_FOUND);
 
         if (!order.getCustomer().getUserId().equals(customerId)) {
             throw new AppException(ErrorCode.FORBIDDEN);
         }
         if (order.getOrderStatus() != OrderStatus.COMPLETED) {
-            throw new ReviewNotAllowedException("Chỉ đánh giá đơn đã hoàn thành");
+            throw new AppException(ErrorCode.REVIEW_NOT_ALLOWED, "Chỉ đánh giá đơn đã hoàn thành");
         }
         if (order.getCompletedAt() != null
                 && order.getCompletedAt().plusDays(REVIEW_WINDOW_DAYS).isBefore(LocalDateTime.now())) {
-            throw new ReviewNotAllowedException("Đã quá " + REVIEW_WINDOW_DAYS + " ngày để đánh giá");
+            throw new AppException(ErrorCode.REVIEW_NOT_ALLOWED, "Đã quá ngày để đánh giá");
         }
         if (reviewRepository.existsByOrderOrderId(req.getOrderId())) {
-            throw new ReviewNotAllowedException("Đơn hàng này đã được đánh giá");
+            throw new AppException(ErrorCode.REVIEW_EXISTS);
         }
 
         Shipper shipper = null;
@@ -67,6 +71,22 @@ public class ReviewService {
                 .shipperComment(req.getShipperComment())
                 .shipper(shipper)
                 .build();
+
+        if (req.getImages() != null || !req.getImages().isEmpty()) {
+            List<ReviewImage> reviewImages = new ArrayList<>();
+            for (int i = 0; i < req.getImages().size(); i++) {
+                String imageUrl = req.getImages().get(i);
+                if (imageUrl != null && !imageUrl.isBlank()) {
+                    ReviewImage reviewImage = ReviewImage.builder()
+                            .review(review)
+                            .imageUrl(imageUrl)
+                            .displayOrder(i)
+                            .build();
+                    reviewImages.add(reviewImage);
+                }
+            }
+            review.setImages(reviewImages);
+        }
 
         Review savedReview = reviewRepository.save(review);
 
@@ -100,5 +120,16 @@ public class ReviewService {
         return PageResponse.from(reviewRepository
                 .findByRestaurantRestaurantIdOrderByCreatedAtDesc(restaurantId, pageable)
                 .map(reviewMapper::toResponse));
+    }
+
+    @Transactional(readOnly = true)
+    public ReviewResponse getReviewByOrderId(Long customerId, Long orderId) {
+        Review review = reviewRepository.findByOrderOrderId(orderId)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+
+        if (!review.getCustomer().getUserId().equals(customerId)) {
+            throw new AppException(ErrorCode.FORBIDDEN);
+        }
+        return reviewMapper.toResponse(review);
     }
 }
