@@ -46,14 +46,14 @@ public class ReviewService {
             throw new AppException(ErrorCode.FORBIDDEN);
         }
         if (order.getOrderStatus() != OrderStatus.COMPLETED) {
-            throw new ReviewNotAllowedException("Chỉ đánh giá đơn đã hoàn thành");
+            throw new AppException(ErrorCode.REVIEW_NOT_ALLOWED, "Chỉ đánh giá đơn đã hoàn thành");
         }
         if (order.getCompletedAt() != null
                 && order.getCompletedAt().plusDays(REVIEW_WINDOW_DAYS).isBefore(LocalDateTime.now())) {
-            throw new ReviewNotAllowedException("Đã quá " + REVIEW_WINDOW_DAYS + " ngày để đánh giá");
+            throw new AppException(ErrorCode.REVIEW_NOT_ALLOWED, "Đã quá ngày để đánh giá");
         }
         if (reviewRepository.existsByOrderOrderId(req.getOrderId())) {
-            throw new ReviewNotAllowedException("Đơn hàng này đã được đánh giá");
+            throw new AppException(ErrorCode.REVIEW_EXISTS);
         }
 
         Shipper shipper = null;
