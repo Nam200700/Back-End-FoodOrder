@@ -129,6 +129,9 @@ public class UserService {
                 }
 
                 if (req.getIsOnline() != null) {
+                    if (!req.getIsOnline() && shipper.getActiveDelivery() != null && shipper.getActiveDelivery() > 0) {
+                        throw new AppException(ErrorCode.SHIPPER_HAS_ACTIVE_DELIVERY);
+                    }
                     shipper.setIsOnline(req.getIsOnline());
                     if (req.getIsOnline()) {
                         shipper.setLastOnlineAt(java.time.LocalDateTime.now());
