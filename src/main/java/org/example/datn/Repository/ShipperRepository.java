@@ -10,4 +10,5 @@ import java.util.Optional;
 public interface ShipperRepository extends BaseRepository<Shipper, Long> {
 
     Optional<Shipper> findByUserUserId(Long userId);
+    boolean existsByLicensePlate(String licensePlate);
 }
