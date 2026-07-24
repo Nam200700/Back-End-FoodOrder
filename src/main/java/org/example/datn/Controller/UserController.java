@@ -7,11 +7,7 @@ import org.example.datn.security.CustomUserDetails;
 import org.example.datn.Service.UserService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.example.datn.DTO.request.auth.UpdateProfileRequest;
 
 @RestController
@@ -33,14 +29,14 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.ok(userService.updateProfile(user.getUserId(), req)));
     }
 
-    @org.springframework.web.bind.annotation.PostMapping("/owner/re-register")
+    @PostMapping("/owner/re-register")
     public ResponseEntity<ApiResponse<UserResponse>> ownerReRegister(
             @AuthenticationPrincipal CustomUserDetails user,
             @jakarta.validation.Valid @RequestBody org.example.datn.DTO.request.auth.OwnerReRegisterRequest req) {
         return ResponseEntity.ok(ApiResponse.ok(userService.ownerReRegister(user.getUserId(), req)));
     }
 
-    @org.springframework.web.bind.annotation.PostMapping("/shipper/re-register")
+    @PostMapping("/shipper/re-register")
     public ResponseEntity<ApiResponse<UserResponse>> shipperReRegister(
             @AuthenticationPrincipal CustomUserDetails user,
             @jakarta.validation.Valid @RequestBody org.example.datn.DTO.request.auth.ShipperReRegisterRequest req) {

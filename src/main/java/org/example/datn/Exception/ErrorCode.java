@@ -59,6 +59,7 @@ public enum ErrorCode {
 
     SHIPPER_OFFLINE(409, "Tài xế đang ngoại tuyến, không thể nhận đơn"),
     SHIPPER_BUSY(409, "Tài xế đang giao đơn khác"),
+    SHIPPER_HAS_ACTIVE_DELIVERY(400, "Không thể offline khi đang có đơn hàng đang giao"),
 
     // Generic
     VALIDATION_FAILED(400, "Dữ liệu không hợp lệ"),
