@@ -70,9 +70,9 @@ public class OrderService {
         User customer = userRepository.getReferenceById(customerId);
         List<Order> savedOrders = req.getRestaurantId().stream().map(restaurantId -> {
             Cart cart = cartRepository.findByCustomerUserIdAndRestaurantRestaurantId(customerId, restaurantId)
-                    .orElseThrow(() -> new AppException(ErrorCode.CART_EMPTY));
+                    .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
             if (cart.getItems().isEmpty()) {
-                throw new AppException(ErrorCode.CART_EMPTY);
+                throw new AppException(ErrorCode.CART_ITEM_NOT_FOUND);
             }
             Order order = Order.builder()
                     .customer(customer)
