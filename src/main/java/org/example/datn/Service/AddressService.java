@@ -41,9 +41,9 @@ public class AddressService {
     @Transactional
     public AddressResponse updateAddress(Long customerId, Long addressId, AddressRequest request) {
         CustomerAddress addressEntity = addressRepository.findById(addressId)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy địa chỉ!"));
+                .orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_FOUND));
         if (!addressEntity.getCustomer().getUserId().equals(customerId)) {
-            throw new AppException(ErrorCode.UNAUTHORIZED);
+            throw new AppException(ErrorCode.FORBIDDEN);
         }
 
         if (Boolean.TRUE.equals(request.getIsDefault())) {
