@@ -33,6 +33,7 @@ public enum ErrorCode {
     CART_EMPTY(400, "Giỏ hàng đang trống"),
     CART_CONFLICT(409, "Giỏ hàng đang chứa món từ quán khác"),
     CART_ITEM_NOT_FOUND(404, "Không tìm thấy món trong giỏ"),
+    CART_NOT_FOUND(404, "không tìm thấy giỏ hàng"),
 
     // Order
     ORDER_NOT_FOUND(404, "Không tìm thấy đơn hàng"),
@@ -60,6 +61,8 @@ public enum ErrorCode {
     SHIPPER_OFFLINE(409, "Tài xế đang ngoại tuyến, không thể nhận đơn"),
     SHIPPER_BUSY(409, "Tài xế đang giao đơn khác"),
     SHIPPER_HAS_ACTIVE_DELIVERY(400, "Không thể offline khi đang có đơn hàng đang giao"),
+
+    ADDRESS_NOT_FOUND(404, "Không tìm thấy địa chỉ"),
 
     // Generic
     VALIDATION_FAILED(400, "Dữ liệu không hợp lệ"),
