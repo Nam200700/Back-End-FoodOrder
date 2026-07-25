@@ -62,6 +62,8 @@ public enum ErrorCode {
     SHIPPER_BUSY(409, "Tài xế đang giao đơn khác"),
     SHIPPER_HAS_ACTIVE_DELIVERY(400, "Không thể offline khi đang có đơn hàng đang giao"),
 
+    ADDRESS_NOT_FOUND(404, "Không tìm thấy địa chỉ"),
+
     // Generic
     VALIDATION_FAILED(400, "Dữ liệu không hợp lệ"),
     NOT_FOUND(404, "Không tìm thấy tài nguyên"),
