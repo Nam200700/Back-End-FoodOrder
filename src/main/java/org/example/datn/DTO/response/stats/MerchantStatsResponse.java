@@ -15,4 +15,11 @@ public class MerchantStatsResponse {
     private BigDecimal subtotal;
     private BigDecimal commission;
     private BigDecimal commissionRate;
+
+    // ─── Bổ sung cho dashboard merchant (rating toàn cục + KPI vận hành) ───
+    private long cancelledOrders;     // số đơn bị huỷ
+    private long pendingOrders;       // số đơn đang chờ duyệt
+    private Double avgRating;         // điểm đánh giá trung bình TOÀN CỤC (không phải theo trang)
+    private long reviewsCount;        // tổng số đánh giá
+    private BigDecimal avgOrderValue; // AOV = doanh thu thực nhận / đơn hoàn tất
 }

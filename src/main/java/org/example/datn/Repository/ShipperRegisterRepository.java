@@ -11,6 +11,8 @@ import java.util.Optional;
 @Repository
 public interface ShipperRegisterRepository extends BaseRepository<ShipperRegister, Long> {
     Page<ShipperRegister> findByStatus(RegisterStatus status, Pageable pageable);
+    // Đếm hồ sơ shipper đang chờ duyệt cho badge/alert dashboard admin
+    long countByStatus(RegisterStatus status);
     Optional<ShipperRegister> findByUserUserId(Long userId);
     Optional<ShipperRegister> findTopByUserUserIdOrderByRegisterIdDesc(Long userId);
     boolean existsByIdCard(String idCard);
