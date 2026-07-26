@@ -13,4 +13,7 @@ public interface ReportRepository extends BaseRepository<Report, Long> {
     Page<Report> findByStatusOrderByCreatedAtDesc(ReportStatus status, Pageable pageable);
 
     Page<Report> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
+    // Đếm báo cáo theo trạng thái (PENDING) cho alert dashboard admin
+    long countByStatus(ReportStatus status);
 }
