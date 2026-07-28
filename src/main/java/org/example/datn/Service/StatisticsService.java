@@ -45,6 +45,7 @@ public class StatisticsService {
     private final ShipperRegisterRepository shipperRegisterRepository;
     private final ReportRepository reportRepository;
     private final ReviewRepository reviewRepository;
+    private final FoodRepository foodRepository; // đếm sức khoẻ thực đơn cho dashboard insights
 
     @Value("${platform.commission-rate:0.10}")
     private double commissionRate;
