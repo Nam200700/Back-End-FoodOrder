@@ -29,4 +29,13 @@ public class MerchantStatsController {
         return ResponseEntity.ok(ApiResponse.ok(
                 statisticsService.merchantStats(user.getUserId(), restaurantId)));
     }
+
+    /** Tổng quan nghiệp vụ cho dashboard (xu hướng, giờ cao điểm, khách, sức khoẻ thực đơn). */
+    @GetMapping("/insights")
+    public ResponseEntity<ApiResponse<MerchantInsightsResponse>> insights(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @RequestParam Long restaurantId) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                statisticsService.merchantInsights(user.getUserId(), restaurantId)));
+    }
 }
