@@ -275,7 +275,13 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public RefreshResponse refresh(RefreshRequest req) {
-        String token = req.getRefreshToken();
+        // Overload cũ (đọc từ body) — giữ lại để tương thích ngược, uỷ quyền cho bản String.
+        return refresh(req.getRefreshToken());
+    }
+
+    @Transactional(readOnly = true)
+    public RefreshResponse refresh(String token) {
+        // Refresh token nay lấy từ cookie HttpOnly (xem AuthController) thay vì body.
         if (!jwtTokenProvider.validateToken(token) || !jwtTokenProvider.isRefreshToken(token)) {
             throw new AppException(ErrorCode.TOKEN_INVALID);
         }
