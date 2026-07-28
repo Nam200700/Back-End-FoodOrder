@@ -35,6 +35,15 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
     @Value("${app.oauth2.redirect-uri}")
     private String redirectUri;
 
+    @Value("${app.auth.cookie.secure:false}")
+    private boolean cookieSecure;
+
+    @Value("${app.auth.cookie.same-site:Lax}")
+    private String cookieSameSite;
+
+    @Value("${app.jwt.refresh-token-expiry}")
+    private long refreshTokenExpiry;
+
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request,
                                         HttpServletResponse response,
@@ -49,9 +58,20 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         String token = jwtTokenProvider.generateAccessToken(user);
         String refreshToken = jwtTokenProvider.generateRefreshToken(user);
 
+        // Đồng bộ với luồng login thường: refresh token đi trong cookie HttpOnly, KHÔNG
+        // nhét vào URL (tránh lộ token qua lịch sử trình duyệt / referer). URL chỉ mang
+        // access token sống ngắn cho FE nạp vào bộ nhớ.
+        ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken)
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .sameSite(cookieSameSite)
+                .path("/api/v1/auth")
+                .maxAge(Duration.ofMillis(refreshTokenExpiry))
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+
         String target = UriComponentsBuilder.fromUriString(redirectUri)
                 .queryParam("token", token)
-                .queryParam("refreshToken", refreshToken)
                 .build().toUriString();
 
         getRedirectStrategy().sendRedirect(request, response, target);
