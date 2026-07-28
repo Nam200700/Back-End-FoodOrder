@@ -2,6 +2,7 @@ package org.example.datn.Controller;
 
 import lombok.RequiredArgsConstructor;
 import org.example.datn.common.ApiResponse;
+import org.example.datn.DTO.response.stats.MerchantInsightsResponse;
 import org.example.datn.DTO.response.stats.MerchantStatsResponse;
 import org.example.datn.security.CustomUserDetails;
 import org.example.datn.Service.StatisticsService;
