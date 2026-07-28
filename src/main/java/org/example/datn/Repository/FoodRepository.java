@@ -34,4 +34,10 @@ public interface FoodRepository extends BaseRepository<Food, Long> {
     List<Food> findByRestaurantRestaurantId(Long restaurantId);
 
     List<Food> findByCategoryCategoryId(Long categoryId);
+
+    // ─── Đếm sức khoẻ thực đơn cho dashboard merchant ───
+    long countByRestaurantRestaurantId(Long restaurantId);                                      // tổng số món
+    long countByRestaurantRestaurantIdAndStatusTrueAndIsAvailableTrue(Long restaurantId);       // đang bán
+    long countByRestaurantRestaurantIdAndStatusTrueAndIsAvailableFalse(Long restaurantId);      // hiện nhưng tạm hết
+    long countByRestaurantRestaurantIdAndStatusFalse(Long restaurantId);                        // đang ẩn
 }
