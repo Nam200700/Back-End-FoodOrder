@@ -61,6 +61,18 @@ public class AdminService {
         return userPage.map(userMapper::toResponse);
     }
 
+    public UserStatsResponse getUserStats() {
+        return UserStatsResponse.builder()
+                .totalUser(userRepository.count())
+                .activeUser(userRepository.countByStatusTrue())
+                .blockedUser(userRepository.countByStatusFalse())
+                .totalAdmin(userRepository.countByRole(Role.ADMIN))
+                .totalCustomer(userRepository.countByRole(Role.CUSTOMER))
+                .totalOwner(userRepository.countByRole(Role.OWNER))
+                .totalShipper(userRepository.countByRole(Role.SHIPPER))
+                .build();
+    }
+
     @Transactional
     public UserResponse setUserStatus(Long userId, boolean active, String lockedReason) {
         User user = userRepository.findByIdOrThrow(userId, ErrorCode.USER_NOT_FOUND);
