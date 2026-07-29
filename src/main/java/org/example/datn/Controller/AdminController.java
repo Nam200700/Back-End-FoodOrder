@@ -61,7 +61,10 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.ok(pageResponse));
     }
 
-
+    @GetMapping("/users/stats")
+    public ResponseEntity<ApiResponse<UserStatsResponse>> getUserStats() {
+        return ResponseEntity.ok(ApiResponse.ok(adminService.getUserStats()));
+    }
 
     @PatchMapping("/users/{id}/status")
     public ResponseEntity<ApiResponse<UserResponse>> setStatus(
