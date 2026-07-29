@@ -1,6 +1,7 @@
 package org.example.datn.Service;
 
 import lombok.RequiredArgsConstructor;
+import org.example.datn.DTO.response.stats.UserStatsResponse;
 import org.example.datn.common.PageResponse;
 import org.example.datn.domain.User;
 import org.example.datn.domain.RestaurantRegister;
@@ -9,6 +10,7 @@ import org.example.datn.domain.Restaurant;
 import org.example.datn.domain.Shipper;
 import org.example.datn.domain.enums.RegisterStatus;
 import org.example.datn.Repository.ShipperRepository;
+import org.example.datn.domain.enums.Role;
 import org.example.datn.domain.enums.VehicleType;
 import org.example.datn.DTO.response.auth.UserResponse;
 import org.example.datn.DTO.response.restaurant.RestaurantRegisterResponse;
@@ -24,6 +26,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 
@@ -39,8 +42,23 @@ public class AdminService {
     private final ShipperRepository shipperRepository;
 
     @Transactional(readOnly = true)
-    public PageResponse<UserResponse> listUsers(Pageable pageable) {
-        return PageResponse.from(userRepository.findAll(pageable).map(userMapper::toResponse));
+    public Page<UserResponse> listUsers(String role, Boolean activeStatus, Pageable pageable) {
+        Page<User> userPage;
+        boolean hasRole = StringUtils.hasText(role) && !"all".equalsIgnoreCase(role);
+        boolean hasStatus = activeStatus != null;
+
+        if (hasRole && hasStatus) {
+            userPage = userRepository.findByRoleAndStatus(Role.valueOf(role.toUpperCase()), activeStatus, pageable);
+        } else if (hasRole) {
+            userPage = userRepository.findByRole(Role.valueOf(role.toUpperCase()), pageable);
+        } else if (hasStatus) {
+            userPage = userRepository.findByStatus(activeStatus, pageable);
+        } else {
+            userPage = userRepository.findAll(pageable);
+        }
+
+        // Sử dụng UserMapper để map từng phần tử User sang UserResponse
+        return userPage.map(userMapper::toResponse);
     }
 
     @Transactional
