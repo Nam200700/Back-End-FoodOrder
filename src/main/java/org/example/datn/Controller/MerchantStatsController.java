@@ -2,6 +2,7 @@ package org.example.datn.Controller;
 
 import lombok.RequiredArgsConstructor;
 import org.example.datn.common.ApiResponse;
+import org.example.datn.DTO.response.stats.MerchantInsightsResponse;
 import org.example.datn.DTO.response.stats.MerchantStatsResponse;
 import org.example.datn.security.CustomUserDetails;
 import org.example.datn.Service.StatisticsService;
@@ -27,5 +28,14 @@ public class MerchantStatsController {
             @RequestParam Long restaurantId) {
         return ResponseEntity.ok(ApiResponse.ok(
                 statisticsService.merchantStats(user.getUserId(), restaurantId)));
+    }
+
+    /** Tổng quan nghiệp vụ cho dashboard (xu hướng, giờ cao điểm, khách, sức khoẻ thực đơn). */
+    @GetMapping("/insights")
+    public ResponseEntity<ApiResponse<MerchantInsightsResponse>> insights(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @RequestParam Long restaurantId) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                statisticsService.merchantInsights(user.getUserId(), restaurantId)));
     }
 }

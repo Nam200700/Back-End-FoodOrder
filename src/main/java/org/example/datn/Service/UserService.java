@@ -1,6 +1,7 @@
 package org.example.datn.Service;
 
 import lombok.RequiredArgsConstructor;
+import org.example.datn.Exception.AppException;
 import org.example.datn.domain.User;
 import org.example.datn.domain.CustomerAddress;
 import org.example.datn.domain.RestaurantRegister;
@@ -20,6 +21,8 @@ import org.example.datn.domain.enums.VehicleType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -37,7 +40,7 @@ public class UserService {
         User user = userRepository.findByIdOrThrow(userId, ErrorCode.USER_NOT_FOUND);
         UserResponse response = userMapper.toResponse(user);
         if (user.getRole() == Role.SHIPPER) {
-            shipperRegisterRepository.findByUserUserId(userId).ifPresent(reg -> {
+            shipperRepository.findByUserUserId(userId).ifPresent(reg -> {
                 response.setVehicleType(reg.getVehicleType() != null ? reg.getVehicleType().name() : null);
                 response.setLicensePlate(reg.getLicensePlate());
                 response.setIdCard(reg.getIdCard());
@@ -59,6 +62,16 @@ public class UserService {
         if (req.getPhone() != null && !req.getPhone().trim().isEmpty()) {
             user.setPhone(req.getPhone().trim());
         }
+        if (req.getEmail() != null && !req.getEmail().trim().isEmpty()) {
+            String newEmail = req.getEmail().trim();
+            if (!newEmail.equals(user.getEmail())) {
+                boolean emailExists = userRepository.existsByEmail(newEmail);
+                if (emailExists) {
+                    throw new AppException(ErrorCode.EMAIL_EXISTS, "Email đã tồn tại!");
+                }
+                user.setEmail(newEmail);
+            }
+        }
         if (req.getAvatar() != null) {
             String oldAvatar = user.getAvatar();
             String newAvatar = req.getAvatar().trim();
@@ -69,12 +82,14 @@ public class UserService {
                 user.setAvatar(newAvatar);
             }
         }
+
         if (user.getRole() == Role.CUSTOMER) {
             CustomerAddress address = customerAddressRepository.findByCustomerUserIdAndIsDefaultTrue(userId)
                     .orElseGet(() -> {
-                        java.util.List<CustomerAddress> all = customerAddressRepository.findByCustomerUserId(userId);
+                        List<CustomerAddress> all = customerAddressRepository.findByCustomerUserId(userId);
                         return all.isEmpty() ? null : all.get(0);
                     });
+
             if (address == null) {
                 address = new CustomerAddress();
                 address.setCustomer(user);
@@ -94,33 +109,50 @@ public class UserService {
         userRepository.save(user);
 
         if (user.getRole() == Role.SHIPPER) {
-            shipperRegisterRepository.findByUserUserId(userId).ifPresent(reg -> {
+            shipperRepository.findByUserUserId(userId).ifPresent(shipper -> {
                 if (req.getLicensePlate() != null && !req.getLicensePlate().trim().isEmpty()) {
-                    reg.setLicensePlate(req.getLicensePlate().trim());
+                    String newLicensePlate = req.getLicensePlate().trim();
+                    if (!newLicensePlate.equals(shipper.getLicensePlate())) {
+                        boolean plateExists = shipperRepository.existsByLicensePlate(newLicensePlate);
+                        if (plateExists) {
+                            throw new AppException(ErrorCode.LICENSE_PLATE_EXISTS);
+                        }
+                        shipper.setLicensePlate(req.getLicensePlate().trim());
+                    }
                 }
                 if (req.getVehicleType() != null && !req.getVehicleType().trim().isEmpty()) {
                     try {
-                        reg.setVehicleType(VehicleType.valueOf(req.getVehicleType().trim().toUpperCase()));
+                        shipper.setVehicleType(VehicleType.valueOf(req.getVehicleType().trim().toUpperCase()));
                     } catch (Exception e) {
                         // ignore invalid vehicle type
                     }
                 }
-                shipperRegisterRepository.save(reg);
+
+                if (req.getIsOnline() != null) {
+                    if (!req.getIsOnline() && shipper.getActiveDelivery() != null && shipper.getActiveDelivery() > 0) {
+                        throw new AppException(ErrorCode.SHIPPER_HAS_ACTIVE_DELIVERY);
+                    }
+                    shipper.setIsOnline(req.getIsOnline());
+                    if (req.getIsOnline()) {
+                        shipper.setLastOnlineAt(java.time.LocalDateTime.now());
+                    }
+                }
+
+                shipperRepository.save(shipper);
             });
         }
 
         UserResponse response = userMapper.toResponse(user);
         if (user.getRole() == Role.SHIPPER) {
-            shipperRegisterRepository.findByUserUserId(userId).ifPresent(reg -> {
-                response.setVehicleType(reg.getVehicleType() != null ? reg.getVehicleType().name() : null);
-                response.setLicensePlate(reg.getLicensePlate());
-                response.setIdCard(reg.getIdCard());
-            });
             shipperRepository.findByUserUserId(userId).ifPresent(shipper -> {
+                response.setVehicleType(shipper.getVehicleType() != null ? shipper.getVehicleType().name() : null);
+                response.setLicensePlate(shipper.getLicensePlate());
                 response.setActiveDelivery(shipper.getActiveDelivery());
                 response.setTotalDelivery(shipper.getTotalDelivery());
+                response.setIsOnline(shipper.getIsOnline());
             });
         }
+
         return response;
     }
 

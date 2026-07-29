@@ -32,6 +32,14 @@ public class ReviewController {
                 .body(ApiResponse.created(reviewService.createReview(user.getUserId(), req)));
     }
 
+    @GetMapping("/reviews/{orderId}")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<ApiResponse<ReviewResponse>> getReviewByOrder(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @PathVariable Long orderId) {
+        return ResponseEntity.ok(ApiResponse.ok(reviewService.getReviewByOrderId(user.getUserId(), orderId)));
+    }
+
     @PostMapping("/merchant/reviews/{reviewId}/reply")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<ApiResponse<ReviewResponse>> reply(

@@ -90,4 +90,68 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
               AND o.paymentStatus != org.example.datn.domain.enums.PaymentStatus.REFUNDED
             """)
     BigDecimal sumCompletedSubtotalExcludeRefunded();
+
+    // ─── Dashboard insights merchant (tổng quan nghiệp vụ) ───────────────────
+
+    /** Doanh thu món (subtotal) đơn hoàn tất của quán trong khoảng [from, to). */
+    @Query("""
+            SELECT COALESCE(SUM(o.subtotalAmount), 0) FROM Order o
+            WHERE o.restaurant.restaurantId = :rid
+              AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+              AND o.paymentStatus != org.example.datn.domain.enums.PaymentStatus.REFUNDED
+              AND o.createdAt >= :from AND o.createdAt < :to
+            """)
+    BigDecimal sumCompletedSubtotalByRestaurantBetween(@Param("rid") Long restaurantId,
+                                                       @Param("from") java.time.LocalDateTime from,
+                                                       @Param("to") java.time.LocalDateTime to);
+
+    /** Số đơn hoàn tất của quán trong khoảng [from, to). */
+    @Query("""
+            SELECT COUNT(o) FROM Order o
+            WHERE o.restaurant.restaurantId = :rid
+              AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+              AND o.createdAt >= :from AND o.createdAt < :to
+            """)
+    long countCompletedByRestaurantBetween(@Param("rid") Long restaurantId,
+                                           @Param("from") java.time.LocalDateTime from,
+                                           @Param("to") java.time.LocalDateTime to);
+
+    /** Số đơn hoàn tất gom theo giờ trong ngày → {hour, count}. */
+    @Query("""
+            SELECT FUNCTION('HOUR', o.createdAt), COUNT(o) FROM Order o
+            WHERE o.restaurant.restaurantId = :rid
+              AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+            GROUP BY FUNCTION('HOUR', o.createdAt)
+            ORDER BY FUNCTION('HOUR', o.createdAt)
+            """)
+    List<Object[]> findPeakHoursByRestaurant(@Param("rid") Long restaurantId);
+
+    /** Số khách (distinct) đã có đơn hoàn tất ở quán. */
+    @Query("""
+            SELECT COUNT(DISTINCT o.customer.userId) FROM Order o
+            WHERE o.restaurant.restaurantId = :rid
+              AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+            """)
+    long countDistinctCustomersByRestaurant(@Param("rid") Long restaurantId);
+
+    /** Id khách có >= 2 đơn hoàn tất (khách quay lại) — service lấy .size(). */
+    @Query("""
+            SELECT o.customer.userId FROM Order o
+            WHERE o.restaurant.restaurantId = :rid
+              AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+            GROUP BY o.customer.userId
+            HAVING COUNT(o) >= 2
+            """)
+    List<Long> findReturningCustomerIdsByRestaurant(@Param("rid") Long restaurantId);
+
+    /** Id khách có đơn hoàn tất ĐẦU TIÊN kể từ :since (khách mới) — service lấy .size(). */
+    @Query("""
+            SELECT o.customer.userId FROM Order o
+            WHERE o.restaurant.restaurantId = :rid
+              AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+            GROUP BY o.customer.userId
+            HAVING MIN(o.createdAt) >= :since
+            """)
+    List<Long> findNewCustomerIdsByRestaurantSince(@Param("rid") Long restaurantId,
+                                                   @Param("since") java.time.LocalDateTime since);
 }

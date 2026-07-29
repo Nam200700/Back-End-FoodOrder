@@ -77,10 +77,19 @@ public class ShippingService {
 
     private RouteInfoResponse getRouteInfo(double startLat, double startLng, double endLat, double endLng) {
         try {
-            String url = String.format("https://api.openrouteservice.org/v2/directions/driving-car?api_key=%s&start=%f,%f&end=%f,%f",
-                    openRouteServiceApiKey, startLng, startLat, endLng, endLat
+            String url = String.format(
+                    "https://api.openrouteservice.org/v2/directions/driving-car" +
+                            "?api_key=%s" +
+                            "&start=%f,%f" +
+                            "&end=%f,%f" +
+                            "&preference=fastest" +
+                            "&instructions=false",
+                    openRouteServiceApiKey,
+                    startLng, startLat,
+                    endLng, endLat
             );
 
+            log.info("ORS URL: {}", url);
             ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
 
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {

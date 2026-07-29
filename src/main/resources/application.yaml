@@ -49,8 +49,16 @@ app:
     secret: ${JWT_SECRET:antigravity-food-dev-secret-key-change-me-256bit}
     access-token-expiry: 900000        # 15 minutes (ms)
     refresh-token-expiry: 604800000    # 7 days (ms)
+  auth:
+    cookie:
+      # Refresh token đặt trong cookie HttpOnly (JS không đọc được -> chống XSS trộm token).
+      # Dev localhost chạy http nên secure=false; PROD (HTTPS) đặt AUTH_COOKIE_SECURE=true.
+      # SameSite=Lax hợp lệ khi FE/BE cùng site (localhost khác port vẫn same-site); nếu FE và
+      # BE ở hai domain khác nhau thật thì đặt AUTH_COOKIE_SAMESITE=None kèm secure=true.
+      secure: ${AUTH_COOKIE_SECURE:false}
+      same-site: ${AUTH_COOKIE_SAMESITE:Lax}
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,https://app.antigravity.vn}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
   shipping:
     base-fee: 15000        # VND for first 2km
     base-km: 2.0

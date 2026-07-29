@@ -18,4 +18,19 @@ public class StatsOverviewResponse {
     private BigDecimal totalMerchantNet;
     private BigDecimal totalShipperShare;
     private BigDecimal commissionRate;
+
+    // ─── Bổ sung cho dashboard admin bỏ hardcode đi dùng dữ liệu từ db đẩy lên ───
+    private long activeShippers;      // shipper đang online
+    private long lockedUsers;         // tài khoản bị khoá
+    private long customerCount;       // phân bố vai trò: khách hàng
+    private long ownerCount;          // phân bố vai trò: chủ quán
+    private long shipperCount;        // phân bố vai trò: tài xế
+    private long pendingRestaurantRegisters; // hồ sơ quán chờ duyệt
+    private long pendingShipperRegisters;    // hồ sơ shipper chờ duyệt
+    private long pendingReports;      // báo cáo chưa xử lý
+    private BigDecimal avgOrderValue; // giá trị đơn trung bình (AOV = GTV / đơn hoàn tất)
+    // Phân bố trạng thái đơn (panel vận hành)
+    private long pendingOrders;
+    private long preparingOrders;
+    private long deliveringOrders;
 }

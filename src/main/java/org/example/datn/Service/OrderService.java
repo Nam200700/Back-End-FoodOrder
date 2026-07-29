@@ -53,6 +53,7 @@ public class OrderService {
     private final PaymentRepository paymentRepository;
     private final RefundService refundService;
     private final ShippingService shippingService;
+    private final DeliveryRepository deliveryRepository;
 
     private static final Map<OrderStatus, Set<OrderStatus>> VALID_TRANSITIONS = Map.of(
             PENDING, Set.of(CONFIRMED, CANCELLED),
@@ -69,9 +70,9 @@ public class OrderService {
         User customer = userRepository.getReferenceById(customerId);
         List<Order> savedOrders = req.getRestaurantId().stream().map(restaurantId -> {
             Cart cart = cartRepository.findByCustomerUserIdAndRestaurantRestaurantId(customerId, restaurantId)
-                    .orElseThrow(() -> new AppException(ErrorCode.CART_EMPTY));
+                    .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
             if (cart.getItems().isEmpty()) {
-                throw new AppException(ErrorCode.CART_EMPTY);
+                throw new AppException(ErrorCode.CART_ITEM_NOT_FOUND);
             }
             Order order = Order.builder()
                     .customer(customer)
@@ -342,18 +343,26 @@ public class OrderService {
     @Transactional(isolation = Isolation.SERIALIZABLE)
     public OrderResponse acceptOrder(Long shipperId, Long orderId) {
         Order order = orderRepository.findByIdOrThrow(orderId, ErrorCode.ORDER_NOT_FOUND);
+        Shipper shipper = shipperRepository.findByUserUserId(shipperId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
         if (order.getShipper() != null) {
             throw new AppException(ErrorCode.ORDER_ALREADY_TAKEN);
         }
         if (order.getOrderStatus() != READY_FOR_PICKUP) {
-            throw new OrderStatusException("Đơn chưa sẵn sàng để nhận");
+            throw new AppException(ErrorCode.ORDER_NOT_READY_FOR_PICKUP);
         }
+
+        if (!Boolean.TRUE.equals(shipper.getIsOnline())) {
+            throw new AppException(ErrorCode.SHIPPER_OFFLINE);
+        }
+        if (shipper.getActiveDelivery() > 0) {
+            throw new AppException(ErrorCode.SHIPPER_BUSY);
+        }
+
         order.setShipper(userRepository.getReferenceById(shipperId));
         orderRepository.save(order);
 
-        // Cập nhật activeDelivery cho tài xế
-        Shipper shipper = shipperRepository.findByUserUserId(shipperId)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         shipper.setActiveDelivery(shipper.getActiveDelivery() + 1);
         shipperRepository.save(shipper);
 
@@ -443,10 +452,13 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
-    public Page<OrderResponse> getShipperOrders(Long shipperId, Pageable pageable) {
-        return orderRepository.findByShipperUserId(shipperId, pageable)
-                .map(orderMapper::toResponse)
-                .map(this::enrichOrderResponse);
+    public Page<OrderResponse> getShipperOrders(Long shipperId, OrderStatus status, Pageable pageable) {
+        Page<Delivery> deliveryPage = deliveryRepository.findByShipperIdAndOrderStatus(shipperId, status, pageable);
+        return deliveryPage.map(delivery -> {
+            Order order = delivery.getOrder();
+            OrderResponse response = orderMapper.toResponse(order);
+            return enrichOrderResponse(response);
+        });
     }
 
     @Transactional(readOnly = true)

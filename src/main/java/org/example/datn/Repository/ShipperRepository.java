@@ -10,4 +10,8 @@ import java.util.Optional;
 public interface ShipperRepository extends BaseRepository<Shipper, Long> {
 
     Optional<Shipper> findByUserUserId(Long userId);
+    boolean existsByLicensePlate(String licensePlate);
+
+    // Đếm số shipper đang online (phục vụ card "Tài xế đang hoạt động" ở dashboard admin)
+    long countByIsOnlineTrue();
 }

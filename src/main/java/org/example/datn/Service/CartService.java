@@ -31,7 +31,7 @@ public class CartService {
 
     @Transactional(readOnly = true)
     public List<CartResponse> getCart(Long customerId) {
-        return cartRepository.findByCustomerUserId(customerId).stream()
+        return cartRepository.findByCustomerUserIdOrderByCreatedAtDesc(customerId).stream()
                 .map(cartMapper::toResponse)
                 .collect(java.util.stream.Collectors.toList());
     }
@@ -95,7 +95,7 @@ public class CartService {
             cartRepository.findByCustomerUserIdAndRestaurantRestaurantId(customerId, restaurantId)
                     .ifPresent(cartRepository::delete);
         } else {
-            List<Cart> carts = cartRepository.findByCustomerUserId(customerId);
+            List<Cart> carts = cartRepository.findByCustomerUserIdOrderByCreatedAtDesc(customerId);
             cartRepository.deleteAll(carts);
         }
     }
@@ -127,7 +127,7 @@ public class CartService {
 
     @Transactional
     public CartResponse updateItemNote(Long customerId, UpdateCartItemNoteRequest req) {
-        Cart cart = cartRepository.findByCustomerUserId(customerId).stream()
+        Cart cart = cartRepository.findByCustomerUserIdOrderByCreatedAtDesc(customerId).stream()
                 .filter(c -> c.getItems().stream().anyMatch(i -> i.getFood().getFoodId().equals(req.getFoodId())))
                 .findFirst()
                 .orElseThrow(() -> new AppException(ErrorCode.CART_ITEM_NOT_FOUND));

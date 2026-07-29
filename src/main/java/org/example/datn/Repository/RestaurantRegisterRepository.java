@@ -11,4 +11,7 @@ import org.springframework.stereotype.Repository;
 public interface RestaurantRegisterRepository extends BaseRepository<RestaurantRegister, Long> {
     Page<RestaurantRegister> findByStatus(RegisterStatus status, Pageable pageable);
     java.util.Optional<RestaurantRegister> findTopByOwnerUserIdOrderByRegisterIdDesc(Long ownerId);
+
+    // Đếm hồ sơ quán đang chờ duyệt cho badge/alert dashboard admin
+    long countByStatus(RegisterStatus status);
 }
