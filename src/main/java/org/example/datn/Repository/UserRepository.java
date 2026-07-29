@@ -35,5 +35,7 @@ public interface UserRepository extends BaseRepository<User, Long> {
 
     // Chỉ lọc theo Trạng thái Active/Blocked (lấy tất cả role)
     Page<User> findByStatus(Boolean status, Pageable pageable);
-    
+
+    long countByStatusTrue();
+    long countByRoleAndStatus(Role role, Boolean status);
 }
