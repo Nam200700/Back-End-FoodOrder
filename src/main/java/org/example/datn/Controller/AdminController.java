@@ -2,6 +2,8 @@ package org.example.datn.Controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.example.datn.DTO.response.stats.UserStatsResponse;
+import org.example.datn.Service.*;
 import org.example.datn.common.ApiResponse;
 import org.example.datn.common.PageResponse;
 import org.example.datn.domain.enums.ReportStatus;
@@ -14,12 +16,11 @@ import org.example.datn.DTO.response.auth.ShipperRegisterResponse;
 import org.example.datn.DTO.response.report.ReportResponse;
 import org.example.datn.DTO.response.stats.StatsOverviewResponse;
 import org.example.datn.security.CustomUserDetails;
-import org.example.datn.Service.AdminService;
-import org.example.datn.Service.ReportService;
-import org.example.datn.Service.StatisticsService;
-import org.example.datn.Service.OrderService;
 import org.example.datn.DTO.response.order.OrderResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -35,6 +36,7 @@ public class AdminController {
     private final ReportService reportService;
     private final StatisticsService statisticsService;
     private final OrderService orderService;
+    private final UserService userService;
 
     @GetMapping("/stats/overview")
     public ResponseEntity<ApiResponse<StatsOverviewResponse>> overview() {
@@ -47,9 +49,19 @@ public class AdminController {
     }
 
     @GetMapping("/users")
-    public ResponseEntity<ApiResponse<PageResponse<UserResponse>>> users(Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.ok(adminService.listUsers(pageable)));
+    public ResponseEntity<ApiResponse<PageResponse<UserResponse>>> users(
+            @RequestParam int page,
+            @RequestParam int size,
+            @RequestParam(required = false) String role,
+            @RequestParam(required = false) Boolean active
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("userId").descending());
+        Page<UserResponse> usersPage = adminService.listUsers(role, active, pageable);
+        PageResponse<UserResponse> pageResponse = PageResponse.from(usersPage);
+        return ResponseEntity.ok(ApiResponse.ok(pageResponse));
     }
+
+
 
     @PatchMapping("/users/{id}/status")
     public ResponseEntity<ApiResponse<UserResponse>> setStatus(
