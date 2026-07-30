@@ -154,4 +154,28 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
             """)
     List<Long> findNewCustomerIdsByRestaurantSince(@Param("rid") Long restaurantId,
                                                    @Param("since") java.time.LocalDateTime since);
+
+    @Query("""
+            SELECT o FROM Order o 
+            JOIN FETCH o.customer c
+            JOIN FETCH o.restaurant r
+            WHERE (:keyword IS NULL OR
+                   CAST(o.orderId AS string) LIKE LOWER(CONCAT('%', :keyword, '%')) OR 
+                   LOWER(r.restaurantName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR 
+                   LOWER(c.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR 
+                   LOWER(c.phone) LIKE LOWER(CONCAT('%', :keyword, '%')))
+            AND (:status IS NULL OR o.orderStatus = :status) 
+            AND (:statuses IS NULL OR o.orderStatus IN :statuses)
+            """)
+    Page<Order> searchAdminOrders(
+            @Param("keyword") String keyword,
+            @Param("status") OrderStatus status,
+            @Param("statuses") List<OrderStatus> statuses,
+            Pageable pageable
+    );
+
+    long countByOrderStatusIn(List<OrderStatus> orderStatuses);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED")
+    BigDecimal sumTotalGmv();
 }
