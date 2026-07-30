@@ -94,7 +94,35 @@ public class AdminService {
         return PageResponse.from(orderPage.map(orderMapper::toResponse));
     }
 
+    public OrderStatsResponse getOrderStats() {
+        List<OrderStatus> processingStatuses = List.of(
+                OrderStatus.PENDING,
+                OrderStatus.CONFIRMED,
+                OrderStatus.PREPARING,
+                OrderStatus.READY_FOR_PICKUP
+        );
 
+        List<OrderStatus> deliveringStatuses = List.of(
+                OrderStatus.PICKED_UP,
+                OrderStatus.DELIVERING
+        );
+
+        long total = orderRepository.count();
+        long completed = orderRepository.countByOrderStatus(OrderStatus.COMPLETED);
+        long processing = orderRepository.countByOrderStatusIn(processingStatuses);
+        long delivering = orderRepository.countByOrderStatusIn(deliveringStatuses);
+        long cancelled = orderRepository.countByOrderStatus(OrderStatus.CANCELLED);
+        BigDecimal gmv = orderRepository.sumTotalGmv();
+
+        return OrderStatsResponse.builder()
+                .totalOrders(total)
+                .completedOrders(completed)
+                .processingOrders(processing)
+                .deliveringOrders(delivering)
+                .cancelledOrders(cancelled)
+                .gmv(gmv != null ? gmv : BigDecimal.ZERO)
+                .build();
+    }
 
     @Transactional
     public UserResponse setUserStatus(Long userId, boolean active, String lockedReason) {
