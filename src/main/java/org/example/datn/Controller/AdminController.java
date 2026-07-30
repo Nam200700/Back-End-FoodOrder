@@ -2,10 +2,12 @@ package org.example.datn.Controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.example.datn.DTO.response.stats.OrderStatsResponse;
 import org.example.datn.DTO.response.stats.UserStatsResponse;
 import org.example.datn.Service.*;
 import org.example.datn.common.ApiResponse;
 import org.example.datn.common.PageResponse;
+import org.example.datn.domain.enums.OrderStatus;
 import org.example.datn.domain.enums.ReportStatus;
 import org.example.datn.domain.enums.RegisterStatus;
 import org.example.datn.DTO.request.report.ResolveReportRequest;
@@ -45,8 +47,17 @@ public class AdminController {
     }
 
     @GetMapping("/orders")
-    public ResponseEntity<ApiResponse<PageResponse<OrderResponse>>> orders(Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(orderService.getAllOrders(pageable))));
+    public ResponseEntity<ApiResponse<PageResponse<OrderResponse>>> getAdminOrders(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) OrderStatus status,
+            @RequestParam(required = false) String statusGroup,
+            Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.ok(adminService.listOrders(keyword, status, statusGroup, pageable)));
+    }
+
+    @GetMapping("/orders/stats")
+    public ResponseEntity<ApiResponse<OrderStatsResponse>> getOrderStats() {
+        return ResponseEntity.ok(ApiResponse.ok(adminService.getOrderStats()));
     }
 
     @GetMapping("/users")
