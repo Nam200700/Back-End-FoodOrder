@@ -39,4 +39,14 @@ public class MerchantStatsController {
         return ResponseEntity.ok(ApiResponse.ok(
                 statisticsService.merchantInsights(user.getUserId(), restaurantId)));
     }
+
+    /** Báo cáo tài chính đầy đủ theo kỳ (gộp ở server) cho trang Thống kê owner. */
+    @GetMapping("/report")
+    public ResponseEntity<ApiResponse<MerchantReportResponse>> report(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @RequestParam Long restaurantId,
+            @RequestParam(required = false, defaultValue = "all") String range) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                statisticsService.merchantReport(user.getUserId(), restaurantId, range)));
+    }
 }
