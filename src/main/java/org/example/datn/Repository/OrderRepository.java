@@ -237,9 +237,9 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
               AND o.paymentStatus != org.example.datn.domain.enums.PaymentStatus.REFUNDED
               AND o.createdAt >= :from AND o.createdAt < :to
             """)
-    Object[] financeCompletedByRestaurantBetween(@Param("rid") Long rid,
-                                                 @Param("from") java.time.LocalDateTime from,
-                                                 @Param("to") java.time.LocalDateTime to);
+    List<Object[]> financeCompletedByRestaurantBetween(@Param("rid") Long rid,
+                                                       @Param("from") java.time.LocalDateTime from,
+                                                       @Param("to") java.time.LocalDateTime to);
 
     /** Phân bố trạng thái ĐƠN của quán trong kỳ: {orderStatus, count, sum(total)}. */
     @Query("""
@@ -316,8 +316,8 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
               AND o.paymentStatus != org.example.datn.domain.enums.PaymentStatus.REFUNDED
               AND o.createdAt >= :from AND o.createdAt < :to
             """)
-    Object[] financeCompletedSystemBetween(@Param("from") java.time.LocalDateTime from,
-                                           @Param("to") java.time.LocalDateTime to);
+    List<Object[]> financeCompletedSystemBetween(@Param("from") java.time.LocalDateTime from,
+                                                 @Param("to") java.time.LocalDateTime to);
 
     @Query("""
             SELECT o.orderStatus, COUNT(o), COALESCE(SUM(o.totalAmount),0)

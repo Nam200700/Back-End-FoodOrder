@@ -342,10 +342,9 @@ public class StatisticsService {
         LocalDateTime from = w[0], to = w[1];
         BigDecimal rate = BigDecimal.valueOf(commissionRate);
 
-        // Tài chính đơn hoàn tất: {total, subtotal, shipping, count}
-        Object[] fin = orderRepository.financeCompletedByRestaurantBetween(restaurantId, from, to);
-        // Spring có thể bọc 1-row aggregate thành Object[]{Object[]}; chuẩn hoá lại
-        if (fin.length == 1 && fin[0] instanceof Object[] inner) fin = inner;
+        // Tài chính đơn hoàn tất: {total, subtotal, shipping, count} (aggregate → đúng 1 hàng)
+        List<Object[]> finRows = orderRepository.financeCompletedByRestaurantBetween(restaurantId, from, to);
+        Object[] fin = finRows.isEmpty() ? new Object[]{null, null, null, 0L} : finRows.get(0);
         BigDecimal gtv = bd(fin[0]);
         BigDecimal subtotal = bd(fin[1]);
         BigDecimal shipping = bd(fin[2]);
@@ -401,8 +400,8 @@ public class StatisticsService {
         LocalDateTime from = w[0], to = w[1];
         BigDecimal rate = BigDecimal.valueOf(commissionRate);
 
-        Object[] fin = orderRepository.financeCompletedSystemBetween(from, to);
-        if (fin.length == 1 && fin[0] instanceof Object[] inner) fin = inner;
+        List<Object[]> finRows = orderRepository.financeCompletedSystemBetween(from, to);
+        Object[] fin = finRows.isEmpty() ? new Object[]{null, null, null, 0L} : finRows.get(0);
         BigDecimal gtv = bd(fin[0]);
         BigDecimal subtotal = bd(fin[1]);
         BigDecimal shipping = bd(fin[2]);
