@@ -259,6 +259,7 @@ public class StatisticsService {
         LocalDateTime last7 = now.minusDays(7);
         LocalDateTime prev7 = now.minusDays(14);
         LocalDateTime since30 = now.minusDays(30);
+        LocalDateTime sinceDaily = now.minusYears(2); // chuỗi theo ngày: gần như toàn lịch sử (FE có thanh kéo trượt)
 
         // Xu hướng: doanh thu món & số đơn hoàn tất 7 ngày qua vs 7 ngày trước
         BigDecimal revenue7d = orderRepository.sumCompletedSubtotalByRestaurantBetween(restaurantId, last7, now);
