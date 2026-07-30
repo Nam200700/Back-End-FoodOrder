@@ -2,6 +2,7 @@ package org.example.datn.Service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.datn.annotation.EvictStatsCaches;
 import org.example.datn.domain.Order;
 import org.example.datn.domain.Payment;
 import org.example.datn.domain.enums.PaymentMethod;
@@ -37,6 +38,7 @@ public class PaymentService {
 
     /** COD is collected on hand-off, so completion settles the payment. */
     @Transactional
+    @EvictStatsCaches
     public void markCodPaidOnCompletion(Order order) {
         if (order.getPaymentMethod() != PaymentMethod.COD) {
             return;
