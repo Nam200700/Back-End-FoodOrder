@@ -13,5 +13,4 @@ public class OrderStatsResponse {
     private long cancelledOrders;
     private long processingOrders;
     private long deliveringOrders;
-    private BigDecimal gmv;
 }
