@@ -40,6 +40,14 @@ public class MerchantInsightsResponse {
 
     @Data
     @Builder
+    public static class DayBucket {
+        private String date;         // yyyy-MM-dd
+        private BigDecimal revenue;  // doanh thu món (subtotal) đơn hoàn tất trong ngày
+        private long orders;         // số đơn hoàn tất trong ngày
+    }
+
+    @Data
+    @Builder
     public static class HourBucket {
         private int hour;   // 0..23
         private long count; // số đơn hoàn tất trong khung giờ đó
