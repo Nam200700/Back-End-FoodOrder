@@ -305,4 +305,151 @@ public class StatisticsService {
                 .menuNoSales(menuNoSales)
                 .build();
     }
+
+    // ═══════════════════ BÁO CÁO THỐNG KÊ (gộp ở server, nhanh) ═══════════════════
+
+    /** Quy đổi range → cửa sổ [from, to). "all" dùng mốc rất cũ để bao toàn bộ. */
+    private LocalDateTime[] resolveRange(String range) {
+        LocalDateTime to = LocalDateTime.now();
+        LocalDateTime from;
+        switch (range == null ? "all" : range) {
+            case "7days" -> from = to.minusDays(7);
+            case "30days" -> from = to.minusDays(30);
+            case "thisMonth" -> from = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+            default -> from = LocalDateTime.of(2000, 1, 1, 0, 0); // "all"
+        }
+        return new LocalDateTime[]{from, to};
+    }
+
+    private static BigDecimal bd(Object o) {
+        if (o == null) return BigDecimal.ZERO;
+        return (o instanceof BigDecimal b) ? b : new BigDecimal(o.toString());
+    }
+
+    private static long lng(Object o) {
+        return o == null ? 0L : ((Number) o).longValue();
+    }
+
+    /**
+     * BÁO CÁO TÀI CHÍNH NHÀ HÀNG — gộp toàn bộ ở DB theo cửa sổ thời gian (thay tính client-side).
+     */
+    @Transactional(readOnly = true)
+    public MerchantReportResponse merchantReport(Long merchantId, Long restaurantId, String range) {
+        Restaurant restaurant = restaurantRepository.findByIdOrThrow(restaurantId, ErrorCode.RESTAURANT_NOT_FOUND);
+        ownershipGuard.checkRestaurantOwner(restaurant, merchantId);
+
+        LocalDateTime[] w = resolveRange(range);
+        LocalDateTime from = w[0], to = w[1];
+        BigDecimal rate = BigDecimal.valueOf(commissionRate);
+
+        // Tài chính đơn hoàn tất: {total, subtotal, shipping, count}
+        Object[] fin = orderRepository.financeCompletedByRestaurantBetween(restaurantId, from, to);
+        // Spring có thể bọc 1-row aggregate thành Object[]{Object[]}; chuẩn hoá lại
+        if (fin.length == 1 && fin[0] instanceof Object[] inner) fin = inner;
+        BigDecimal gtv = bd(fin[0]);
+        BigDecimal subtotal = bd(fin[1]);
+        BigDecimal shipping = bd(fin[2]);
+        long completedOrders = lng(fin[3]);
+        BigDecimal commission = subtotal.multiply(rate);
+        BigDecimal earnings = subtotal.subtract(commission);
+        BigDecimal aov = completedOrders > 0
+                ? subtotal.divide(BigDecimal.valueOf(completedOrders), 0, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+
+        // Phân bố trạng thái đơn → suy ra tổng đơn & đơn huỷ
+        List<MerchantReportResponse.Bucket> statusDist = orderRepository.statusDistByRestaurantBetween(restaurantId, from, to)
+                .stream().map(r -> MerchantReportResponse.Bucket.builder()
+                        .key(((Enum<?>) r[0]).name()).count(lng(r[1])).amount(bd(r[2])).build())
+                .toList();
+        long totalOrders = statusDist.stream().mapToLong(MerchantReportResponse.Bucket::getCount).sum();
+        long cancelledOrders = statusDist.stream()
+                .filter(b -> b.getKey().equals(OrderStatus.CANCELLED.name()))
+                .mapToLong(MerchantReportResponse.Bucket::getCount).sum();
+
+        List<MerchantReportResponse.Bucket> paymentDist = orderRepository.paymentDistByRestaurantBetween(restaurantId, from, to)
+                .stream().map(r -> MerchantReportResponse.Bucket.builder()
+                        .key(((Enum<?>) r[0]).name()).count(lng(r[1])).amount(bd(r[2])).build())
+                .toList();
+
+        List<MerchantReportResponse.DayPoint> daily = orderRepository.dailyByRestaurantBetween(restaurantId, from, to)
+                .stream().map(r -> MerchantReportResponse.DayPoint.builder()
+                        .date(r[0].toString()).subtotal(bd(r[1])).orders(lng(r[2])).build())
+                .toList();
+
+        long uniqueCustomers = orderRepository.countDistinctCustomersByRestaurantBetween(restaurantId, from, to);
+
+        List<MerchantReportResponse.TopFood> topFoods = orderRepository
+                .topFoodsByRestaurantBetween(restaurantId, from, to, PageRequest.of(0, 5))
+                .stream().map(r -> MerchantReportResponse.TopFood.builder()
+                        .name((String) r[0]).qty(lng(r[1])).revenue(bd(r[2])).build())
+                .toList();
+
+        return MerchantReportResponse.builder()
+                .range(range).commissionRate(rate)
+                .gtv(gtv).subtotal(subtotal).commission(commission).earnings(earnings).shipping(shipping).aov(aov)
+                .totalOrders(totalOrders).completedOrders(completedOrders).cancelledOrders(cancelledOrders)
+                .uniqueCustomers(uniqueCustomers)
+                .daily(daily).paymentDist(paymentDist).statusDist(statusDist).topFoods(topFoods)
+                .build();
+    }
+
+    /**
+     * BÁO CÁO PHÂN TÍCH DOANH THU HỆ THỐNG — gộp toàn bộ ở DB (thay việc tải size=2000 đơn + size=1500 user).
+     */
+    @Transactional(readOnly = true)
+    public AdminReportResponse adminReport(String range) {
+        LocalDateTime[] w = resolveRange(range);
+        LocalDateTime from = w[0], to = w[1];
+        BigDecimal rate = BigDecimal.valueOf(commissionRate);
+
+        Object[] fin = orderRepository.financeCompletedSystemBetween(from, to);
+        if (fin.length == 1 && fin[0] instanceof Object[] inner) fin = inner;
+        BigDecimal gtv = bd(fin[0]);
+        BigDecimal subtotal = bd(fin[1]);
+        BigDecimal shipping = bd(fin[2]);
+        long completedOrders = lng(fin[3]);
+        BigDecimal commission = subtotal.multiply(rate);
+        BigDecimal merchantNet = subtotal.subtract(commission);
+        BigDecimal aov = completedOrders > 0
+                ? subtotal.divide(BigDecimal.valueOf(completedOrders), 0, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+
+        List<AdminReportResponse.Bucket> statusDist = orderRepository.statusDistSystemBetween(from, to)
+                .stream().map(r -> AdminReportResponse.Bucket.builder()
+                        .key(((Enum<?>) r[0]).name()).count(lng(r[1])).amount(bd(r[2])).build())
+                .toList();
+        long totalOrders = statusDist.stream().mapToLong(AdminReportResponse.Bucket::getCount).sum();
+        long cancelledOrders = statusDist.stream()
+                .filter(b -> b.getKey().equals(OrderStatus.CANCELLED.name()))
+                .mapToLong(AdminReportResponse.Bucket::getCount).sum();
+
+        List<AdminReportResponse.Bucket> paymentDist = orderRepository.paymentDistSystemBetween(from, to)
+                .stream().map(r -> AdminReportResponse.Bucket.builder()
+                        .key(((Enum<?>) r[0]).name()).count(lng(r[1])).amount(bd(r[2])).build())
+                .toList();
+
+        List<AdminReportResponse.DayPoint> daily = orderRepository.dailySystemBetween(from, to)
+                .stream().map(r -> AdminReportResponse.DayPoint.builder()
+                        .date(r[0].toString()).gtv(bd(r[1])).subtotal(bd(r[2])).orders(lng(r[3])).build())
+                .toList();
+
+        long uniqueCustomers = orderRepository.countDistinctCustomersSystemBetween(from, to);
+
+        List<AdminReportResponse.TopRestaurant> topRestaurants = orderRepository
+                .topRestaurantsSystemBetween(from, to, PageRequest.of(0, 5))
+                .stream().map(r -> {
+                    BigDecimal sub = bd(r[2]);
+                    BigDecimal comm = sub.multiply(rate);
+                    return AdminReportResponse.TopRestaurant.builder()
+                            .name((String) r[0]).orders(lng(r[1]))
+                            .subtotal(sub).commission(comm).netShare(sub.subtract(comm)).build();
+                })
+                .toList();
+
+        return AdminReportResponse.builder()
+                .range(range).commissionRate(rate)
+                .gtv(gtv).subtotal(subtotal).commission(commission).merchantNet(merchantNet).shipping(shipping).aov(aov)
+                .totalOrders(totalOrders).completedOrders(completedOrders).cancelledOrders(cancelledOrders)
+                .uniqueCustomers(uniqueCustomers)
+                .daily(daily).paymentDist(paymentDist).statusDist(statusDist).topRestaurants(topRestaurants)
+                .build();
+    }
 }
