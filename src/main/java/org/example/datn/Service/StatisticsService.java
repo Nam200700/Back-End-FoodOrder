@@ -267,6 +267,16 @@ public class StatisticsService {
         long orders7d = orderRepository.countCompletedByRestaurantBetween(restaurantId, last7, now);
         long ordersPrev7d = orderRepository.countCompletedByRestaurantBetween(restaurantId, prev7, last7);
 
+        // Chuỗi doanh thu món theo ngày (toàn lịch sử) — {yyyy-MM-dd, revenue, orders}
+        List<MerchantInsightsResponse.DayBucket> dailyRevenue = orderRepository.findDailyRevenueByRestaurantSince(restaurantId, sinceDaily)
+                .stream()
+                .map(row -> MerchantInsightsResponse.DayBucket.builder()
+                        .date(row[0].toString())
+                        .revenue(row[1] == null ? BigDecimal.ZERO : new BigDecimal(row[1].toString()))
+                        .orders(((Number) row[2]).longValue())
+                        .build())
+                .toList();
+
         // Giờ cao điểm (map {hour, count} từ Object[])
         List<MerchantInsightsResponse.HourBucket> peakHours = orderRepository.findPeakHoursByRestaurant(restaurantId)
                 .stream()
@@ -299,6 +309,7 @@ public class StatisticsService {
                 .revenuePrev7d(revenuePrev7d)
                 .orders7d(orders7d)
                 .ordersPrev7d(ordersPrev7d)
+                .dailyRevenue(dailyRevenue)
                 .peakHours(peakHours)
                 .uniqueCustomers(uniqueCustomers)
                 .returningCustomers(returningCustomers)
