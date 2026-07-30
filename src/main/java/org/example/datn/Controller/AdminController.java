@@ -17,6 +17,7 @@ import org.example.datn.DTO.response.restaurant.RestaurantRegisterResponse;
 import org.example.datn.DTO.response.auth.ShipperRegisterResponse;
 import org.example.datn.DTO.response.report.ReportResponse;
 import org.example.datn.DTO.response.stats.StatsOverviewResponse;
+import org.example.datn.DTO.response.stats.AdminInsightsResponse;
 import org.example.datn.security.CustomUserDetails;
 import org.example.datn.DTO.response.order.OrderResponse;
 import org.springframework.data.domain.Page;
@@ -44,6 +45,12 @@ public class AdminController {
     @GetMapping("/stats/overview")
     public ResponseEntity<ApiResponse<StatsOverviewResponse>> overview() {
         return ResponseEntity.ok(ApiResponse.ok(statisticsService.adminOverview()));
+    }
+
+    /** Tổng quan nghiệp vụ toàn hệ thống (xu hướng, tăng trưởng, GTV theo ngày, giờ cao điểm, toàn vẹn thanh toán). */
+    @GetMapping("/stats/insights")
+    public ResponseEntity<ApiResponse<AdminInsightsResponse>> insights() {
+        return ResponseEntity.ok(ApiResponse.ok(statisticsService.adminInsights()));
     }
 
     @GetMapping("/orders")

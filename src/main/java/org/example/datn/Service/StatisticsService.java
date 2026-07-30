@@ -117,6 +117,72 @@ public class StatisticsService {
                 .build();
     }
 
+    /**
+     * Số liệu TỔNG QUAN NGHIỆP VỤ TOÀN HỆ THỐNG cho dashboard admin.
+     * Mọi con số tính THẲNG ở DB (không tải đơn rồi tính client-side vốn bị chặn size=2000) → chính xác tuyệt đối.
+     */
+    @Transactional(readOnly = true)
+    public AdminInsightsResponse adminInsights() {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime last7 = now.minusDays(7);
+        LocalDateTime prev7 = now.minusDays(14);
+        LocalDateTime since30 = now.minusDays(30);
+
+        // Xu hướng: GTV & đơn hoàn tất 7 ngày qua vs 7 ngày trước
+        BigDecimal gmv7d = orderRepository.sumCompletedRevenueBetween(last7, now);
+        BigDecimal gmvPrev7d = orderRepository.sumCompletedRevenueBetween(prev7, last7);
+        long orders7d = orderRepository.countCompletedBetween(last7, now);
+        long ordersPrev7d = orderRepository.countCompletedBetween(prev7, last7);
+
+        // Tăng trưởng thành viên/đối tác (theo created_at)
+        long newUsers7d = userRepository.countByCreatedAtAfter(last7);
+        long newUsers30d = userRepository.countByCreatedAtAfter(since30);
+        long newRestaurants30d = restaurantRepository.countByCreatedAtAfter(since30);
+        long newShippers30d = userRepository.countByRoleAndCreatedAtAfter(Role.SHIPPER, since30);
+
+        // Chuỗi GTV theo ngày 30 ngày gần nhất (tính ở server) — {yyyy-MM-dd, gtv, orders}
+        List<AdminInsightsResponse.DayBucket> dailyGmv = orderRepository.findDailyGmvSince(since30)
+                .stream()
+                .map(row -> AdminInsightsResponse.DayBucket.builder()
+                        .date(row[0].toString())
+                        .gmv(row[1] == null ? BigDecimal.ZERO : new BigDecimal(row[1].toString()))
+                        .orders(((Number) row[2]).longValue())
+                        .build())
+                .toList();
+
+        // Giờ cao điểm toàn hệ thống {hour, count}
+        List<AdminInsightsResponse.HourBucket> peakHours = orderRepository.findPeakHoursSystemWide()
+                .stream()
+                .map(row -> AdminInsightsResponse.HourBucket.builder()
+                        .hour(((Number) row[0]).intValue())
+                        .count(((Number) row[1]).longValue())
+                        .build())
+                .toList();
+
+        // Toàn vẹn thanh toán (đếm theo trạng thái thanh toán toàn hệ thống)
+        long paidOrders = orderRepository.countByPaymentStatus(PaymentStatus.PAID);
+        long pendingPayment = orderRepository.countByPaymentStatus(PaymentStatus.PENDING);
+        long refundedOrders = orderRepository.countByPaymentStatus(PaymentStatus.REFUNDED);
+        long failedPayments = orderRepository.countByPaymentStatus(PaymentStatus.FAILED);
+
+        return AdminInsightsResponse.builder()
+                .gmv7d(gmv7d)
+                .gmvPrev7d(gmvPrev7d)
+                .orders7d(orders7d)
+                .ordersPrev7d(ordersPrev7d)
+                .newUsers7d(newUsers7d)
+                .newUsers30d(newUsers30d)
+                .newRestaurants30d(newRestaurants30d)
+                .newShippers30d(newShippers30d)
+                .dailyGmv(dailyGmv)
+                .peakHours(peakHours)
+                .paidOrders(paidOrders)
+                .pendingPayment(pendingPayment)
+                .refundedOrders(refundedOrders)
+                .failedPayments(failedPayments)
+                .build();
+    }
+
     @Transactional(readOnly = true)
     public MerchantStatsResponse merchantStats(Long merchantId, Long restaurantId) {
         Restaurant restaurant = restaurantRepository.findByIdOrThrow(restaurantId, ErrorCode.RESTAURANT_NOT_FOUND);
