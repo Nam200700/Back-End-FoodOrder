@@ -190,6 +190,7 @@ public class StatisticsService {
                 .build();
     }
 
+    @Cacheable(value = "merchantStats", key = "#restaurantId")
     @Transactional(readOnly = true)
     public MerchantStatsResponse merchantStats(Long merchantId, Long restaurantId) {
         Restaurant restaurant = restaurantRepository.findByIdOrThrow(restaurantId, ErrorCode.RESTAURANT_NOT_FOUND);
