@@ -55,7 +55,10 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.ok(adminService.listOrders(keyword, status, statusGroup, pageable)));
     }
 
-
+    @GetMapping("/orders/stats")
+    public ResponseEntity<ApiResponse<OrderStatsResponse>> getOrderStats() {
+        return ResponseEntity.ok(ApiResponse.ok(adminService.getOrderStats()));
+    }
 
     @GetMapping("/users")
     public ResponseEntity<ApiResponse<PageResponse<UserResponse>>> users(
