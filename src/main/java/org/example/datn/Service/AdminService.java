@@ -42,23 +42,17 @@ public class AdminService {
     private final ShipperRepository shipperRepository;
 
     @Transactional(readOnly = true)
-    public Page<UserResponse> listUsers(String role, Boolean activeStatus, Pageable pageable) {
-        Page<User> userPage;
-        boolean hasRole = StringUtils.hasText(role) && !"all".equalsIgnoreCase(role);
-        boolean hasStatus = activeStatus != null;
-
-        if (hasRole && hasStatus) {
-            userPage = userRepository.findByRoleAndStatus(Role.valueOf(role.toUpperCase()), activeStatus, pageable);
-        } else if (hasRole) {
-            userPage = userRepository.findByRole(Role.valueOf(role.toUpperCase()), pageable);
-        } else if (hasStatus) {
-            userPage = userRepository.findByStatus(activeStatus, pageable);
-        } else {
-            userPage = userRepository.findAll(pageable);
+    public PageResponse<UserResponse> listUsers(String keyword, String role, Boolean activeStatus, Pageable pageable) {
+        Role roleEnum = null;
+        if (StringUtils.hasText(role) && !"all".equalsIgnoreCase(role)) {
+            roleEnum = Role.valueOf(role.toUpperCase());
         }
-
-        // Sử dụng UserMapper để map từng phần tử User sang UserResponse
-        return userPage.map(userMapper::toResponse);
+        Page<User> userPage = userRepository.searchUsers(
+                StringUtils.hasText(keyword) ? keyword.trim() : null,
+                roleEnum,
+                activeStatus,
+                pageable);
+        return PageResponse.from(userPage.map(userMapper::toResponse));
     }
 
     public UserStatsResponse getUserStats() {
