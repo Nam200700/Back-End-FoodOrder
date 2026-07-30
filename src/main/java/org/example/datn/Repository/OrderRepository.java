@@ -178,4 +178,200 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
 
     @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED")
     BigDecimal sumTotalGmv();
+
+    // ─── Dashboard insights ADMIN (tổng quan nghiệp vụ toàn hệ thống, không cap size) ───────
+
+    /** GTV (totalAmount) đơn hoàn tất TOÀN HỆ THỐNG trong khoảng [from, to), loại refund. */
+    @Query("""
+            SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o
+            WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+              AND o.paymentStatus != org.example.datn.domain.enums.PaymentStatus.REFUNDED
+              AND o.createdAt >= :from AND o.createdAt < :to
+            """)
+    BigDecimal sumCompletedRevenueBetween(@Param("from") java.time.LocalDateTime from,
+                                          @Param("to") java.time.LocalDateTime to);
+
+    /** Số đơn hoàn tất TOÀN HỆ THỐNG trong khoảng [from, to). */
+    @Query("""
+            SELECT COUNT(o) FROM Order o
+            WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+              AND o.createdAt >= :from AND o.createdAt < :to
+            """)
+    long countCompletedBetween(@Param("from") java.time.LocalDateTime from,
+                               @Param("to") java.time.LocalDateTime to);
+
+    /** Chuỗi GTV theo NGÀY (đơn hoàn tất, loại refund) kể từ :since → {yyyy-MM-dd, gtv, count}. Native cho hàm DATE(). */
+    @Query(value = """
+            SELECT DATE(created_at) AS d, COALESCE(SUM(total_amount), 0) AS gtv, COUNT(*) AS cnt
+            FROM orders
+            WHERE order_status = 'COMPLETED' AND payment_status <> 'REFUNDED'
+              AND created_at >= :since
+            GROUP BY DATE(created_at)
+            ORDER BY DATE(created_at)
+            """, nativeQuery = true)
+    List<Object[]> findDailyGmvSince(@Param("since") java.time.LocalDateTime since);
+
+    /** Giờ cao điểm toàn hệ thống: số đơn hoàn tất gom theo giờ trong ngày → {hour, count}. */
+    @Query("""
+            SELECT FUNCTION('HOUR', o.createdAt), COUNT(o) FROM Order o
+            WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+            GROUP BY FUNCTION('HOUR', o.createdAt)
+            ORDER BY FUNCTION('HOUR', o.createdAt)
+            """)
+    List<Object[]> findPeakHoursSystemWide();
+
+    /** Đếm đơn theo trạng thái thanh toán (toàn vẹn thanh toán toàn hệ thống). */
+    long countByPaymentStatus(org.example.datn.domain.enums.PaymentStatus paymentStatus);
+
+    // ═══ BÁO CÁO THỐNG KÊ (gộp ở server theo cửa sổ [from,to) — thay cho tính client-side) ═══
+
+    // ─── Merchant (scoped theo restaurantId) ───
+
+    /** Tài chính đơn hoàn tất của quán: {SUM(total), SUM(subtotal), SUM(shipping), COUNT}. */
+    @Query("""
+            SELECT COALESCE(SUM(o.totalAmount),0), COALESCE(SUM(o.subtotalAmount),0),
+                   COALESCE(SUM(o.shippingFee),0), COUNT(o)
+            FROM Order o
+            WHERE o.restaurant.restaurantId = :rid
+              AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+              AND o.paymentStatus != org.example.datn.domain.enums.PaymentStatus.REFUNDED
+              AND o.createdAt >= :from AND o.createdAt < :to
+            """)
+    List<Object[]> financeCompletedByRestaurantBetween(@Param("rid") Long rid,
+                                                       @Param("from") java.time.LocalDateTime from,
+                                                       @Param("to") java.time.LocalDateTime to);
+
+    /** Phân bố trạng thái ĐƠN của quán trong kỳ: {orderStatus, count, sum(total)}. */
+    @Query("""
+            SELECT o.orderStatus, COUNT(o), COALESCE(SUM(o.totalAmount),0)
+            FROM Order o
+            WHERE o.restaurant.restaurantId = :rid
+              AND o.createdAt >= :from AND o.createdAt < :to
+            GROUP BY o.orderStatus
+            """)
+    List<Object[]> statusDistByRestaurantBetween(@Param("rid") Long rid,
+                                                 @Param("from") java.time.LocalDateTime from,
+                                                 @Param("to") java.time.LocalDateTime to);
+
+    /** Phân bố trạng thái THANH TOÁN của quán trong kỳ: {paymentStatus, count, sum(total)}. */
+    @Query("""
+            SELECT o.paymentStatus, COUNT(o), COALESCE(SUM(o.totalAmount),0)
+            FROM Order o
+            WHERE o.restaurant.restaurantId = :rid
+              AND o.createdAt >= :from AND o.createdAt < :to
+            GROUP BY o.paymentStatus
+            """)
+    List<Object[]> paymentDistByRestaurantBetween(@Param("rid") Long rid,
+                                                  @Param("from") java.time.LocalDateTime from,
+                                                  @Param("to") java.time.LocalDateTime to);
+
+    /** Chuỗi ngày của quán: {yyyy-MM-dd, subtotal(đơn hoàn tất), count(mọi đơn)}. Native cho DATE(). */
+    @Query(value = """
+            SELECT DATE(created_at) AS d,
+                   COALESCE(SUM(CASE WHEN order_status='COMPLETED' AND payment_status<>'REFUNDED'
+                                     THEN subtotal_amount ELSE 0 END),0) AS sub,
+                   COUNT(*) AS cnt
+            FROM orders
+            WHERE restaurant_id = :rid AND created_at >= :from AND created_at < :to
+            GROUP BY DATE(created_at)
+            ORDER BY DATE(created_at)
+            """, nativeQuery = true)
+    List<Object[]> dailyByRestaurantBetween(@Param("rid") Long rid,
+                                            @Param("from") java.time.LocalDateTime from,
+                                            @Param("to") java.time.LocalDateTime to);
+
+    /** Số khách duy nhất của quán trong kỳ (mọi trạng thái). */
+    @Query("""
+            SELECT COUNT(DISTINCT o.customer.userId) FROM Order o
+            WHERE o.restaurant.restaurantId = :rid
+              AND o.createdAt >= :from AND o.createdAt < :to
+            """)
+    long countDistinctCustomersByRestaurantBetween(@Param("rid") Long rid,
+                                                   @Param("from") java.time.LocalDateTime from,
+                                                   @Param("to") java.time.LocalDateTime to);
+
+    /** Top món bán chạy của quán trong kỳ (đơn hoàn tất): {foodName, SUM(qty), SUM(qty*price)}. Dùng Pageable để limit. */
+    @Query("""
+            SELECT oi.foodName, COALESCE(SUM(oi.quantity),0), COALESCE(SUM(oi.quantity * oi.priceAtOrder),0)
+            FROM Order o JOIN o.items oi
+            WHERE o.restaurant.restaurantId = :rid
+              AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+              AND o.createdAt >= :from AND o.createdAt < :to
+            GROUP BY oi.foodName
+            ORDER BY SUM(oi.quantity) DESC
+            """)
+    List<Object[]> topFoodsByRestaurantBetween(@Param("rid") Long rid,
+                                               @Param("from") java.time.LocalDateTime from,
+                                               @Param("to") java.time.LocalDateTime to,
+                                               Pageable pageable);
+
+    // ─── Admin (toàn hệ thống) ───
+
+    /** Tài chính đơn hoàn tất toàn sàn: {SUM(total), SUM(subtotal), SUM(shipping), COUNT}. */
+    @Query("""
+            SELECT COALESCE(SUM(o.totalAmount),0), COALESCE(SUM(o.subtotalAmount),0),
+                   COALESCE(SUM(o.shippingFee),0), COUNT(o)
+            FROM Order o
+            WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+              AND o.paymentStatus != org.example.datn.domain.enums.PaymentStatus.REFUNDED
+              AND o.createdAt >= :from AND o.createdAt < :to
+            """)
+    List<Object[]> financeCompletedSystemBetween(@Param("from") java.time.LocalDateTime from,
+                                                 @Param("to") java.time.LocalDateTime to);
+
+    @Query("""
+            SELECT o.orderStatus, COUNT(o), COALESCE(SUM(o.totalAmount),0)
+            FROM Order o
+            WHERE o.createdAt >= :from AND o.createdAt < :to
+            GROUP BY o.orderStatus
+            """)
+    List<Object[]> statusDistSystemBetween(@Param("from") java.time.LocalDateTime from,
+                                           @Param("to") java.time.LocalDateTime to);
+
+    @Query("""
+            SELECT o.paymentStatus, COUNT(o), COALESCE(SUM(o.totalAmount),0)
+            FROM Order o
+            WHERE o.createdAt >= :from AND o.createdAt < :to
+            GROUP BY o.paymentStatus
+            """)
+    List<Object[]> paymentDistSystemBetween(@Param("from") java.time.LocalDateTime from,
+                                            @Param("to") java.time.LocalDateTime to);
+
+    /** Chuỗi ngày toàn sàn: {yyyy-MM-dd, gtv(hoàn tất), subtotal(hoàn tất), count(mọi đơn)}. */
+    @Query(value = """
+            SELECT DATE(created_at) AS d,
+                   COALESCE(SUM(CASE WHEN order_status='COMPLETED' AND payment_status<>'REFUNDED'
+                                     THEN total_amount ELSE 0 END),0) AS gtv,
+                   COALESCE(SUM(CASE WHEN order_status='COMPLETED' AND payment_status<>'REFUNDED'
+                                     THEN subtotal_amount ELSE 0 END),0) AS sub,
+                   COUNT(*) AS cnt
+            FROM orders
+            WHERE created_at >= :from AND created_at < :to
+            GROUP BY DATE(created_at)
+            ORDER BY DATE(created_at)
+            """, nativeQuery = true)
+    List<Object[]> dailySystemBetween(@Param("from") java.time.LocalDateTime from,
+                                      @Param("to") java.time.LocalDateTime to);
+
+    @Query("""
+            SELECT COUNT(DISTINCT o.customer.userId) FROM Order o
+            WHERE o.createdAt >= :from AND o.createdAt < :to
+            """)
+    long countDistinctCustomersSystemBetween(@Param("from") java.time.LocalDateTime from,
+                                             @Param("to") java.time.LocalDateTime to);
+
+    /** Top quán theo doanh thu món trong kỳ (đơn hoàn tất): {restaurantName, COUNT, SUM(subtotal), SUM(total)}. */
+    @Query("""
+            SELECT o.restaurant.restaurantName, COUNT(o),
+                   COALESCE(SUM(o.subtotalAmount),0), COALESCE(SUM(o.totalAmount),0)
+            FROM Order o
+            WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+              AND o.paymentStatus != org.example.datn.domain.enums.PaymentStatus.REFUNDED
+              AND o.createdAt >= :from AND o.createdAt < :to
+            GROUP BY o.restaurant.restaurantName
+            ORDER BY SUM(o.subtotalAmount) DESC
+            """)
+    List<Object[]> topRestaurantsSystemBetween(@Param("from") java.time.LocalDateTime from,
+                                               @Param("to") java.time.LocalDateTime to,
+                                               Pageable pageable);
 }

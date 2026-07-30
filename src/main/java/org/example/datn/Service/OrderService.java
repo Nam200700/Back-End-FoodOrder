@@ -1,6 +1,7 @@
 package org.example.datn.Service;
 
 import lombok.RequiredArgsConstructor;
+import org.example.datn.annotation.EvictStatsCaches;
 import org.example.datn.DTO.request.order.CancelOrderRequest;
 import org.example.datn.DTO.request.order.CreateOrderRequest;
 import org.example.datn.DTO.response.order.OrderResponse;
@@ -66,6 +67,7 @@ public class OrderService {
 
     // ─── Customer ────────────────────────────────────────────
     @Transactional
+    @EvictStatsCaches
     public List<OrderResponse> createOrder(Long customerId, CreateOrderRequest req) {
         User customer = userRepository.getReferenceById(customerId);
         List<Order> savedOrders = req.getRestaurantId().stream().map(restaurantId -> {
@@ -150,6 +152,7 @@ public class OrderService {
     }
 
     @Transactional
+    @EvictStatsCaches
     public OrderResponse cancelOrderByCustomer(Long customerId, Long orderId, String reason) {
         Order order = loadWithItems(orderId);
         ownershipGuard.checkOrderOwner(order, customerId);
@@ -166,6 +169,7 @@ public class OrderService {
     }
 
     @Transactional
+    @EvictStatsCaches
     public OrderResponse cancelOrder(Long orderId, CancelOrderRequest req, Long currentUserId) {
         Order order = orderRepository.findDetailById(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
@@ -266,6 +270,7 @@ public class OrderService {
     }
 
     @Transactional
+    @EvictStatsCaches
     public OrderResponse confirmOrder(Long merchantId, Long orderId) {
         Order order = getOrderForMerchant(merchantId, orderId);
         validateTransition(order.getOrderStatus(), CONFIRMED);
@@ -280,6 +285,7 @@ public class OrderService {
     }
 
     @Transactional
+    @EvictStatsCaches
     public OrderResponse rejectOrder(Long merchantId, Long orderId, String reason) {
         Order order = getOrderForMerchant(merchantId, orderId);
         validateTransition(order.getOrderStatus(), CANCELLED);
@@ -303,6 +309,7 @@ public class OrderService {
     }
 
     @Transactional
+    @EvictStatsCaches
     public OrderResponse markPreparing(Long merchantId, Long orderId) {
         Order order = getOrderForMerchant(merchantId, orderId);
         validateTransition(order.getOrderStatus(), PREPARING);
@@ -317,6 +324,7 @@ public class OrderService {
     }
 
     @Transactional
+    @EvictStatsCaches
     public OrderResponse markReadyForPickup(Long merchantId, Long orderId) {
         Order order = getOrderForMerchant(merchantId, orderId);
         validateTransition(order.getOrderStatus(), READY_FOR_PICKUP);
@@ -341,6 +349,7 @@ public class OrderService {
 
     /** SERIALIZABLE so two shippers cannot accept the same order. */
     @Transactional(isolation = Isolation.SERIALIZABLE)
+    @EvictStatsCaches
     public OrderResponse acceptOrder(Long shipperId, Long orderId) {
         Order order = orderRepository.findByIdOrThrow(orderId, ErrorCode.ORDER_NOT_FOUND);
         Shipper shipper = shipperRepository.findByUserUserId(shipperId)
@@ -375,6 +384,7 @@ public class OrderService {
     }
 
     @Transactional
+    @EvictStatsCaches
     public OrderResponse markPickedUp(Long shipperId, Long orderId) {
         Order order = getOrderForShipper(shipperId, orderId);
         validateTransition(order.getOrderStatus(), PICKED_UP);
@@ -386,6 +396,7 @@ public class OrderService {
     }
 
     @Transactional
+    @EvictStatsCaches
     public OrderResponse markDelivering(Long shipperId, Long orderId) {
         Order order = getOrderForShipper(shipperId, orderId);
         validateTransition(order.getOrderStatus(), DELIVERING);
@@ -396,6 +407,7 @@ public class OrderService {
     }
 
     @Transactional
+    @EvictStatsCaches
     public OrderResponse markCompleted(Long shipperId, Long orderId) {
         Order order = getOrderForShipper(shipperId, orderId);
         validateTransition(order.getOrderStatus(), COMPLETED);
