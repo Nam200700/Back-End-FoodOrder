@@ -249,6 +249,7 @@ public class StatisticsService {
      * Số liệu TỔNG QUAN NGHIỆP VỤ cho dashboard merchant (xu hướng, giờ cao điểm, khách, thực đơn).
      * Tách khỏi báo cáo tài chính; tính trên TOÀN BỘ đơn để owner liếc một cái thấy sức khoẻ kinh doanh.
      */
+    @Cacheable(value = "merchantInsights", key = "#restaurantId")
     @Transactional(readOnly = true)
     public MerchantInsightsResponse merchantInsights(Long merchantId, Long restaurantId) {
         Restaurant restaurant = restaurantRepository.findByIdOrThrow(restaurantId, ErrorCode.RESTAURANT_NOT_FOUND);
