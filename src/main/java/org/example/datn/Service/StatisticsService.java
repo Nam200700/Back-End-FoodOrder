@@ -147,8 +147,9 @@ public class StatisticsService {
         long newRestaurants30d = restaurantRepository.countByCreatedAtAfter(since30);
         long newShippers30d = userRepository.countByRoleAndCreatedAtAfter(Role.SHIPPER, since30);
 
-        // Chuỗi GTV theo ngày 30 ngày gần nhất (tính ở server) — {yyyy-MM-dd, gtv, orders}
-        List<AdminInsightsResponse.DayBucket> dailyGmv = orderRepository.findDailyGmvSince(since30)
+        // Chuỗi GTV theo ngày TOÀN LỊCH SỬ (tính ở server) — {yyyy-MM-dd, gtv, orders}; FE có thanh kéo trượt
+        LocalDateTime sinceDaily = now.minusYears(2);
+        List<AdminInsightsResponse.DayBucket> dailyGmv = orderRepository.findDailyGmvSince(sinceDaily)
                 .stream()
                 .map(row -> AdminInsightsResponse.DayBucket.builder()
                         .date(row[0].toString())
@@ -259,12 +260,23 @@ public class StatisticsService {
         LocalDateTime last7 = now.minusDays(7);
         LocalDateTime prev7 = now.minusDays(14);
         LocalDateTime since30 = now.minusDays(30);
+        LocalDateTime sinceDaily = now.minusYears(2); // chuỗi theo ngày: gần như toàn lịch sử (FE có thanh kéo trượt)
 
         // Xu hướng: doanh thu món & số đơn hoàn tất 7 ngày qua vs 7 ngày trước
         BigDecimal revenue7d = orderRepository.sumCompletedSubtotalByRestaurantBetween(restaurantId, last7, now);
         BigDecimal revenuePrev7d = orderRepository.sumCompletedSubtotalByRestaurantBetween(restaurantId, prev7, last7);
         long orders7d = orderRepository.countCompletedByRestaurantBetween(restaurantId, last7, now);
         long ordersPrev7d = orderRepository.countCompletedByRestaurantBetween(restaurantId, prev7, last7);
+
+        // Chuỗi doanh thu món theo ngày (toàn lịch sử) — {yyyy-MM-dd, revenue, orders}
+        List<MerchantInsightsResponse.DayBucket> dailyRevenue = orderRepository.findDailyRevenueByRestaurantSince(restaurantId, sinceDaily)
+                .stream()
+                .map(row -> MerchantInsightsResponse.DayBucket.builder()
+                        .date(row[0].toString())
+                        .revenue(row[1] == null ? BigDecimal.ZERO : new BigDecimal(row[1].toString()))
+                        .orders(((Number) row[2]).longValue())
+                        .build())
+                .toList();
 
         // Giờ cao điểm (map {hour, count} từ Object[])
         List<MerchantInsightsResponse.HourBucket> peakHours = orderRepository.findPeakHoursByRestaurant(restaurantId)
@@ -298,6 +310,7 @@ public class StatisticsService {
                 .revenuePrev7d(revenuePrev7d)
                 .orders7d(orders7d)
                 .ordersPrev7d(ordersPrev7d)
+                .dailyRevenue(dailyRevenue)
                 .peakHours(peakHours)
                 .uniqueCustomers(uniqueCustomers)
                 .returningCustomers(returningCustomers)
