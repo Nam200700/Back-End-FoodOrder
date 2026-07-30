@@ -1,6 +1,7 @@
 package org.example.datn.Service;
 
 import lombok.RequiredArgsConstructor;
+import org.example.datn.DTO.response.stats.UserStatsResponse;
 import org.example.datn.common.PageResponse;
 import org.example.datn.domain.User;
 import org.example.datn.domain.RestaurantRegister;
@@ -9,6 +10,7 @@ import org.example.datn.domain.Restaurant;
 import org.example.datn.domain.Shipper;
 import org.example.datn.domain.enums.RegisterStatus;
 import org.example.datn.Repository.ShipperRepository;
+import org.example.datn.domain.enums.Role;
 import org.example.datn.domain.enums.VehicleType;
 import org.example.datn.DTO.response.auth.UserResponse;
 import org.example.datn.DTO.response.restaurant.RestaurantRegisterResponse;
@@ -24,6 +26,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 
@@ -39,8 +42,29 @@ public class AdminService {
     private final ShipperRepository shipperRepository;
 
     @Transactional(readOnly = true)
-    public PageResponse<UserResponse> listUsers(Pageable pageable) {
-        return PageResponse.from(userRepository.findAll(pageable).map(userMapper::toResponse));
+    public PageResponse<UserResponse> listUsers(String keyword, String role, Boolean activeStatus, Pageable pageable) {
+        Role roleEnum = null;
+        if (StringUtils.hasText(role) && !"all".equalsIgnoreCase(role)) {
+            roleEnum = Role.valueOf(role.toUpperCase());
+        }
+        Page<User> userPage = userRepository.searchUsers(
+                StringUtils.hasText(keyword) ? keyword.trim() : null,
+                roleEnum,
+                activeStatus,
+                pageable);
+        return PageResponse.from(userPage.map(userMapper::toResponse));
+    }
+
+    public UserStatsResponse getUserStats() {
+        return UserStatsResponse.builder()
+                .totalUser(userRepository.count())
+                .activeUser(userRepository.countByStatusTrue())
+                .blockedUser(userRepository.countByStatusFalse())
+                .totalAdmin(userRepository.countByRole(Role.ADMIN))
+                .totalCustomer(userRepository.countByRole(Role.CUSTOMER))
+                .totalOwner(userRepository.countByRole(Role.OWNER))
+                .totalShipper(userRepository.countByRole(Role.SHIPPER))
+                .build();
     }
 
     @Transactional
