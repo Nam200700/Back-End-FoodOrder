@@ -1,15 +1,14 @@
 package org.example.datn.Service;
 
 import lombok.RequiredArgsConstructor;
+import org.example.datn.DTO.response.order.OrderResponse;
+import org.example.datn.DTO.response.stats.OrderStatsResponse;
 import org.example.datn.DTO.response.stats.UserStatsResponse;
+import org.example.datn.Repository.*;
 import org.example.datn.common.PageResponse;
-import org.example.datn.domain.User;
-import org.example.datn.domain.RestaurantRegister;
-import org.example.datn.domain.ShipperRegister;
-import org.example.datn.domain.Restaurant;
-import org.example.datn.domain.Shipper;
+import org.example.datn.domain.*;
+import org.example.datn.domain.enums.OrderStatus;
 import org.example.datn.domain.enums.RegisterStatus;
-import org.example.datn.Repository.ShipperRepository;
 import org.example.datn.domain.enums.Role;
 import org.example.datn.domain.enums.VehicleType;
 import org.example.datn.DTO.response.auth.UserResponse;
@@ -17,18 +16,17 @@ import org.example.datn.DTO.response.restaurant.RestaurantRegisterResponse;
 import org.example.datn.DTO.response.auth.ShipperRegisterResponse;
 import org.example.datn.DTO.request.auth.ReviewRegisterRequest;
 import org.example.datn.Exception.ErrorCode;
+import org.example.datn.mapper.OrderMapper;
 import org.example.datn.mapper.UserMapper;
-import org.example.datn.Repository.UserRepository;
-import org.example.datn.Repository.RestaurantRegisterRepository;
-import org.example.datn.Repository.ShipperRegisterRepository;
-import org.example.datn.Repository.RestaurantRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -40,6 +38,8 @@ public class AdminService {
     private final ShipperRegisterRepository shipperRegisterRepository;
     private final RestaurantRepository restaurantRepository;
     private final ShipperRepository shipperRepository;
+    private final OrderRepository orderRepository;
+    private final OrderMapper orderMapper;
 
     @Transactional(readOnly = true)
     public PageResponse<UserResponse> listUsers(String keyword, String role, Boolean activeStatus, Pageable pageable) {
@@ -66,6 +66,35 @@ public class AdminService {
                 .totalShipper(userRepository.countByRole(Role.SHIPPER))
                 .build();
     }
+
+    @Transactional(readOnly = true)
+    public PageResponse<OrderResponse> listOrders(String keyword, OrderStatus status, String statusGroup, Pageable pageable) {
+        OrderStatus singleStatus = status;
+        List<OrderStatus> statusList = null;
+        if (StringUtils.hasText(statusGroup)) {
+            if ("PROCESSING".equalsIgnoreCase(statusGroup)) {
+                statusList = List.of(
+                        OrderStatus.PENDING,
+                        OrderStatus.CONFIRMED,
+                        OrderStatus.PREPARING,
+                        OrderStatus.READY_FOR_PICKUP
+                );
+            } else if ("DELIVERING".equalsIgnoreCase(statusGroup)) {
+                statusList = List.of(
+                        OrderStatus.PICKED_UP,
+                        OrderStatus.DELIVERING
+                );
+            }
+        }
+        Page<Order> orderPage = orderRepository.searchAdminOrders(
+                StringUtils.hasText(keyword) ? keyword.trim() : null,
+                singleStatus,
+                statusList,
+                pageable);
+        return PageResponse.from(orderPage.map(orderMapper::toResponse));
+    }
+
+
 
     @Transactional
     public UserResponse setUserStatus(Long userId, boolean active, String lockedReason) {
