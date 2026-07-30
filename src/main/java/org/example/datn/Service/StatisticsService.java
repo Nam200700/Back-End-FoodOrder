@@ -337,6 +337,7 @@ public class StatisticsService {
     /**
      * BÁO CÁO TÀI CHÍNH NHÀ HÀNG — gộp toàn bộ ở DB theo cửa sổ thời gian (thay tính client-side).
      */
+    @Cacheable(value = "merchantReport", key = "#restaurantId + '-' + #range")
     @Transactional(readOnly = true)
     public MerchantReportResponse merchantReport(Long merchantId, Long restaurantId, String range) {
         Restaurant restaurant = restaurantRepository.findByIdOrThrow(restaurantId, ErrorCode.RESTAURANT_NOT_FOUND);
