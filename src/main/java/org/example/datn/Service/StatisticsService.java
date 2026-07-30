@@ -147,8 +147,9 @@ public class StatisticsService {
         long newRestaurants30d = restaurantRepository.countByCreatedAtAfter(since30);
         long newShippers30d = userRepository.countByRoleAndCreatedAtAfter(Role.SHIPPER, since30);
 
-        // Chuỗi GTV theo ngày 30 ngày gần nhất (tính ở server) — {yyyy-MM-dd, gtv, orders}
-        List<AdminInsightsResponse.DayBucket> dailyGmv = orderRepository.findDailyGmvSince(since30)
+        // Chuỗi GTV theo ngày TOÀN LỊCH SỬ (tính ở server) — {yyyy-MM-dd, gtv, orders}; FE có thanh kéo trượt
+        LocalDateTime sinceDaily = now.minusYears(2);
+        List<AdminInsightsResponse.DayBucket> dailyGmv = orderRepository.findDailyGmvSince(sinceDaily)
                 .stream()
                 .map(row -> AdminInsightsResponse.DayBucket.builder()
                         .date(row[0].toString())
