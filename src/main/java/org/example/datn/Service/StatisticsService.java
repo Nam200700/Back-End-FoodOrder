@@ -127,6 +127,7 @@ public class StatisticsService {
      * Số liệu TỔNG QUAN NGHIỆP VỤ TOÀN HỆ THỐNG cho dashboard admin.
      * Mọi con số tính THẲNG ở DB (không tải đơn rồi tính client-side vốn bị chặn size=2000) → chính xác tuyệt đối.
      */
+    @Cacheable("adminInsights")
     @Transactional(readOnly = true)
     public AdminInsightsResponse adminInsights() {
         LocalDateTime now = LocalDateTime.now();
