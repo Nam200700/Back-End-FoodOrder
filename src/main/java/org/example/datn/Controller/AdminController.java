@@ -54,6 +54,13 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.ok(statisticsService.adminInsights()));
     }
 
+    /** Báo cáo phân tích doanh thu hệ thống theo kỳ (gộp ở server) cho trang Thống kê admin. */
+    @GetMapping("/stats/report")
+    public ResponseEntity<ApiResponse<AdminReportResponse>> report(
+            @RequestParam(required = false, defaultValue = "all") String range) {
+        return ResponseEntity.ok(ApiResponse.ok(statisticsService.adminReport(range)));
+    }
+
     @GetMapping("/orders")
     public ResponseEntity<ApiResponse<PageResponse<OrderResponse>>> getAdminOrders(
             @RequestParam(required = false) String keyword,
