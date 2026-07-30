@@ -106,21 +106,12 @@ public class AdminService {
                 OrderStatus.PICKED_UP,
                 OrderStatus.DELIVERING
         );
-
-        long total = orderRepository.count();
-        long completed = orderRepository.countByOrderStatus(OrderStatus.COMPLETED);
-        long processing = orderRepository.countByOrderStatusIn(processingStatuses);
-        long delivering = orderRepository.countByOrderStatusIn(deliveringStatuses);
-        long cancelled = orderRepository.countByOrderStatus(OrderStatus.CANCELLED);
-        BigDecimal gmv = orderRepository.sumTotalGmv();
-
         return OrderStatsResponse.builder()
-                .totalOrders(total)
-                .completedOrders(completed)
-                .processingOrders(processing)
-                .deliveringOrders(delivering)
-                .cancelledOrders(cancelled)
-                .gmv(gmv != null ? gmv : BigDecimal.ZERO)
+                .totalOrders(orderRepository.count())
+                .completedOrders(orderRepository.countByOrderStatus(OrderStatus.COMPLETED))
+                .processingOrders(orderRepository.countByOrderStatusIn(processingStatuses))
+                .deliveringOrders(orderRepository.countByOrderStatusIn(deliveringStatuses))
+                .cancelledOrders(orderRepository.countByOrderStatus(OrderStatus.CANCELLED))
                 .build();
     }
 
