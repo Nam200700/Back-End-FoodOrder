@@ -52,6 +52,7 @@ public class PaymentService {
     }
 
     @Transactional
+    @EvictStatsCaches
     public void refundIfPaid(Order order) {
         if (order.getPaymentStatus() != PaymentStatus.PAID) {
             return;
@@ -67,6 +68,7 @@ public class PaymentService {
 
     /** Called by the VNPay IPN handler. */
     @Transactional
+    @EvictStatsCaches
     public void applyVnpayResult(Long orderId, boolean success, String transactionNo) {
         Order order = orderRepository.findByIdOrThrow(orderId, ErrorCode.ORDER_NOT_FOUND);
         Payment payment = paymentRepository.findByOrderOrderId(orderId)
