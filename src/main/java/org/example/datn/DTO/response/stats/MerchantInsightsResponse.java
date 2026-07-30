@@ -20,6 +20,9 @@ public class MerchantInsightsResponse {
     private long orders7d;
     private long ordersPrev7d;
 
+    // ─── Chuỗi doanh thu món theo NGÀY (toàn lịch sử) — tính ở SERVER, không giới hạn; FE có thanh kéo trượt ───
+    private List<DayBucket> dailyRevenue;
+
     // ─── Giờ cao điểm: số đơn hoàn tất gom theo giờ trong ngày ───
     private List<HourBucket> peakHours;
 
