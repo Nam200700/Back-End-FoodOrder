@@ -396,6 +396,7 @@ public class StatisticsService {
     /**
      * BÁO CÁO PHÂN TÍCH DOANH THU HỆ THỐNG — gộp toàn bộ ở DB (thay việc tải size=2000 đơn + size=1500 user).
      */
+    @Cacheable(value = "adminReport", key = "#range")
     @Transactional(readOnly = true)
     public AdminReportResponse adminReport(String range) {
         LocalDateTime[] w = resolveRange(range);
