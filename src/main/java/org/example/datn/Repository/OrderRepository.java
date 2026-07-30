@@ -178,4 +178,48 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
 
     @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED")
     BigDecimal sumTotalGmv();
+
+    // ─── Dashboard insights ADMIN (tổng quan nghiệp vụ toàn hệ thống, không cap size) ───────
+
+    /** GTV (totalAmount) đơn hoàn tất TOÀN HỆ THỐNG trong khoảng [from, to), loại refund. */
+    @Query("""
+            SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o
+            WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+              AND o.paymentStatus != org.example.datn.domain.enums.PaymentStatus.REFUNDED
+              AND o.createdAt >= :from AND o.createdAt < :to
+            """)
+    BigDecimal sumCompletedRevenueBetween(@Param("from") java.time.LocalDateTime from,
+                                          @Param("to") java.time.LocalDateTime to);
+
+    /** Số đơn hoàn tất TOÀN HỆ THỐNG trong khoảng [from, to). */
+    @Query("""
+            SELECT COUNT(o) FROM Order o
+            WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+              AND o.createdAt >= :from AND o.createdAt < :to
+            """)
+    long countCompletedBetween(@Param("from") java.time.LocalDateTime from,
+                               @Param("to") java.time.LocalDateTime to);
+
+    /** Chuỗi GTV theo NGÀY (đơn hoàn tất, loại refund) kể từ :since → {yyyy-MM-dd, gtv, count}. Native cho hàm DATE(). */
+    @Query(value = """
+            SELECT DATE(created_at) AS d, COALESCE(SUM(total_amount), 0) AS gtv, COUNT(*) AS cnt
+            FROM orders
+            WHERE order_status = 'COMPLETED' AND payment_status <> 'REFUNDED'
+              AND created_at >= :since
+            GROUP BY DATE(created_at)
+            ORDER BY DATE(created_at)
+            """, nativeQuery = true)
+    List<Object[]> findDailyGmvSince(@Param("since") java.time.LocalDateTime since);
+
+    /** Giờ cao điểm toàn hệ thống: số đơn hoàn tất gom theo giờ trong ngày → {hour, count}. */
+    @Query("""
+            SELECT FUNCTION('HOUR', o.createdAt), COUNT(o) FROM Order o
+            WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+            GROUP BY FUNCTION('HOUR', o.createdAt)
+            ORDER BY FUNCTION('HOUR', o.createdAt)
+            """)
+    List<Object[]> findPeakHoursSystemWide();
+
+    /** Đếm đơn theo trạng thái thanh toán (toàn vẹn thanh toán toàn hệ thống). */
+    long countByPaymentStatus(org.example.datn.domain.enums.PaymentStatus paymentStatus);
 }
