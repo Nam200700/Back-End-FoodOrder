@@ -7,10 +7,15 @@ import org.example.datn.domain.enums.RegisterStatus;
 import org.example.datn.domain.enums.ReportStatus;
 import org.example.datn.domain.enums.Role;
 import org.example.datn.DTO.response.stats.AdminInsightsResponse;
+import org.example.datn.DTO.response.stats.AdminReportResponse;
 import org.example.datn.DTO.response.stats.MerchantInsightsResponse;
+import org.example.datn.DTO.response.stats.MerchantReportResponse;
 import org.example.datn.DTO.response.stats.MerchantStatsResponse;
 import org.example.datn.DTO.response.stats.StatsOverviewResponse;
 import org.example.datn.domain.enums.PaymentStatus;
+import org.springframework.data.domain.PageRequest;
+
+import java.time.LocalDate;
 import org.example.datn.Exception.ErrorCode;
 import org.example.datn.Repository.FoodRepository;
 import org.example.datn.Repository.OrderRepository;
