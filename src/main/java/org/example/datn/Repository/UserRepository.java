@@ -31,6 +31,10 @@ public interface UserRepository extends BaseRepository<User, Long> {
     long countByStatusTrue();
     long countByRoleAndStatus(Role role, Boolean status);
 
+    // Tăng trưởng thành viên cho dashboard admin (theo created_at, không cap)
+    long countByCreatedAtAfter(java.time.LocalDateTime since);
+    long countByRoleAndCreatedAtAfter(Role role, java.time.LocalDateTime since);
+
     @Query("SELECT u FROM User u WHERE " +
             "(:keyword IS NULL OR :keyword = '' OR " +
             "LOWER(u.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
