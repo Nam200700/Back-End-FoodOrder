@@ -14,4 +14,7 @@ public interface RestaurantRepository extends BaseRepository<Restaurant, Long> {
     Page<Restaurant> findByStatusTrue(Pageable pageable);
 
     List<Restaurant> findByOwnerUserId(Long ownerId);
+
+    // Tăng trưởng quán đối tác cho dashboard admin (theo created_at)
+    long countByCreatedAtAfter(java.time.LocalDateTime since);
 }
