@@ -211,6 +211,19 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
             """, nativeQuery = true)
     List<Object[]> findDailyGmvSince(@Param("since") java.time.LocalDateTime since);
 
+    /** Chuỗi doanh thu món (subtotal, đơn hoàn tất, loại refund) theo NGÀY của MỘT quán kể từ :since → {yyyy-MM-dd, revenue, count}. */
+    @Query(value = """
+            SELECT DATE(created_at) AS d, COALESCE(SUM(subtotal_amount), 0) AS rev, COUNT(*) AS cnt
+            FROM orders
+            WHERE order_status = 'COMPLETED' AND payment_status <> 'REFUNDED'
+              AND restaurant_id = :rid
+              AND created_at >= :since
+            GROUP BY DATE(created_at)
+            ORDER BY DATE(created_at)
+            """, nativeQuery = true)
+    List<Object[]> findDailyRevenueByRestaurantSince(@Param("rid") Long restaurantId,
+                                                     @Param("since") java.time.LocalDateTime since);
+
     /** Giờ cao điểm toàn hệ thống: số đơn hoàn tất gom theo giờ trong ngày → {hour, count}. */
     @Query("""
             SELECT FUNCTION('HOUR', o.createdAt), COUNT(o) FROM Order o
