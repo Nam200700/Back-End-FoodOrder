@@ -84,5 +84,12 @@ public class VoucherController {
         return ResponseEntity.ok(ApiResponse.ok(voucherService.getPublicVouchers()));
     }
 
-
+    @PostMapping("/{voucherId}/claim")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<ApiResponse<Void>> claimPublicVoucher(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @PathVariable Long voucherId) {
+        voucherService.claimPublicVoucher(user.getUserId(), voucherId);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
 }
