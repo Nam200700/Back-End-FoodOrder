@@ -55,6 +55,7 @@ public class OrderService {
     private final RefundService refundService;
     private final ShippingService shippingService;
     private final DeliveryRepository deliveryRepository;
+    private final UserVoucherRepository userVoucherRepository;
 
     private static final Map<OrderStatus, Set<OrderStatus>> VALID_TRANSITIONS = Map.of(
             PENDING, Set.of(CONFIRMED, CANCELLED),
@@ -70,12 +71,36 @@ public class OrderService {
     @EvictStatsCaches
     public List<OrderResponse> createOrder(Long customerId, CreateOrderRequest req) {
         User customer = userRepository.getReferenceById(customerId);
+
+        // 1. Kiểm tra và lấy thông tin Voucher (nếu có truyền userVoucherId lên request)
+        UserVoucher userVoucher = null;
+        Voucher voucher = null;
+        if (req.getUserVoucherId() != null) {
+            userVoucher = userVoucherRepository.findById(req.getUserVoucherId())
+                    .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
+
+            if (!userVoucher.getUser().getUserId().equals(customerId)) {
+                throw new AppException(ErrorCode.VOUCHER_NOT_OWNED);
+            }
+            if (Boolean.TRUE.equals(userVoucher.getUsed())) {
+                throw new AppException(ErrorCode.VOUCHER_ALREADY_USED);
+            }
+            if (userVoucher.getExpiredAt() != null && userVoucher.getExpiredAt().isBefore(LocalDateTime.now())) {
+                throw new AppException(ErrorCode.VOUCHER_EXPIRED);
+            }
+            voucher = userVoucher.getVoucher();
+        }
+
+        final Voucher finalVoucher = voucher;
+        final UserVoucher finalUserVoucher = userVoucher;
+
         List<Order> savedOrders = req.getRestaurantId().stream().map(restaurantId -> {
             Cart cart = cartRepository.findByCustomerUserIdAndRestaurantRestaurantId(customerId, restaurantId)
                     .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
             if (cart.getItems().isEmpty()) {
                 throw new AppException(ErrorCode.CART_ITEM_NOT_FOUND);
             }
+
             Order order = Order.builder()
                     .customer(customer)
                     .restaurant(cart.getRestaurant())
@@ -86,6 +111,7 @@ public class OrderService {
                     .discountAmount(BigDecimal.ZERO)
                     .orderStatus(PENDING)
                     .note(req.getNote())
+                    .voucher(finalVoucher) // Lưu voucher vào bảng order
                     .build();
 
             // Snapshot price + name at order time.
@@ -118,11 +144,43 @@ public class OrderService {
             long shippingFee = ShippingFeeCalculator.calculate(distance);
             BigDecimal shippingFeeBd = BigDecimal.valueOf(shippingFee);
             order.setShippingFee(shippingFeeBd);
+
             BigDecimal subtotal = items.stream()
                     .map(i -> i.getPriceAtOrder().multiply(BigDecimal.valueOf(i.getQuantity())))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
             order.setSubtotalAmount(subtotal);
-            order.setTotalAmount(subtotal.add(shippingFeeBd));
+
+            // Tổng giá trị ban đầu trước khi giảm giá (Tiền hàng + Phí ship)
+            BigDecimal totalBeforeDiscount = subtotal.add(shippingFeeBd);
+
+            // 2. Tính toán discountAmount dựa theo loại DiscountType (FIXED, PERCENT, FREESHIP)
+            BigDecimal discountAmount = BigDecimal.ZERO;
+            if (finalVoucher != null) {
+                switch (finalVoucher.getDiscountType()) {
+                    case FIXED -> discountAmount = finalVoucher.getDiscountValue();
+                    case PERCENT -> {
+                        discountAmount = subtotal.multiply(finalVoucher.getDiscountValue())
+                                .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+                    }
+                    case FREESHIP -> {
+                        discountAmount = shippingFeeBd; // FREESHIP trừ đúng bằng phí ship
+                    }
+                }
+            }
+
+            // 3. Kiểm tra nếu số tiền giảm lớn hơn tổng giá trị đơn hàng -> Bắn thông báo lỗi
+            if (discountAmount.compareTo(totalBeforeDiscount) > 0) {
+                throw new AppException(ErrorCode.VOUCHER_DISCOUNT_EXCEEDED);
+            }
+
+            order.setDiscountAmount(discountAmount);
+
+            // 4. Tính lại tổng tiền sau khi trừ giảm giá
+            BigDecimal totalAmount = totalBeforeDiscount.subtract(discountAmount);
+            if (totalAmount.compareTo(BigDecimal.ZERO) < 0) {
+                totalAmount = BigDecimal.ZERO;
+            }
+            order.setTotalAmount(totalAmount);
 
             Order saved = orderRepository.save(order);
             cartRepository.delete(cart);
@@ -133,6 +191,18 @@ public class OrderService {
             webSocketService.broadcastOrderStatus(saved);
             return saved;
         }).toList();
+
+        // 5. Đánh dấu UserVoucher đã được sử dụng sau khi tạo đơn hàng thành công
+        if (finalUserVoucher != null) {
+            finalUserVoucher.setUsed(true);
+            finalUserVoucher.setUsedAt(LocalDateTime.now());
+            userVoucherRepository.save(finalUserVoucher);
+
+            if (voucher != null) {
+                voucher.setUsedQuantity(voucher.getUsedQuantity() + 1);
+            }
+        }
+
         return savedOrders.stream().map(orderMapper::toResponse).toList();
     }
 
