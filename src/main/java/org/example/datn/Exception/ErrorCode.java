@@ -64,6 +64,9 @@ public enum ErrorCode {
 
     ADDRESS_NOT_FOUND(404, "Không tìm thấy địa chỉ"),
 
+    VOUCHER_NOT_FOUND(404, "Không tìm thấy voucher"),
+    VOUCHER_CODE_EXISTS(409, "Mã voucher đã tồn tại"),
+
     // Generic
     VALIDATION_FAILED(400, "Dữ liệu không hợp lệ"),
     NOT_FOUND(404, "Không tìm thấy tài nguyên"),
