@@ -38,9 +38,6 @@ public class Voucher extends BaseEntity {
     @Column(name = "discount_value", nullable = false)
     private BigDecimal discountValue;
 
-    @Column(nullable = false)
-    private Integer quantity = 0;
-
     @Column(name = "used_quantity", nullable = false)
     private Integer usedQuantity = 0;
 
