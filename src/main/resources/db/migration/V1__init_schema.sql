@@ -352,6 +352,50 @@ CREATE TABLE shippers (
                           PRIMARY KEY (shipper_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE vouchers (
+                          voucher_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                          code VARCHAR(50) NOT NULL UNIQUE,
+                          name VARCHAR(255) NOT NULL,
+                          discount_type ENUM('FIXED','PERCENT','FREESHIP') NOT NULL,
+                          discount_value DECIMAL(10,2) NOT NULL,
+                          quantity INT NOT NULL,
+                          used_quantity INT NOT NULL DEFAULT 0,
+                          start_date DATETIME NOT NULL,
+                          end_date DATETIME NOT NULL,
+                          status ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+                          issue_type ENUM(
+        'MANUAL',
+        'NEW_USER',
+        'FIRST_ORDER',
+        'INACTIVE_DAYS',
+        'BIRTHDAY',
+        'EVENT'
+    ) NOT NULL,
+                          created_at DATETIME,
+                          updated_at DATETIME
+);
+
+CREATE TABLE user_vouchers (
+                               user_voucher_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                               user_id BIGINT NOT NULL,
+                               voucher_id BIGINT NOT NULL,
+                               received_at DATETIME NOT NULL,
+                               expired_at DATETIME,
+                               used BOOLEAN NOT NULL DEFAULT FALSE,
+                               used_at DATETIME,
+                               created_at DATETIME,
+                               updated_at DATETIME,
+
+                               CONSTRAINT fk_uv_user
+                                   FOREIGN KEY(user_id) REFERENCES users(user_id),
+
+                               CONSTRAINT fk_uv_voucher
+                                   FOREIGN KEY(voucher_id) REFERENCES vouchers(voucher_id),
+
+                               CONSTRAINT uk_user_voucher
+                                   UNIQUE(user_id, voucher_id)
+);
+
 
 -- ─── Unique constraints ───────────────────────────────────────
 
@@ -454,3 +498,8 @@ DELETE FROM conversations
 WHERE last_message_at < NOW() - INTERVAL 3 DAY
    OR (last_message_at IS NULL AND created_at < NOW() - INTERVAL 3 DAY)
     LIMIT 500;
+
+ALTER TABLE orders ADD COLUMN voucher_id BIGINT NULL;
+ALTER TABLE orders ADD CONSTRAINT fk_orders_voucher FOREIGN KEY (voucher_id) REFERENCES vouchers(voucher_id);
+-- ALTER TABLE user_vouchers ADD CONSTRAINT uk_user_voucher UNIQUE(user_id, voucher_id);
+-- ALTER TABLE user_vouchers ADD CONSTRAINT uk_user_voucher_order UNIQUE
