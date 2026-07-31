@@ -11,4 +11,5 @@ public class VoucherStatsResponse {
     private long totalVouchers;
     private long activeVouchers;
     private long inactiveVouchers;
+    private long expiredVouchers;
 }
