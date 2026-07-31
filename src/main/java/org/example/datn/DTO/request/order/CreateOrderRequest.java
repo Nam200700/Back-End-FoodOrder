@@ -25,4 +25,6 @@ public class CreateOrderRequest {
     private PaymentMethod paymentMethod;
 
     private String note;
+
+    private Long userVoucherId;
 }
