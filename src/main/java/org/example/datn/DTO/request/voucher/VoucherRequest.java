@@ -31,10 +31,6 @@ public class VoucherRequest {
     @DecimalMin(value = "0.0", inclusive = false)
     private BigDecimal discountValue;
 
-    @NotNull(message = "Số lượng không được để trống")
-    @Min(value = 1)
-    private Integer quantity;
-
     @NotNull(message = "Ngày bắt đầu không được để trống")
     private LocalDateTime startDate;
 
