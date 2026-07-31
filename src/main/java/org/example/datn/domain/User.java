@@ -5,6 +5,9 @@ import lombok.*;
 import org.example.datn.domain.base.BaseEntity;
 import org.example.datn.domain.enums.Role;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
 @Table(name = "users")
 @Getter
@@ -62,4 +65,8 @@ public class User extends BaseEntity {
     @Builder.Default
     @Column(name = "email_verified", nullable = false)
     private Boolean emailVerified = false;
+
+    @Builder.Default
+    @OneToMany(mappedBy = "user")
+    private List<UserVoucher> userVouchers = new ArrayList<>();
 }
