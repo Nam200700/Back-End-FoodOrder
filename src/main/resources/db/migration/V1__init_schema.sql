@@ -358,7 +358,7 @@ CREATE TABLE vouchers (
                           name VARCHAR(255) NOT NULL,
                           discount_type ENUM('FIXED','PERCENT','FREESHIP') NOT NULL,
                           discount_value DECIMAL(10,2) NOT NULL,
-                          quantity INT NOT NULL,
+--                           quantity INT NOT NULL,
                           used_quantity INT NOT NULL DEFAULT 0,
                           start_date DATETIME NOT NULL,
                           end_date DATETIME NOT NULL,
