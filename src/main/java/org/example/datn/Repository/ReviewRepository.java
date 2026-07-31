@@ -19,6 +19,8 @@ public interface ReviewRepository extends BaseRepository<Review, Long> {
 
     Page<Review> findByRestaurantRestaurantIdOrderByCreatedAtDesc(Long restaurantId, Pageable pageable);
 
+    Page<Review> findByShipperShipperIdOrderByCreatedAtDesc(Long shipperId, Pageable pageable);
+
     long countByRestaurantRestaurantId(Long restaurantId);
 
     @Query("SELECT AVG(r.restaurantRating) FROM Review r WHERE r.restaurant.restaurantId = :restaurantId")

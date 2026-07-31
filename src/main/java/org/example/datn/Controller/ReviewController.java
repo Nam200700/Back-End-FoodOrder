@@ -57,4 +57,12 @@ public class ReviewController {
         return ResponseEntity.ok(ApiResponse.ok(
                 reviewService.getRestaurantReviews(restaurantId, pageable)));
     }
+
+    @GetMapping("/shipper/reviews")
+    @PreAuthorize("hasRole('SHIPPER')")
+    public ResponseEntity<ApiResponse<PageResponse<ReviewResponse>>> shipperReviews(
+            @AuthenticationPrincipal CustomUserDetails user, Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                reviewService.getShipperReviews(user.getUserId(), pageable)));
+    }
 }
