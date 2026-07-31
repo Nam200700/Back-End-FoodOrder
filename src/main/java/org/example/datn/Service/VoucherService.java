@@ -118,5 +118,13 @@ public class VoucherService {
         ).toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<VoucherResponse> getPublicVouchers() {
+        List<Voucher> vouchers = voucherRepository.findByIssueTypeAndStatusAndEndDateAfter(
+                VoucherIssueType.EVENT, VoucherStatus.ACTIVE, LocalDateTime.now()
+        );
+        return vouchers.stream().map(voucherMapper::toResponse).toList();
+    }
+
 
 }
