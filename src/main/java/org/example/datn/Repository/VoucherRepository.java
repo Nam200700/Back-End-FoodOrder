@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 public interface VoucherRepository extends BaseRepository<Voucher, Long> {
@@ -15,10 +16,15 @@ public interface VoucherRepository extends BaseRepository<Voucher, Long> {
     boolean existsByCode(String code);
     long countByStatus(VoucherStatus status);
 
+    long countByEndDateBefore(LocalDateTime now);
+
     @Query("SELECT v FROM Voucher v WHERE " +
             "(:keyword IS NULL OR :keyword = '' OR LOWER(v.code) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(v.name) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
-            "AND (:status IS NULL OR v.status = :status)")
+            "AND (:status IS NULL OR " +
+            "     (:status = 'EXPIRED' AND v.endDate < :now) OR " +
+            "     (:status != 'EXPIRED' AND v.status = :status))")
     Page<Voucher> searchAndFilter(@Param("keyword") String keyword,
                                   @Param("status") VoucherStatus status,
+                                  @Param("now") LocalDateTime now,
                                   Pageable pageable);
 }
