@@ -78,5 +78,11 @@ public class VoucherController {
         return ResponseEntity.ok(ApiResponse.ok(voucherService.getMyVouchers(user.getUserId())));
     }
 
+    @GetMapping("/public")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<ApiResponse<List<VoucherResponse>>> getPublicVouchers() {
+        return ResponseEntity.ok(ApiResponse.ok(voucherService.getPublicVouchers()));
+    }
+
 
 }
