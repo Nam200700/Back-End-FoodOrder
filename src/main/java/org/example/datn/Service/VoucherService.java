@@ -126,5 +126,37 @@ public class VoucherService {
         return vouchers.stream().map(voucherMapper::toResponse).toList();
     }
 
+    public void claimPublicVoucher(Long userId, Long voucherId) {
+        Voucher voucher = voucherRepository.findById(voucherId)
+                .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
 
+        // Kiểm tra xem có phải voucher public không và còn hạn không
+        if (voucher.getIssueType() != VoucherIssueType.EVENT || voucher.getStatus() != VoucherStatus.ACTIVE) {
+            throw new AppException(ErrorCode.VOUCHER_NOT_FOUND);
+        }
+
+        if (LocalDateTime.now().isAfter(voucher.getEndDate())) {
+            throw new AppException(ErrorCode.VOUCHER_EXPIRED);
+        }
+
+        // Kiểm tra xem user đã lưu mã này chưa
+        boolean alreadyClaimed = userVoucherRepository.existsByUser_UserIdAndVoucher_VoucherId(userId, voucherId);
+        if (alreadyClaimed) {
+            throw new AppException(ErrorCode.VOUCHER_ALREADY_CLAIMED);
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+        // Tạo bản ghi ví voucher cho user
+        UserVoucher userVoucher = UserVoucher.builder()
+                .user(user)
+                .voucher(voucher)
+                .receivedAt(LocalDateTime.now())
+                .expiredAt(voucher.getEndDate())
+                .used(false)
+                .build();
+
+        userVoucherRepository.save(userVoucher);
+    }
 }
