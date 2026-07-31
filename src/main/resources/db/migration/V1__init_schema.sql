@@ -362,7 +362,7 @@ CREATE TABLE vouchers (
                           used_quantity INT NOT NULL DEFAULT 0,
                           start_date DATETIME NOT NULL,
                           end_date DATETIME NOT NULL,
-                          status ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+                          status ENUM('ACTIVE','INACTIVE', 'EXPIRED') NOT NULL DEFAULT 'ACTIVE',
                           issue_type ENUM(
         'MANUAL',
         'NEW_USER',
