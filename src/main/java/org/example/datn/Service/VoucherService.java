@@ -2,13 +2,19 @@ package org.example.datn.Service;
 
 import lombok.RequiredArgsConstructor;
 import org.example.datn.DTO.request.voucher.VoucherRequest;
+import org.example.datn.DTO.response.voucher.UserVoucherResponse;
 import org.example.datn.DTO.response.voucher.VoucherResponse;
 import org.example.datn.DTO.response.voucher.VoucherStatsResponse;
 import org.example.datn.Exception.AppException;
 import org.example.datn.Exception.ErrorCode;
+import org.example.datn.Repository.UserRepository;
+import org.example.datn.Repository.UserVoucherRepository;
 import org.example.datn.Repository.VoucherRepository;
 import org.example.datn.common.PageResponse;
+import org.example.datn.domain.User;
+import org.example.datn.domain.UserVoucher;
 import org.example.datn.domain.Voucher;
+import org.example.datn.domain.enums.VoucherIssueType;
 import org.example.datn.domain.enums.VoucherStatus;
 import org.example.datn.mapper.VoucherMapper;
 import org.springframework.data.domain.Page;
@@ -26,6 +32,9 @@ public class VoucherService {
 
     private final VoucherRepository voucherRepository;
     private final VoucherMapper voucherMapper;
+
+    private final UserVoucherRepository userVoucherRepository;
+    private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public List<VoucherResponse> getAllVouchers() {
@@ -88,4 +97,26 @@ public class VoucherService {
         Page<Voucher> page = voucherRepository.searchAndFilter(keyword, status, LocalDateTime.now(), pageable);
         return PageResponse.from(page.map(voucherMapper::toResponse));
     }
+
+
+    //customer
+    @Transactional(readOnly = true)
+    public List<UserVoucherResponse> getMyVouchers(Long userId) {
+        List<UserVoucher> list = userVoucherRepository.findByUser_UserId(userId);
+        return list.stream().map(uv -> UserVoucherResponse.builder()
+                .userVoucherId(uv.getUserVoucherId())
+                .voucherId(uv.getVoucher().getVoucherId())
+                .code(uv.getVoucher().getCode())
+                .name(uv.getVoucher().getName())
+                .discountType(uv.getVoucher().getDiscountType())
+                .discountValue(uv.getVoucher().getDiscountValue())
+                .receivedAt(uv.getReceivedAt())
+                .expiredAt(uv.getExpiredAt())
+                .used(uv.getUsed())
+                .usedAt(uv.getUsedAt())
+                .build()
+        ).toList();
+    }
+
+
 }
