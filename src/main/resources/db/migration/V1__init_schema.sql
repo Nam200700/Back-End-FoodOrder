@@ -363,14 +363,7 @@ CREATE TABLE vouchers (
                           start_date DATETIME NOT NULL,
                           end_date DATETIME NOT NULL,
                           status ENUM('ACTIVE','INACTIVE', 'EXPIRED') NOT NULL DEFAULT 'ACTIVE',
-                          issue_type ENUM(
-        'MANUAL',
-        'NEW_USER',
-        'FIRST_ORDER',
-        'INACTIVE_DAYS',
-        'BIRTHDAY',
-        'EVENT'
-    ) NOT NULL,
+                          issue_type ENUM('NEW_USER', 'BIRTHDAY', 'EVENT', 'ORDER_CANCELLED') NOT NULL,
                           created_at DATETIME,
                           updated_at DATETIME
 );
