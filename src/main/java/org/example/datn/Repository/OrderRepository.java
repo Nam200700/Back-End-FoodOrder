@@ -394,4 +394,46 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
 
     // Tìm danh sách đơn hàng theo trạng thái và thời gian tạo trước một mốc thời gian cutoffTime
     List<Order> findByOrderStatusAndCreatedAtBefore(OrderStatus orderStatus, LocalDateTime cutoffTime);
+
+    // ─────────────── VOUCHER ANALYTICS (đơn hoàn tất có gắn voucher) ───────────────
+
+    /** Tài chính đơn hoàn tất CÓ voucher trong [from,to): {count, SUM(discount), SUM(total)}. */
+    @Query("""
+            SELECT COUNT(o), COALESCE(SUM(o.discountAmount),0), COALESCE(SUM(o.totalAmount),0)
+            FROM Order o
+            WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+              AND o.paymentStatus != org.example.datn.domain.enums.PaymentStatus.REFUNDED
+              AND o.voucher IS NOT NULL
+              AND o.createdAt >= :from AND o.createdAt < :to
+            """)
+    List<Object[]> voucherFinanceBetween(@Param("from") java.time.LocalDateTime from,
+                                         @Param("to") java.time.LocalDateTime to);
+
+    /** Top voucher theo lượt dùng trong [from,to): {code, name, uses, SUM(discount)}. */
+    @Query("""
+            SELECT o.voucher.code, o.voucher.name, COUNT(o), COALESCE(SUM(o.discountAmount),0)
+            FROM Order o
+            WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+              AND o.paymentStatus != org.example.datn.domain.enums.PaymentStatus.REFUNDED
+              AND o.voucher IS NOT NULL
+              AND o.createdAt >= :from AND o.createdAt < :to
+            GROUP BY o.voucher.voucherId, o.voucher.code, o.voucher.name
+            ORDER BY COUNT(o) DESC
+            """)
+    List<Object[]> topVouchersBetween(@Param("from") java.time.LocalDateTime from,
+                                      @Param("to") java.time.LocalDateTime to,
+                                      Pageable pageable);
+
+    /** Lượt dùng voucher theo NGÀY trong [from,to): {yyyy-MM-dd, uses, SUM(discount)}. Native cho DATE(). */
+    @Query(value = """
+            SELECT DATE(created_at) AS d, COUNT(*) AS uses, COALESCE(SUM(discount_amount),0) AS disc
+            FROM orders
+            WHERE order_status = 'COMPLETED' AND payment_status <> 'REFUNDED'
+              AND voucher_id IS NOT NULL
+              AND created_at >= :from AND created_at < :to
+            GROUP BY DATE(created_at)
+            ORDER BY DATE(created_at)
+            """, nativeQuery = true)
+    List<Object[]> dailyVoucherUsageBetween(@Param("from") java.time.LocalDateTime from,
+                                            @Param("to") java.time.LocalDateTime to);
 }
