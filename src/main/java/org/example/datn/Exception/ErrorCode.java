@@ -23,6 +23,7 @@ public enum ErrorCode {
     //Them phan thong bao cho CCCD và Bien so xe neu bi trung hoac da co
     ID_CARD_EXISTS(409, "Số CCCD/CMND đã được đăng ký"),
     LICENSE_PLATE_EXISTS(409, "Biển số xe đã được đăng ký"),
+    RESTAURANT_PHONE_EXISTS(409, "Số điện thoại quán đã được đăng ký"),
 
     // Restaurant / Food / Category
     RESTAURANT_NOT_FOUND(404, "Không tìm thấy quán ăn"),
