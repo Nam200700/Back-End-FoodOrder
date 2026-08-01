@@ -217,28 +217,8 @@ public class AuthService {
             }
         });
 
-        // Vô hiệu hóa OTP cũ
-        otpRepository.invalidateOldOtps(email, org.example.datn.domain.enums.OtpPurpose.REGISTER);
-
-        // Tạo mã OTP 6 số mới
-        java.security.SecureRandom random = new java.security.SecureRandom();
-        StringBuilder codeBuilder = new StringBuilder(6);
-        for (int i = 0; i < 6; i++) {
-            codeBuilder.append(random.nextInt(10));
-        }
-        String code = codeBuilder.toString();
-
-        // Lưu OTP mới
-        otpRepository.save(org.example.datn.domain.Otp.builder()
-                .phone(email)
-                .code(code)
-                .purpose(org.example.datn.domain.enums.OtpPurpose.REGISTER)
-                .expiredAt(java.time.LocalDateTime.now().plusMinutes(5))
-                .failCount(0)
-                .isUsed(false)
-                .build());
-
-        // Gửi OTP qua email
+        // Tạo & lưu OTP REGISTER mới rồi gửi qua email
+        String code = generateAndStoreOtp(email, OtpPurpose.REGISTER);
         emailService.sendOtp(email, code);
     }
 
@@ -344,26 +324,8 @@ public class AuthService {
             }
         });
 
-        // Vô hiệu hóa OTP cũ
-        otpRepository.invalidateOldOtps(phoneOrEmail, org.example.datn.domain.enums.OtpPurpose.RESET_PASSWORD);
-
-        // Tạo mã OTP 6 số ngẫu nhiên
-        java.security.SecureRandom random = new java.security.SecureRandom();
-        StringBuilder codeBuilder = new StringBuilder(6);
-        for (int i = 0; i < 6; i++) {
-            codeBuilder.append(random.nextInt(10));
-        }
-        String code = codeBuilder.toString();
-
-        // Lưu OTP mới với TTL 5 phút
-        otpRepository.save(org.example.datn.domain.Otp.builder()
-                .phone(phoneOrEmail)
-                .code(code)
-                .purpose(org.example.datn.domain.enums.OtpPurpose.RESET_PASSWORD)
-                .expiredAt(java.time.LocalDateTime.now().plusMinutes(5))
-                .failCount(0)
-                .isUsed(false)
-                .build());
+        // Tạo & lưu OTP RESET_PASSWORD mới
+        String code = generateAndStoreOtp(phoneOrEmail, OtpPurpose.RESET_PASSWORD);
 
         // Gửi OTP theo phương thức yêu cầu
         if ("EMAIL".equalsIgnoreCase(method)) {
