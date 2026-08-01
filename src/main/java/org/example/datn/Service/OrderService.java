@@ -476,6 +476,9 @@ public class OrderService {
         return orderRepository.findAvailableOrders().stream()
                 .map(orderMapper::toResponse)
                 .map(this::enrichOrderResponse)
+                // Bảo vệ PII: KHÔNG lộ SĐT khách khi đơn còn ở pool (chưa ai nhận).
+                // Sau khi shipper nhận đơn, các endpoint khác mới trả đủ số điện thoại để liên hệ giao hàng.
+                .map(r -> { r.setCustomerPhone(null); return r; })
                 .toList();
     }
 
