@@ -132,4 +132,14 @@ public class ReviewService {
         }
         return reviewMapper.toResponse(review);
     }
+
+    @Transactional(readOnly = true)
+    public PageResponse<ReviewResponse> getShipperReviews(Long shipperUserId, Pageable pageable) {
+        Shipper shipper = shipperRepository.findByUserUserId(shipperUserId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy shipper"));
+
+        return PageResponse.from(reviewRepository
+                .findByShipperShipperIdOrderByCreatedAtDesc(shipper.getShipperId(), pageable)
+                .map(reviewMapper::toResponse));
+    }
 }
