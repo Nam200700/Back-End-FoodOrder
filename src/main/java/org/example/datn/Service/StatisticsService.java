@@ -480,4 +480,104 @@ public class StatisticsService {
                 .daily(daily).paymentDist(paymentDist).statusDist(statusDist).topRestaurants(topRestaurants)
                 .build();
     }
+
+    // ─── Shipper: tổng hợp thu nhập (gộp server-side, không bị chặn size=1000) ───
+    private static String weekdayKey(DayOfWeek d) {
+        switch (d) {
+            case MONDAY:    return "T2";
+            case TUESDAY:   return "T3";
+            case WEDNESDAY: return "T4";
+            case THURSDAY:  return "T5";
+            case FRIDAY:    return "T6";
+            case SATURDAY:  return "T7";
+            default:        return "CN";
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public ShipperInsightsResponse shipperInsights(Long shipperUserId) {
+        Shipper shipper = shipperRepository.findByUserUserId(shipperUserId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        List<Order> completed = orderRepository.findByShipperUserIdAndOrderStatus(shipperUserId, OrderStatus.COMPLETED);
+
+        LocalDate today = LocalDate.now();
+        LocalDateTime startToday = today.atStartOfDay();
+        LocalDateTime start7d = today.minusDays(6).atStartOfDay();
+        LocalDateTime weekStart = today.minusDays((today.getDayOfWeek().getValue() + 6) % 7).atStartOfDay(); // Thứ 2 00:00
+        LocalDateTime weekEnd = weekStart.plusDays(7);
+        LocalDateTime monthStart = today.withDayOfMonth(1).atStartOfDay();
+        LocalDateTime lastMonthStart = monthStart.minusMonths(1);
+
+        String[] order = {"T2", "T3", "T4", "T5", "T6", "T7", "CN"};
+        Map<String, Long> dayMap = new HashMap<>();
+        Map<String, Long> weekdayAll = new HashMap<>();
+        long[] hourTotals = new long[24];
+
+        // 6 tháng gần đây (kể cả tháng hiện tại)
+        List<ShipperInsightsResponse.MonthAmount> monthly = new ArrayList<>();
+        Map<String, Integer> monthIndex = new HashMap<>();
+        for (int i = 5; i >= 0; i--) {
+            LocalDate d = today.minusMonths(i).withDayOfMonth(1);
+            monthIndex.put(d.getYear() + "-" + d.getMonthValue(), monthly.size());
+            monthly.add(ShipperInsightsResponse.MonthAmount.builder()
+                    .label(String.format("%02d/%d", d.getMonthValue(), d.getYear())).amount(0).build());
+        }
+
+        long totalEarnings = 0, todayEarnings = 0, week7dEarnings = 0, thisWeekEarnings = 0;
+        long thisMonthEarnings = 0, lastMonthEarnings = 0, maxFee = 0;
+        int todayCount = 0, week7dCount = 0, thisMonthCount = 0;
+        Set<LocalDate> activeDays = new HashSet<>();
+
+        for (Order o : completed) {
+            long fee = o.getShippingFee() == null ? 0 : o.getShippingFee().longValue();
+            LocalDateTime c = o.getCreatedAt();
+            if (c == null) continue;
+            totalEarnings += fee;
+            if (fee > maxFee) maxFee = fee;
+            String wk = weekdayKey(c.getDayOfWeek());
+            weekdayAll.merge(wk, fee, Long::sum);
+            hourTotals[c.getHour()] += fee;
+            if (!c.isBefore(weekStart) && c.isBefore(weekEnd)) { dayMap.merge(wk, fee, Long::sum); thisWeekEarnings += fee; }
+            if (!c.isBefore(startToday)) { todayEarnings += fee; todayCount++; }
+            if (!c.isBefore(start7d)) { week7dEarnings += fee; week7dCount++; }
+            if (!c.isBefore(monthStart)) { thisMonthEarnings += fee; thisMonthCount++; activeDays.add(c.toLocalDate()); }
+            else if (!c.isBefore(lastMonthStart)) { lastMonthEarnings += fee; }
+            Integer mi = monthIndex.get(c.getYear() + "-" + c.getMonthValue());
+            if (mi != null) { ShipperInsightsResponse.MonthAmount ma = monthly.get(mi); ma.setAmount(ma.getAmount() + fee); }
+        }
+
+        List<ShipperInsightsResponse.DayAmount> daily = new ArrayList<>();
+        for (String k : order) daily.add(ShipperInsightsResponse.DayAmount.builder().day(k).amount(dayMap.getOrDefault(k, 0L)).build());
+
+        String bestWeekday = null; long bestAmt = 0;
+        for (String k : order) { long v = weekdayAll.getOrDefault(k, 0L); if (v > bestAmt) { bestAmt = v; bestWeekday = k; } }
+
+        int peakHourIdx = 0; long peakAmt = 0;
+        for (int h = 0; h < 24; h++) { if (hourTotals[h] > peakAmt) { peakAmt = hourTotals[h]; peakHourIdx = h; } }
+
+        int monthDelta = lastMonthEarnings > 0
+                ? (int) Math.round((thisMonthEarnings - lastMonthEarnings) * 100.0 / lastMonthEarnings)
+                : (thisMonthEarnings > 0 ? 100 : 0);
+        int activeDayCount = activeDays.size();
+        long avgPerActiveDay = activeDayCount > 0 ? thisMonthEarnings / activeDayCount : 0;
+
+        Double liveAvg = reviewRepository.findAverageRatingByShipperId(shipper.getShipperId());
+        double rating = liveAvg != null ? liveAvg
+                : (shipper.getAvgRating() != null ? shipper.getAvgRating().doubleValue() : 0.0);
+        int ratedCount = (int) reviewRepository.countByShipperShipperIdAndShipperRatingIsNotNull(shipper.getShipperId());
+
+        return ShipperInsightsResponse.builder()
+                .totalEarnings(totalEarnings).completedCount(completed.size())
+                .todayEarnings(todayEarnings).todayCount(todayCount)
+                .week7dEarnings(week7dEarnings).week7dCount(week7dCount)
+                .thisWeekEarnings(thisWeekEarnings)
+                .thisMonthEarnings(thisMonthEarnings).thisMonthCount(thisMonthCount)
+                .lastMonthEarnings(lastMonthEarnings).monthDelta(monthDelta)
+                .activeDayCount(activeDayCount).avgPerActiveDay(avgPerActiveDay)
+                .bestWeekday(bestWeekday).bestWeekdayAmount(bestAmt)
+                .peakHourIdx(peakHourIdx).peakHourAmount(peakAmt).maxFee(maxFee)
+                .rating(rating).ratedCount(ratedCount)
+                .daily(daily).monthly(monthly)
+                .build();
+    }
 }
