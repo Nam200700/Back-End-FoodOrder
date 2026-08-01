@@ -7,6 +7,7 @@ import org.example.datn.domain.enums.PaymentMethod;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 @Data
 public class CreateOrderRequest {
@@ -25,4 +26,6 @@ public class CreateOrderRequest {
     private PaymentMethod paymentMethod;
 
     private String note;
+
+    private Map<Long, Long> restaurantVouchers;
 }

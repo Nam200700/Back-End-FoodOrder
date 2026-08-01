@@ -64,6 +64,14 @@ public enum ErrorCode {
 
     ADDRESS_NOT_FOUND(404, "Không tìm thấy địa chỉ"),
 
+    VOUCHER_NOT_FOUND(404, "Không tìm thấy voucher"),
+    VOUCHER_CODE_EXISTS(409, "Mã voucher đã tồn tại"),
+    VOUCHER_EXPIRED(400, "Voucher đã hết hạn sử dụng"),
+    VOUCHER_ALREADY_CLAIMED(409, "Bạn đã nhận voucher này rồi"),
+    VOUCHER_ALREADY_USED(400, "Voucher đã được sử dụng"),
+    VOUCHER_NOT_OWNED(403, "Voucher không thuộc về bạn"),
+    VOUCHER_DISCOUNT_EXCEEDED(400, "Số tiền giảm giá vượt quá tổng giá trị đơn hàng"),
+
     // Generic
     VALIDATION_FAILED(400, "Dữ liệu không hợp lệ"),
     NOT_FOUND(404, "Không tìm thấy tài nguyên"),
