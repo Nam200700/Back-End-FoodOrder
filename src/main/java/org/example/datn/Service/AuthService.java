@@ -20,6 +20,7 @@ import org.example.datn.Exception.EmailNotVerifiedException;
 import org.example.datn.mapper.UserMapper;
 import org.example.datn.Repository.UserRepository;
 import org.example.datn.Repository.RestaurantRegisterRepository;
+import org.example.datn.Repository.RestaurantRepository;
 import org.example.datn.Repository.ShipperRegisterRepository;
 import org.example.datn.Repository.OtpRepository;
 import org.example.datn.Service.SmsService;
