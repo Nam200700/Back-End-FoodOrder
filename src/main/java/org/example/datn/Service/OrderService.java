@@ -1,11 +1,11 @@
 package org.example.datn.Service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.datn.annotation.EvictStatsCaches;
 import org.example.datn.DTO.request.order.CancelOrderRequest;
 import org.example.datn.DTO.request.order.CreateOrderRequest;
 import org.example.datn.DTO.response.order.OrderResponse;
-import org.example.datn.DTO.response.shipping.ShippingCalculateResponse;
 import org.example.datn.Exception.AppException;
 import org.example.datn.Exception.ErrorCode;
 import org.example.datn.Exception.OrderStatusException;
@@ -15,12 +15,13 @@ import org.example.datn.domain.enums.NotificationType;
 import org.example.datn.domain.enums.OrderStatus;
 import org.example.datn.domain.enums.PaymentStatus;
 import org.example.datn.domain.enums.Role;
+import org.example.datn.domain.enums.VoucherIssueType;
 import org.example.datn.mapper.OrderMapper;
 import org.example.datn.security.OwnershipGuard;
-import org.example.datn.util.HaversineCalculator;
 import org.example.datn.util.ShippingFeeCalculator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +34,7 @@ import java.util.Set;
 
 import static org.example.datn.domain.enums.OrderStatus.*;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderService {
@@ -56,6 +58,7 @@ public class OrderService {
     private final ShippingService shippingService;
     private final DeliveryRepository deliveryRepository;
     private final UserVoucherRepository userVoucherRepository;
+    private final VoucherRepository voucherRepository;
 
     private static final Map<OrderStatus, Set<OrderStatus>> VALID_TRANSITIONS = Map.of(
             PENDING, Set.of(CONFIRMED, CANCELLED),
@@ -66,39 +69,110 @@ public class OrderService {
             DELIVERING, Set.of(COMPLETED)
     );
 
+    // ─── Scheduled Task ──────────────────────────────────────
+    /**
+     * Tự động quét và hủy đơn PENDING quá 5 phút chưa xác nhận,
+     * đồng thời tặng Voucher đền bù (ORDER_CANCELLED) cho khách hàng.
+     */
+    @Scheduled(fixedRate = 30000)
+    @Transactional
+    public void autoCancelExpiredPendingOrders() {
+        LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(5);
+
+        // 1. Tìm các đơn PENDING tạo trước cutoffTime (quá 5 phút)
+        List<Order> expiredOrders = orderRepository.findByOrderStatusAndCreatedAtBefore(OrderStatus.PENDING, cutoffTime);
+
+        if (expiredOrders.isEmpty()) {
+            return;
+        }
+
+        // 2. Tìm Voucher đền bù (ORDER_CANCELLED) có sẵn trong DB
+        Voucher compensationVoucher = voucherRepository.findActiveVoucherByIssueType(VoucherIssueType.ORDER_CANCELLED)
+                .orElse(null);
+
+        for (Order order : expiredOrders) {
+            try {
+                // 3. Cập nhật trạng thái đơn hàng sang CANCELLED
+                order.setOrderStatus(OrderStatus.CANCELLED);
+                order.setCancelReason("Hệ thống tự động hủy do quán không xác nhận đơn trong vòng 5 phút");
+                order.setPaymentStatus(PaymentStatus.FAILED);
+                orderRepository.save(order);
+
+                User customer = order.getCustomer();
+
+                // 4. Phát Voucher đền bù cho khách hàng (nếu tìm thấy Voucher đền bù)
+                if (compensationVoucher != null && customer != null) {
+                    LocalDateTime expiredAt = (compensationVoucher.getEndDate() != null)
+                            ? compensationVoucher.getEndDate()
+                            : LocalDateTime.now().plusDays(30); // Hạn mặc định 30 ngày nếu voucher không set endDate
+
+                    UserVoucher userVoucher = UserVoucher.builder()
+                            .user(customer)
+                            .voucher(compensationVoucher)
+                            .used(false)
+                            .receivedAt(LocalDateTime.now())
+                            .expiredAt(expiredAt)
+                            .build();
+                    userVoucherRepository.save(userVoucher);
+                }
+
+                // 5. Gửi thông báo & WebSocket tới Chủ quán và Khách hàng
+                if (order.getRestaurant() != null && order.getRestaurant().getOwner() != null) {
+                    notificationService.notifyUser(
+                            order.getRestaurant().getOwner().getUserId(),
+                            NotificationType.ORDER_CANCELLED,
+                            order.getOrderId()
+                    );
+                }
+
+                if (customer != null) {
+                    notificationService.notifyUser(
+                            customer.getUserId(),
+                            NotificationType.ORDER_CANCELLED,
+                            order.getOrderId()
+                    );
+                }
+
+                webSocketService.broadcastOrderStatus(order);
+
+            } catch (Exception e) {
+                log.error("Lỗi khi tự động hủy đơn hàng ID: {}", order.getOrderId(), e);
+            }
+        }
+    }
+
     // ─── Customer ────────────────────────────────────────────
     @Transactional
     @EvictStatsCaches
     public List<OrderResponse> createOrder(Long customerId, CreateOrderRequest req) {
         User customer = userRepository.getReferenceById(customerId);
 
-        // 1. Kiểm tra và lấy thông tin Voucher (nếu có truyền userVoucherId lên request)
-        UserVoucher userVoucher = null;
-        Voucher voucher = null;
-        if (req.getUserVoucherId() != null) {
-            userVoucher = userVoucherRepository.findById(req.getUserVoucherId())
-                    .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
-
-            if (!userVoucher.getUser().getUserId().equals(customerId)) {
-                throw new AppException(ErrorCode.VOUCHER_NOT_OWNED);
-            }
-            if (Boolean.TRUE.equals(userVoucher.getUsed())) {
-                throw new AppException(ErrorCode.VOUCHER_ALREADY_USED);
-            }
-            if (userVoucher.getExpiredAt() != null && userVoucher.getExpiredAt().isBefore(LocalDateTime.now())) {
-                throw new AppException(ErrorCode.VOUCHER_EXPIRED);
-            }
-            voucher = userVoucher.getVoucher();
-        }
-
-        final Voucher finalVoucher = voucher;
-        final UserVoucher finalUserVoucher = userVoucher;
-
         List<Order> savedOrders = req.getRestaurantId().stream().map(restaurantId -> {
             Cart cart = cartRepository.findByCustomerUserIdAndRestaurantRestaurantId(customerId, restaurantId)
                     .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
             if (cart.getItems().isEmpty()) {
                 throw new AppException(ErrorCode.CART_ITEM_NOT_FOUND);
+            }
+
+            // 1. Kiểm tra và lấy thông tin Voucher riêng cho từng quán (nếu có)
+            Long userVoucherId = (req.getRestaurantVouchers() != null) ? req.getRestaurantVouchers().get(restaurantId) : null;
+            UserVoucher userVoucher = null;
+            Voucher voucher = null;
+
+            if (userVoucherId != null) {
+                userVoucher = userVoucherRepository.findById(userVoucherId)
+                        .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
+
+                if (!userVoucher.getUser().getUserId().equals(customerId)) {
+                    throw new AppException(ErrorCode.VOUCHER_NOT_OWNED);
+                }
+                if (Boolean.TRUE.equals(userVoucher.getUsed())) {
+                    throw new AppException(ErrorCode.VOUCHER_ALREADY_USED);
+                }
+                if (userVoucher.getExpiredAt() != null && userVoucher.getExpiredAt().isBefore(LocalDateTime.now())) {
+                    throw new AppException(ErrorCode.VOUCHER_EXPIRED);
+                }
+                voucher = userVoucher.getVoucher();
             }
 
             Order order = Order.builder()
@@ -111,10 +185,10 @@ public class OrderService {
                     .discountAmount(BigDecimal.ZERO)
                     .orderStatus(PENDING)
                     .note(req.getNote())
-                    .voucher(finalVoucher) // Lưu voucher vào bảng order
+                    .voucher(voucher) // Lưu voucher vào đơn hàng của quán này
                     .build();
 
-            // Snapshot price + name at order time.
+            // Snapshot giá + tên tại thời điểm đặt hàng
             List<OrderItem> items = cart.getItems().stream().map(ci -> {
                 Food food = ci.getFood();
                 if (!Boolean.TRUE.equals(food.getStatus())) {
@@ -155,20 +229,20 @@ public class OrderService {
 
             // 2. Tính toán discountAmount dựa theo loại DiscountType (FIXED, PERCENT, FREESHIP)
             BigDecimal discountAmount = BigDecimal.ZERO;
-            if (finalVoucher != null) {
-                switch (finalVoucher.getDiscountType()) {
-                    case FIXED -> discountAmount = finalVoucher.getDiscountValue();
+            if (voucher != null) {
+                switch (voucher.getDiscountType()) {
+                    case FIXED -> discountAmount = voucher.getDiscountValue();
                     case PERCENT -> {
-                        discountAmount = subtotal.multiply(finalVoucher.getDiscountValue())
+                        discountAmount = subtotal.multiply(voucher.getDiscountValue())
                                 .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
                     }
                     case FREESHIP -> {
-                        discountAmount = shippingFeeBd; // FREESHIP trừ đúng bằng phí ship
+                        discountAmount = shippingFeeBd; // FREESHIP trừ đúng bằng phí ship của quán này
                     }
                 }
             }
 
-            // 3. Kiểm tra nếu số tiền giảm lớn hơn tổng giá trị đơn hàng -> Bắn thông báo lỗi
+            // 3. Kiểm tra nếu số tiền giảm lớn hơn tổng giá trị đơn hàng của quán -> Bắn lỗi
             if (discountAmount.compareTo(totalBeforeDiscount) > 0) {
                 throw new AppException(ErrorCode.VOUCHER_DISCOUNT_EXCEEDED);
             }
@@ -182,6 +256,17 @@ public class OrderService {
             }
             order.setTotalAmount(totalAmount);
 
+            // 5. Đánh dấu UserVoucher đã được sử dụng
+            if (userVoucher != null) {
+                userVoucher.setUsed(true);
+                userVoucher.setUsedAt(LocalDateTime.now());
+                userVoucherRepository.save(userVoucher);
+
+                if (voucher != null) {
+                    voucher.setUsedQuantity((voucher.getUsedQuantity() != null ? voucher.getUsedQuantity() : 0) + 1);
+                }
+            }
+
             Order saved = orderRepository.save(order);
             cartRepository.delete(cart);
             paymentService.createForOrder(saved);
@@ -191,17 +276,6 @@ public class OrderService {
             webSocketService.broadcastOrderStatus(saved);
             return saved;
         }).toList();
-
-        // 5. Đánh dấu UserVoucher đã được sử dụng sau khi tạo đơn hàng thành công
-        if (finalUserVoucher != null) {
-            finalUserVoucher.setUsed(true);
-            finalUserVoucher.setUsedAt(LocalDateTime.now());
-            userVoucherRepository.save(finalUserVoucher);
-
-            if (voucher != null) {
-                voucher.setUsedQuantity(voucher.getUsedQuantity() + 1);
-            }
-        }
 
         return savedOrders.stream().map(orderMapper::toResponse).toList();
     }
@@ -248,7 +322,6 @@ public class OrderService {
 
         OrderStatus st = order.getOrderStatus();
 
-        // 1) Không cho hủy đơn đã kết thúc
         if (st == OrderStatus.CANCELLED) {
             throw new AppException(ErrorCode.ORDER_ALREADY_CANCELLED);
         }
@@ -256,7 +329,6 @@ public class OrderService {
             throw new AppException(ErrorCode.ORDER_ALREADY_COMPLETED);
         }
 
-        // 2) Kiểm tra quyền theo vai trò + sở hữu
         Role role = current.getRole();
         boolean earlyStage = (st == OrderStatus.PENDING || st == OrderStatus.CONFIRMED);
 
@@ -277,19 +349,16 @@ public class OrderService {
                     throw new AppException(ErrorCode.ORDER_CANCEL_STAGE_INVALID, "Đơn đã qua giai đoạn cho phép hủy");
                 }
             }
-            case ADMIN -> { /* admin hủy được mọi trạng thái (trừ COMPLETED và CANCELLED) */ }
+            case ADMIN -> { }
             default -> throw new AppException(ErrorCode.FORBIDDEN, "Vai trò không được phép hủy đơn");
         }
 
-        // 3) Cập nhật đơn
         order.setOrderStatus(OrderStatus.CANCELLED);
         order.setCancelledBy(current);
         order.setCancelReason(req.getReason().trim());
 
-        // 4) Xử lý thanh toán
         Payment payment = paymentRepository.findByOrderOrderId(orderId).orElse(null);
         if (order.getPaymentStatus() == PaymentStatus.PAID) {
-            // ADMIN hủy đơn đã thu tiền -> hoàn tiền + đảo earning
             refundService.refundOrder(order, payment);
         } else {
             order.setPaymentStatus(PaymentStatus.FAILED);
@@ -299,7 +368,6 @@ public class OrderService {
             }
         }
 
-        // 5) Giảm active_delivery của shipper nếu có
         if (order.getShipper() != null) {
             shipperRepository.findByUserUserId(order.getShipper().getUserId())
                     .ifPresent(s -> {
@@ -309,11 +377,7 @@ public class OrderService {
         }
 
         orderRepository.save(order);
-
-        // 6) Gửi thông báo ORDER_CANCELLED
         notificationService.notifyOrderCancelled(order, role);
-
-        // 7) Broadcast socket
         webSocketService.broadcastOrderStatus(order);
 
         return enrichOrderResponse(orderMapper.toResponse(order));
@@ -365,8 +429,6 @@ public class OrderService {
         order.setPaymentStatus(PaymentStatus.FAILED);
         orderRepository.save(order);
 
-        // Refund if already paid (e.g. VNPay prepaid order).
-        //paymentService.refundIfPaid(order);
         Payment payment = paymentRepository.findByOrderOrderId(orderId).orElse(null);
         if (payment != null) {
             payment.setStatus(PaymentStatus.FAILED);
@@ -417,7 +479,6 @@ public class OrderService {
                 .toList();
     }
 
-    /** SERIALIZABLE so two shippers cannot accept the same order. */
     @Transactional(isolation = Isolation.SERIALIZABLE)
     @EvictStatsCaches
     public OrderResponse acceptOrder(Long shipperId, Long orderId) {
@@ -485,7 +546,6 @@ public class OrderService {
         order.setCompletedAt(LocalDateTime.now());
         orderRepository.save(order);
 
-        // Cập nhật activeDelivery và totalDelivery cho tài xế
         Shipper shipper = shipperRepository.findByUserUserId(shipperId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         if (shipper.getActiveDelivery() > 0) {
@@ -496,7 +556,6 @@ public class OrderService {
         shipper.setTotalDelivery(shipper.getTotalDelivery() + 1);
         shipperRepository.save(shipper);
 
-        // COD orders are settled on delivery.
         paymentService.markCodPaidOnCompletion(order);
         deliveryService.completeDelivery(order);
         transactionService.recordOrderTransactions(order);
