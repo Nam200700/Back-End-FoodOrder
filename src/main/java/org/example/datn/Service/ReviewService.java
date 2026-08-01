@@ -72,7 +72,7 @@ public class ReviewService {
                 .shipper(shipper)
                 .build();
 
-        if (req.getImages() != null || !req.getImages().isEmpty()) {
+        if (req.getImages() != null && !req.getImages().isEmpty()) {
             List<ReviewImage> reviewImages = new ArrayList<>();
             for (int i = 0; i < req.getImages().size(); i++) {
                 String imageUrl = req.getImages().get(i);
