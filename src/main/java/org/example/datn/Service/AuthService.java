@@ -287,6 +287,12 @@ public class AuthService {
         }
         Long userId = jwtTokenProvider.getUserIdFromToken(token);
         User user = userRepository.findByIdOrThrow(userId, ErrorCode.USER_NOT_FOUND);
+        // Không cấp access token mới nếu tài khoản đã bị khoá sau khi đăng nhập
+        // (nếu không, user bị khoá vẫn tự làm mới token tới 7 ngày).
+        if (user.getLockedAt() != null) {
+            String reason = user.getLockedReason() != null ? user.getLockedReason() : "Không có lý do cụ thể";
+            throw new AppException(ErrorCode.FORBIDDEN, "Tài khoản của bạn đã bị khóa. Lý do: " + reason);
+        }
         return new RefreshResponse(jwtTokenProvider.generateAccessToken(user));
     }
 
