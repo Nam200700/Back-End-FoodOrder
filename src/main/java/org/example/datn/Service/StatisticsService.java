@@ -380,11 +380,12 @@ public class StatisticsService {
         BigDecimal gtv = bd(fin[0]);
         BigDecimal subtotal = bd(fin[1]);
         BigDecimal shipping = bd(fin[2]);
-        long completedOrders = lng(fin[3]);
+        // Đơn hoàn tất TẠO DOANH THU (đã loại refund) — dùng làm mẫu số AOV để khớp doanh thu net.
+        long completedNet = lng(fin[3]);
         BigDecimal commission = subtotal.multiply(rate);
         BigDecimal earnings = subtotal.subtract(commission);
-        BigDecimal aov = completedOrders > 0
-                ? subtotal.divide(BigDecimal.valueOf(completedOrders), 0, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+        BigDecimal aov = completedNet > 0
+                ? subtotal.divide(BigDecimal.valueOf(completedNet), 0, RoundingMode.HALF_UP) : BigDecimal.ZERO;
 
         // Phân bố trạng thái đơn → suy ra tổng đơn & đơn huỷ
         List<MerchantReportResponse.Bucket> statusDist = orderRepository.statusDistByRestaurantBetween(restaurantId, from, to)
@@ -394,6 +395,10 @@ public class StatisticsService {
         long totalOrders = statusDist.stream().mapToLong(MerchantReportResponse.Bucket::getCount).sum();
         long cancelledOrders = statusDist.stream()
                 .filter(b -> b.getKey().equals(OrderStatus.CANCELLED.name()))
+                .mapToLong(MerchantReportResponse.Bucket::getCount).sum();
+        // Đơn hoàn tất HIỂN THỊ = MỌI đơn COMPLETED (kể cả đơn sau đó hoàn tiền) → KHỚP số ở Dashboard.
+        long completedOrders = statusDist.stream()
+                .filter(b -> b.getKey().equals(OrderStatus.COMPLETED.name()))
                 .mapToLong(MerchantReportResponse.Bucket::getCount).sum();
 
         List<MerchantReportResponse.Bucket> paymentDist = orderRepository.paymentDistByRestaurantBetween(restaurantId, from, to)
@@ -438,11 +443,12 @@ public class StatisticsService {
         BigDecimal gtv = bd(fin[0]);
         BigDecimal subtotal = bd(fin[1]);
         BigDecimal shipping = bd(fin[2]);
-        long completedOrders = lng(fin[3]);
+        // Đơn hoàn tất TẠO DOANH THU (đã loại refund) — dùng làm mẫu số AOV để khớp doanh thu net.
+        long completedNet = lng(fin[3]);
         BigDecimal commission = subtotal.multiply(rate);
         BigDecimal merchantNet = subtotal.subtract(commission);
-        BigDecimal aov = completedOrders > 0
-                ? subtotal.divide(BigDecimal.valueOf(completedOrders), 0, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+        BigDecimal aov = completedNet > 0
+                ? subtotal.divide(BigDecimal.valueOf(completedNet), 0, RoundingMode.HALF_UP) : BigDecimal.ZERO;
 
         List<AdminReportResponse.Bucket> statusDist = orderRepository.statusDistSystemBetween(from, to)
                 .stream().map(r -> AdminReportResponse.Bucket.builder()
@@ -451,6 +457,10 @@ public class StatisticsService {
         long totalOrders = statusDist.stream().mapToLong(AdminReportResponse.Bucket::getCount).sum();
         long cancelledOrders = statusDist.stream()
                 .filter(b -> b.getKey().equals(OrderStatus.CANCELLED.name()))
+                .mapToLong(AdminReportResponse.Bucket::getCount).sum();
+        // Đơn hoàn tất HIỂN THỊ = MỌI đơn COMPLETED (kể cả đơn sau đó hoàn tiền) → KHỚP số ở Dashboard/overview.
+        long completedOrders = statusDist.stream()
+                .filter(b -> b.getKey().equals(OrderStatus.COMPLETED.name()))
                 .mapToLong(AdminReportResponse.Bucket::getCount).sum();
 
         List<AdminReportResponse.Bucket> paymentDist = orderRepository.paymentDistSystemBetween(from, to)
