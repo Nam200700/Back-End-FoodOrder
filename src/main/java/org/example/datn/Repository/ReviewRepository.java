@@ -28,4 +28,7 @@ public interface ReviewRepository extends BaseRepository<Review, Long> {
 
     @Query("SELECT AVG(r.shipperRating) FROM Review r WHERE r.shipper.shipperId = :shipperId AND r.shipperRating IS NOT NULL")
     Double findAverageRatingByShipperId(@Param("shipperId") Long shipperId);
+
+    // Số lượt đã đánh giá tài xế (có chấm sao) — cho chỉ số "Từ N đánh giá"
+    long countByShipperShipperIdAndShipperRatingIsNotNull(Long shipperId);
 }
