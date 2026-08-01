@@ -32,4 +32,7 @@ public interface VoucherRepository extends BaseRepository<Voucher, Long> {
                                   @Param("status") VoucherStatus status,
                                   @Param("now") LocalDateTime now,
                                   Pageable pageable);
+
+    @Query("SELECT v FROM Voucher v WHERE v.issueType = :issueType AND v.status = 'ACTIVE' AND (v.endDate IS NULL OR v.endDate > CURRENT_TIMESTAMP)")
+    Optional<Voucher> findActiveVoucherByIssueType(@Param("issueType") VoucherIssueType issueType);
 }
