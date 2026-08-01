@@ -67,6 +67,7 @@ public class StatisticsService {
     private final ReportRepository reportRepository;
     private final ReviewRepository reviewRepository;
     private final FoodRepository foodRepository; // đếm sức khoẻ thực đơn cho dashboard insights
+    private final VoucherRepository voucherRepository; // phân tích voucher cho dashboard admin
 
     @Value("${platform.commission-rate:0.10}")
     private double commissionRate;
