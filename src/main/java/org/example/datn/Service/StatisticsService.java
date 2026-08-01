@@ -12,7 +12,10 @@ import org.example.datn.DTO.response.stats.MerchantInsightsResponse;
 import org.example.datn.DTO.response.stats.MerchantReportResponse;
 import org.example.datn.DTO.response.stats.MerchantStatsResponse;
 import org.example.datn.DTO.response.stats.StatsOverviewResponse;
+import org.example.datn.DTO.response.stats.VoucherAnalyticsResponse;
+import org.example.datn.Repository.VoucherRepository;
 import org.example.datn.domain.enums.PaymentStatus;
+import org.example.datn.domain.enums.VoucherStatus;
 import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDate;
