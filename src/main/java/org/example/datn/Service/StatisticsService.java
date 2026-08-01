@@ -485,6 +485,47 @@ public class StatisticsService {
                 .build();
     }
 
+    /**
+     * PHÂN TÍCH VOUCHER cho dashboard admin — số thật từ đơn hoàn tất có gắn voucher.
+     */
+    @Cacheable(value = "voucherAnalytics", key = "#range")
+    @Transactional(readOnly = true)
+    public VoucherAnalyticsResponse voucherAnalytics(String range) {
+        LocalDateTime[] w = resolveRange(range);
+        LocalDateTime from = w[0], to = w[1];
+
+        List<Object[]> finRows = orderRepository.voucherFinanceBetween(from, to);
+        Object[] fin = finRows.isEmpty() ? new Object[]{0L, null, null} : finRows.get(0);
+        long redeemedOrders = lng(fin[0]);
+        BigDecimal discountCost = bd(fin[1]);
+        BigDecimal voucherRevenue = bd(fin[2]);
+        BigDecimal avgDiscount = redeemedOrders > 0
+                ? discountCost.divide(BigDecimal.valueOf(redeemedOrders), 0, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+
+        List<VoucherAnalyticsResponse.TopVoucher> topVouchers = orderRepository
+                .topVouchersBetween(from, to, PageRequest.of(0, 5))
+                .stream().map(r -> VoucherAnalyticsResponse.TopVoucher.builder()
+                        .code((String) r[0]).name((String) r[1]).uses(lng(r[2])).discount(bd(r[3])).build())
+                .toList();
+
+        List<VoucherAnalyticsResponse.DayUsage> dailyUsage = orderRepository.dailyVoucherUsageBetween(from, to)
+                .stream().map(r -> VoucherAnalyticsResponse.DayUsage.builder()
+                        .date(r[0].toString()).uses(lng(r[1])).discount(bd(r[2])).build())
+                .toList();
+
+        return VoucherAnalyticsResponse.builder()
+                .range(range)
+                .totalVouchers(voucherRepository.count())
+                .activeVouchers(voucherRepository.countByStatus(VoucherStatus.ACTIVE))
+                .redeemedOrders(redeemedOrders)
+                .discountCost(discountCost)
+                .voucherRevenue(voucherRevenue)
+                .avgDiscountPerOrder(avgDiscount)
+                .topVouchers(topVouchers)
+                .dailyUsage(dailyUsage)
+                .build();
+    }
+
     // ─── Shipper: tổng hợp thu nhập (gộp server-side, không bị chặn size=1000) ───
     private static String weekdayKey(DayOfWeek d) {
         switch (d) {
