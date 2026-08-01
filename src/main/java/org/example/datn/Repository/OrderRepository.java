@@ -29,6 +29,9 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
 
     Page<Order> findByShipperUserId(Long shipperId, Pageable pageable);
 
+    /** TẤT CẢ đơn theo shipper + trạng thái (không phân trang) để gộp thu nhập server-side. */
+    List<Order> findByShipperUserIdAndOrderStatus(Long shipperId, OrderStatus status);
+
     /** Fetch-join items + food to avoid N+1 when rendering a single order. */
     @Query("""
             SELECT DISTINCT o FROM Order o
