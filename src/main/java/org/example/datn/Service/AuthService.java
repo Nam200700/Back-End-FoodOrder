@@ -40,6 +40,7 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final UserMapper userMapper;
     private final RestaurantRegisterRepository restaurantRegisterRepository;
+    private final RestaurantRepository restaurantRepository;
     private final ShipperRegisterRepository shipperRegisterRepository;
     private final OtpRepository otpRepository;
     private final SmsService smsService;
