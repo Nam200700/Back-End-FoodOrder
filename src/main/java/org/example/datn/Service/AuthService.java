@@ -140,28 +140,8 @@ public class AuthService {
             shipperRegisterRepository.save(reg);
         }
 
-        // Tạo mã OTP có 6 dãy số ngẫu nhiên
-        java.security.SecureRandom random = new java.security.SecureRandom();
-        StringBuilder codeBuilder = new StringBuilder(6);
-        for (int i = 0; i < 6; i++) {
-            codeBuilder.append(random.nextInt(10));
-        }
-        String code = codeBuilder.toString();
-
-        // Vô hiệu hóa OTP REGISTER cũ
-        otpRepository.invalidateOldOtps(user.getEmail(), org.example.datn.domain.enums.OtpPurpose.REGISTER);
-
-        // Lưu OTP mới với TTL 5 phút
-        otpRepository.save(org.example.datn.domain.Otp.builder()
-                .phone(user.getEmail())
-                .code(code)
-                .purpose(org.example.datn.domain.enums.OtpPurpose.REGISTER)
-                .expiredAt(java.time.LocalDateTime.now().plusMinutes(5))
-                .failCount(0)
-                .isUsed(false)
-                .build());
-
-        // Gửi OTP qua email
+        // Tạo & lưu OTP REGISTER mới rồi gửi qua email
+        String code = generateAndStoreOtp(user.getEmail(), OtpPurpose.REGISTER);
         emailService.sendOtp(user.getEmail(), code);
 
         return AuthResponse.builder()
@@ -315,6 +295,29 @@ public class AuthService {
                 .refreshToken(jwtTokenProvider.generateRefreshToken(user))
                 .user(userMapper.toResponse(user))
                 .build();
+    }
+
+    /**
+     * Vô hiệu hoá OTP cũ, tạo mã 6 số mới (TTL 5 phút) và lưu. Trả về mã để caller tự gửi (email/SMS).
+     * Gom logic trùng lặp ở register / resendRegisterOtp / forgotPasswordSendOtp.
+     */
+    private String generateAndStoreOtp(String target, OtpPurpose purpose) {
+        otpRepository.invalidateOldOtps(target, purpose);
+        SecureRandom random = new SecureRandom();
+        StringBuilder codeBuilder = new StringBuilder(6);
+        for (int i = 0; i < 6; i++) {
+            codeBuilder.append(random.nextInt(10));
+        }
+        String code = codeBuilder.toString();
+        otpRepository.save(Otp.builder()
+                .phone(target)
+                .code(code)
+                .purpose(purpose)
+                .expiredAt(LocalDateTime.now().plusMinutes(5))
+                .failCount(0)
+                .isUsed(false)
+                .build());
+        return code;
     }
 
     @Transactional
