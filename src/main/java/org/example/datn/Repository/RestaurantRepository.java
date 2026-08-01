@@ -17,4 +17,7 @@ public interface RestaurantRepository extends BaseRepository<Restaurant, Long> {
 
     // Tăng trưởng quán đối tác cho dashboard admin (theo created_at)
     long countByCreatedAtAfter(java.time.LocalDateTime since);
+
+    // Chống trùng số điện thoại quán (quán đã được duyệt)
+    boolean existsByPhone(String phone);
 }
