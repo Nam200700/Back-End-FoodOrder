@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -387,4 +388,7 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
     List<Object[]> topRestaurantsSystemBetween(@Param("from") java.time.LocalDateTime from,
                                                @Param("to") java.time.LocalDateTime to,
                                                Pageable pageable);
+
+    // Tìm danh sách đơn hàng theo trạng thái và thời gian tạo trước một mốc thời gian cutoffTime
+    List<Order> findByOrderStatusAndCreatedAtBefore(OrderStatus orderStatus, LocalDateTime cutoffTime);
 }
