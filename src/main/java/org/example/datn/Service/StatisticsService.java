@@ -341,12 +341,21 @@ public class StatisticsService {
 
     /** Quy đổi range → cửa sổ [from, to). "all" dùng mốc rất cũ để bao toàn bộ. */
     private LocalDateTime[] resolveRange(String range) {
+        LocalDate today = LocalDate.now();
         LocalDateTime to = LocalDateTime.now();
         LocalDateTime from;
         switch (range == null ? "all" : range) {
+            case "today" -> from = today.atStartOfDay();
             case "7days" -> from = to.minusDays(7);
             case "30days" -> from = to.minusDays(30);
-            case "thisMonth" -> from = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+            case "90days" -> from = to.minusDays(90);
+            case "thisWeek" -> from = today.minusDays((today.getDayOfWeek().getValue() + 6) % 7).atStartOfDay(); // Thứ 2 đầu tuần
+            case "thisMonth" -> from = today.withDayOfMonth(1).atStartOfDay();
+            case "lastMonth" -> { // tháng trước trọn vẹn → to = đầu tháng này
+                from = today.withDayOfMonth(1).minusMonths(1).atStartOfDay();
+                to = today.withDayOfMonth(1).atStartOfDay();
+            }
+            case "thisYear" -> from = today.withDayOfYear(1).atStartOfDay();
             default -> from = LocalDateTime.of(2000, 1, 1, 0, 0); // "all"
         }
         return new LocalDateTime[]{from, to};
