@@ -414,7 +414,7 @@ public class StatisticsService {
         long uniqueCustomers = orderRepository.countDistinctCustomersByRestaurantBetween(restaurantId, from, to);
 
         List<MerchantReportResponse.TopFood> topFoods = orderRepository
-                .topFoodsByRestaurantBetween(restaurantId, from, to, PageRequest.of(0, 5))
+                .topFoodsByRestaurantBetween(restaurantId, from, to, PageRequest.of(0, 10))
                 .stream().map(r -> MerchantReportResponse.TopFood.builder()
                         .name((String) r[0]).qty(lng(r[1])).revenue(bd(r[2])).build())
                 .toList();
@@ -476,7 +476,7 @@ public class StatisticsService {
         long uniqueCustomers = orderRepository.countDistinctCustomersSystemBetween(from, to);
 
         List<AdminReportResponse.TopRestaurant> topRestaurants = orderRepository
-                .topRestaurantsSystemBetween(from, to, PageRequest.of(0, 5))
+                .topRestaurantsSystemBetween(from, to, PageRequest.of(0, 10))
                 .stream().map(r -> {
                     BigDecimal sub = bd(r[2]);
                     BigDecimal comm = sub.multiply(rate);
