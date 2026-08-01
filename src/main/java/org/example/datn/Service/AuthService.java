@@ -70,6 +70,13 @@ public class AuthService {
                 throw new AppException(ErrorCode.LICENSE_PLATE_EXISTS);
             }
         }
+        // Check trùng SĐT quán (chỉ khi đăng ký OWNER và có nhập SĐT quán) — cả hồ sơ chờ duyệt lẫn quán đã duyệt
+        if ("OWNER".equalsIgnoreCase(req.getRole())
+                && req.getRestaurantPhone() != null && !req.getRestaurantPhone().isBlank()
+                && (restaurantRegisterRepository.existsByPhone(req.getRestaurantPhone())
+                    || restaurantRepository.existsByPhone(req.getRestaurantPhone()))) {
+            throw new AppException(ErrorCode.RESTAURANT_PHONE_EXISTS);
+        }
 
 
         org.example.datn.domain.enums.Role userRole = org.example.datn.domain.enums.Role.CUSTOMER;
