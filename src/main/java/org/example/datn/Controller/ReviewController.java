@@ -7,6 +7,7 @@ import org.example.datn.common.PageResponse;
 import org.example.datn.DTO.request.review.CreateReviewRequest;
 import org.example.datn.DTO.request.review.ReplyReviewRequest;
 import org.example.datn.DTO.response.review.ReviewResponse;
+import org.example.datn.DTO.response.review.ShipperReviewSummaryResponse;
 import org.example.datn.security.CustomUserDetails;
 import org.example.datn.Service.ReviewService;
 import org.springframework.data.domain.Pageable;
@@ -61,8 +62,19 @@ public class ReviewController {
     @GetMapping("/shipper/reviews")
     @PreAuthorize("hasRole('SHIPPER')")
     public ResponseEntity<ApiResponse<PageResponse<ReviewResponse>>> shipperReviews(
-            @AuthenticationPrincipal CustomUserDetails user, Pageable pageable) {
+            @AuthenticationPrincipal CustomUserDetails user,
+            @RequestParam(required = false) Integer star,
+            @RequestParam(required = false, defaultValue = "false") boolean imageOnly,
+            Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.ok(
-                reviewService.getShipperReviews(user.getUserId(), pageable)));
+                reviewService.getShipperReviews(user.getUserId(), star, imageOnly, pageable)));
+    }
+
+    /** Tóm tắt đánh giá tài xế (gộp server-side) — trang Đánh Giá dùng để không phải tải hết. */
+    @GetMapping("/shipper/reviews/summary")
+    @PreAuthorize("hasRole('SHIPPER')")
+    public ResponseEntity<ApiResponse<ShipperReviewSummaryResponse>> shipperReviewSummary(
+            @AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok(ApiResponse.ok(reviewService.shipperReviewSummary(user.getUserId())));
     }
 }
