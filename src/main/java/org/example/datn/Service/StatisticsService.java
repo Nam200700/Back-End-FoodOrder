@@ -373,9 +373,9 @@ public class StatisticsService {
     /**
      * BÁO CÁO TÀI CHÍNH NHÀ HÀNG — gộp toàn bộ ở DB theo cửa sổ thời gian (thay tính client-side).
      */
-    @Cacheable(value = "merchantReport", key = "#restaurantId + '-' + #range")
+    @Cacheable(value = "merchantReport", key = "#restaurantId + '-' + #range + '-' + #dow + '-' + #month + '-' + #year")
     @Transactional(readOnly = true)
-    public MerchantReportResponse merchantReport(Long merchantId, Long restaurantId, String range) {
+    public MerchantReportResponse merchantReport(Long merchantId, Long restaurantId, String range, Integer dow, Integer month, Integer year) {
         Restaurant restaurant = restaurantRepository.findByIdOrThrow(restaurantId, ErrorCode.RESTAURANT_NOT_FOUND);
         ownershipGuard.checkRestaurantOwner(restaurant, merchantId);
 
