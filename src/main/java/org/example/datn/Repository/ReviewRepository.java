@@ -53,4 +53,25 @@ public interface ReviewRepository extends BaseRepository<Review, Long> {
                                             @Param("star") Integer star,
                                             @Param("imageOnly") boolean imageOnly,
                                             Pageable pageable);
+
+    // ─────────── Trang Đánh Giá quán (owner): gộp tóm tắt server-side + phân trang có lọc ───────────
+
+    /** Toàn bộ review CÓ chấm sao quán của 1 nhà hàng. */
+    List<Review> findByRestaurantRestaurantIdAndRestaurantRatingIsNotNull(Long restaurantId);
+
+    /** Đếm review của quán CÓ kèm ảnh (cho nút lọc "Có ảnh (N)"). */
+    @Query("SELECT COUNT(r) FROM Review r WHERE r.restaurant.restaurantId = :rid AND r.restaurantRating IS NOT NULL AND SIZE(r.images) > 0")
+    long countRestaurantReviewsWithImages(@Param("rid") Long rid);
+
+    /** Danh sách review của quán có LỌC sao/ảnh + SORT (theo Pageable) — phân trang thật. */
+    @Query("""
+            SELECT r FROM Review r
+            WHERE r.restaurant.restaurantId = :rid AND r.restaurantRating IS NOT NULL
+              AND (:star IS NULL OR r.restaurantRating = :star)
+              AND (:imageOnly = false OR SIZE(r.images) > 0)
+            """)
+    Page<Review> findRestaurantReviewsFiltered(@Param("rid") Long rid,
+                                               @Param("star") Integer star,
+                                               @Param("imageOnly") boolean imageOnly,
+                                               Pageable pageable);
 }
