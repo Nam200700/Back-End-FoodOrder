@@ -270,11 +270,17 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
             FROM Order o
             WHERE o.restaurant.restaurantId = :rid
               AND o.createdAt >= :from AND o.createdAt < :to
+              AND (:dow IS NULL OR FUNCTION('DAYOFWEEK', o.createdAt) = :dow)
+              AND (:month IS NULL OR FUNCTION('MONTH', o.createdAt) = :month)
+              AND (:year IS NULL OR FUNCTION('YEAR', o.createdAt) = :year)
             GROUP BY o.orderStatus
             """)
     List<Object[]> statusDistByRestaurantBetween(@Param("rid") Long rid,
                                                  @Param("from") java.time.LocalDateTime from,
-                                                 @Param("to") java.time.LocalDateTime to);
+                                                 @Param("to") java.time.LocalDateTime to,
+                                                 @Param("dow") Integer dow,
+                                                 @Param("month") Integer month,
+                                                 @Param("year") Integer year);
 
     /** Phân bố trạng thái THANH TOÁN của quán trong kỳ: {paymentStatus, count, sum(total)}. */
     @Query("""
