@@ -58,8 +58,11 @@ public class AdminController {
     /** Báo cáo phân tích doanh thu hệ thống theo kỳ (gộp ở server) cho trang Thống kê admin. */
     @GetMapping("/stats/report")
     public ResponseEntity<ApiResponse<AdminReportResponse>> report(
-            @RequestParam(required = false, defaultValue = "all") String range) {
-        return ResponseEntity.ok(ApiResponse.ok(statisticsService.adminReport(range)));
+            @RequestParam(required = false, defaultValue = "all") String range,
+            @RequestParam(required = false) Integer dow,
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) Integer year) {
+        return ResponseEntity.ok(ApiResponse.ok(statisticsService.adminReport(range, dow, month, year)));
     }
 
     /** Phân tích voucher theo kỳ (lượt dùng, chi phí giảm giá, top voucher) cho dashboard admin. */

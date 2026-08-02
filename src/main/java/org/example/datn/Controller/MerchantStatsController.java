@@ -45,8 +45,11 @@ public class MerchantStatsController {
     public ResponseEntity<ApiResponse<MerchantReportResponse>> report(
             @AuthenticationPrincipal CustomUserDetails user,
             @RequestParam Long restaurantId,
-            @RequestParam(required = false, defaultValue = "all") String range) {
+            @RequestParam(required = false, defaultValue = "all") String range,
+            @RequestParam(required = false) Integer dow,
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) Integer year) {
         return ResponseEntity.ok(ApiResponse.ok(
-                statisticsService.merchantReport(user.getUserId(), restaurantId, range)));
+                statisticsService.merchantReport(user.getUserId(), restaurantId, range, dow, month, year)));
     }
 }

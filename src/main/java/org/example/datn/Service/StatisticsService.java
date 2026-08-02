@@ -384,7 +384,7 @@ public class StatisticsService {
         BigDecimal rate = BigDecimal.valueOf(commissionRate);
 
         // Tài chính đơn hoàn tất: {total, subtotal, shipping, count} (aggregate → đúng 1 hàng)
-        List<Object[]> finRows = orderRepository.financeCompletedByRestaurantBetween(restaurantId, from, to);
+        List<Object[]> finRows = orderRepository.financeCompletedByRestaurantBetween(restaurantId, from, to, dow, month, year);
         Object[] fin = finRows.isEmpty() ? new Object[]{null, null, null, 0L} : finRows.get(0);
         BigDecimal gtv = bd(fin[0]);
         BigDecimal subtotal = bd(fin[1]);
@@ -397,7 +397,7 @@ public class StatisticsService {
                 ? subtotal.divide(BigDecimal.valueOf(completedNet), 0, RoundingMode.HALF_UP) : BigDecimal.ZERO;
 
         // Phân bố trạng thái đơn → suy ra tổng đơn & đơn huỷ
-        List<MerchantReportResponse.Bucket> statusDist = orderRepository.statusDistByRestaurantBetween(restaurantId, from, to)
+        List<MerchantReportResponse.Bucket> statusDist = orderRepository.statusDistByRestaurantBetween(restaurantId, from, to, dow, month, year)
                 .stream().map(r -> MerchantReportResponse.Bucket.builder()
                         .key(((Enum<?>) r[0]).name()).count(lng(r[1])).amount(bd(r[2])).build())
                 .toList();
@@ -410,20 +410,20 @@ public class StatisticsService {
                 .filter(b -> b.getKey().equals(OrderStatus.COMPLETED.name()))
                 .mapToLong(MerchantReportResponse.Bucket::getCount).sum();
 
-        List<MerchantReportResponse.Bucket> paymentDist = orderRepository.paymentDistByRestaurantBetween(restaurantId, from, to)
+        List<MerchantReportResponse.Bucket> paymentDist = orderRepository.paymentDistByRestaurantBetween(restaurantId, from, to, dow, month, year)
                 .stream().map(r -> MerchantReportResponse.Bucket.builder()
                         .key(((Enum<?>) r[0]).name()).count(lng(r[1])).amount(bd(r[2])).build())
                 .toList();
 
-        List<MerchantReportResponse.DayPoint> daily = orderRepository.dailyByRestaurantBetween(restaurantId, from, to)
+        List<MerchantReportResponse.DayPoint> daily = orderRepository.dailyByRestaurantBetween(restaurantId, from, to, dow, month, year)
                 .stream().map(r -> MerchantReportResponse.DayPoint.builder()
                         .date(r[0].toString()).subtotal(bd(r[1])).orders(lng(r[2])).build())
                 .toList();
 
-        long uniqueCustomers = orderRepository.countDistinctCustomersByRestaurantBetween(restaurantId, from, to);
+        long uniqueCustomers = orderRepository.countDistinctCustomersByRestaurantBetween(restaurantId, from, to, dow, month, year);
 
         List<MerchantReportResponse.TopFood> topFoods = orderRepository
-                .topFoodsByRestaurantBetween(restaurantId, from, to, PageRequest.of(0, 10))
+                .topFoodsByRestaurantBetween(restaurantId, from, to, dow, month, year, PageRequest.of(0, 10))
                 .stream().map(r -> MerchantReportResponse.TopFood.builder()
                         .name((String) r[0]).qty(lng(r[1])).revenue(bd(r[2])).build())
                 .toList();
@@ -440,14 +440,14 @@ public class StatisticsService {
     /**
      * BÁO CÁO PHÂN TÍCH DOANH THU HỆ THỐNG — gộp toàn bộ ở DB (thay việc tải size=2000 đơn + size=1500 user).
      */
-    @Cacheable(value = "adminReport", key = "#range")
+    @Cacheable(value = "adminReport", key = "#range + '-' + #dow + '-' + #month + '-' + #year")
     @Transactional(readOnly = true)
-    public AdminReportResponse adminReport(String range) {
+    public AdminReportResponse adminReport(String range, Integer dow, Integer month, Integer year) {
         LocalDateTime[] w = resolveRange(range);
         LocalDateTime from = w[0], to = w[1];
         BigDecimal rate = BigDecimal.valueOf(commissionRate);
 
-        List<Object[]> finRows = orderRepository.financeCompletedSystemBetween(from, to);
+        List<Object[]> finRows = orderRepository.financeCompletedSystemBetween(from, to, dow, month, year);
         Object[] fin = finRows.isEmpty() ? new Object[]{null, null, null, 0L} : finRows.get(0);
         BigDecimal gtv = bd(fin[0]);
         BigDecimal subtotal = bd(fin[1]);
@@ -459,7 +459,7 @@ public class StatisticsService {
         BigDecimal aov = completedNet > 0
                 ? subtotal.divide(BigDecimal.valueOf(completedNet), 0, RoundingMode.HALF_UP) : BigDecimal.ZERO;
 
-        List<AdminReportResponse.Bucket> statusDist = orderRepository.statusDistSystemBetween(from, to)
+        List<AdminReportResponse.Bucket> statusDist = orderRepository.statusDistSystemBetween(from, to, dow, month, year)
                 .stream().map(r -> AdminReportResponse.Bucket.builder()
                         .key(((Enum<?>) r[0]).name()).count(lng(r[1])).amount(bd(r[2])).build())
                 .toList();
@@ -472,20 +472,20 @@ public class StatisticsService {
                 .filter(b -> b.getKey().equals(OrderStatus.COMPLETED.name()))
                 .mapToLong(AdminReportResponse.Bucket::getCount).sum();
 
-        List<AdminReportResponse.Bucket> paymentDist = orderRepository.paymentDistSystemBetween(from, to)
+        List<AdminReportResponse.Bucket> paymentDist = orderRepository.paymentDistSystemBetween(from, to, dow, month, year)
                 .stream().map(r -> AdminReportResponse.Bucket.builder()
                         .key(((Enum<?>) r[0]).name()).count(lng(r[1])).amount(bd(r[2])).build())
                 .toList();
 
-        List<AdminReportResponse.DayPoint> daily = orderRepository.dailySystemBetween(from, to)
+        List<AdminReportResponse.DayPoint> daily = orderRepository.dailySystemBetween(from, to, dow, month, year)
                 .stream().map(r -> AdminReportResponse.DayPoint.builder()
                         .date(r[0].toString()).gtv(bd(r[1])).subtotal(bd(r[2])).orders(lng(r[3])).build())
                 .toList();
 
-        long uniqueCustomers = orderRepository.countDistinctCustomersSystemBetween(from, to);
+        long uniqueCustomers = orderRepository.countDistinctCustomersSystemBetween(from, to, dow, month, year);
 
         List<AdminReportResponse.TopRestaurant> topRestaurants = orderRepository
-                .topRestaurantsSystemBetween(from, to, PageRequest.of(0, 10))
+                .topRestaurantsSystemBetween(from, to, dow, month, year, PageRequest.of(0, 10))
                 .stream().map(r -> {
                     BigDecimal sub = bd(r[2]);
                     BigDecimal comm = sub.multiply(rate);
