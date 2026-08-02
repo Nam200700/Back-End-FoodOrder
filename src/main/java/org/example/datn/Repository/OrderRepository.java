@@ -253,10 +253,16 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
               AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
               AND o.paymentStatus != org.example.datn.domain.enums.PaymentStatus.REFUNDED
               AND o.createdAt >= :from AND o.createdAt < :to
+              AND (:dow IS NULL OR FUNCTION('DAYOFWEEK', o.createdAt) = :dow)
+              AND (:month IS NULL OR FUNCTION('MONTH', o.createdAt) = :month)
+              AND (:year IS NULL OR FUNCTION('YEAR', o.createdAt) = :year)
             """)
     List<Object[]> financeCompletedByRestaurantBetween(@Param("rid") Long rid,
                                                        @Param("from") java.time.LocalDateTime from,
-                                                       @Param("to") java.time.LocalDateTime to);
+                                                       @Param("to") java.time.LocalDateTime to,
+                                                       @Param("dow") Integer dow,
+                                                       @Param("month") Integer month,
+                                                       @Param("year") Integer year);
 
     /** Phân bố trạng thái ĐƠN của quán trong kỳ: {orderStatus, count, sum(total)}. */
     @Query("""
