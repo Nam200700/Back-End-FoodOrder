@@ -326,10 +326,16 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
             SELECT COUNT(DISTINCT o.customer.userId) FROM Order o
             WHERE o.restaurant.restaurantId = :rid
               AND o.createdAt >= :from AND o.createdAt < :to
+              AND (:dow IS NULL OR FUNCTION('DAYOFWEEK', o.createdAt) = :dow)
+              AND (:month IS NULL OR FUNCTION('MONTH', o.createdAt) = :month)
+              AND (:year IS NULL OR FUNCTION('YEAR', o.createdAt) = :year)
             """)
     long countDistinctCustomersByRestaurantBetween(@Param("rid") Long rid,
                                                    @Param("from") java.time.LocalDateTime from,
-                                                   @Param("to") java.time.LocalDateTime to);
+                                                   @Param("to") java.time.LocalDateTime to,
+                                                   @Param("dow") Integer dow,
+                                                   @Param("month") Integer month,
+                                                   @Param("year") Integer year);
 
     /** Top món bán chạy của quán trong kỳ (đơn hoàn tất): {foodName, SUM(qty), SUM(qty*price)}. Dùng Pageable để limit. */
     @Query("""
