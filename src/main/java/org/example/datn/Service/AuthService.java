@@ -156,7 +156,7 @@ public class AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy tài khoản với email này!"));
 
-        org.example.datn.domain.Otp otp = otpRepository.findFirstByPhoneAndPurposeAndIsUsedFalseOrderByCreatedAtDesc(email, org.example.datn.domain.enums.OtpPurpose.REGISTER)
+        org.example.datn.domain.Otp otp = otpRepository.findFirstByRecipientAndPurposeAndIsUsedFalseOrderByCreatedAtDesc(email, org.example.datn.domain.enums.OtpPurpose.REGISTER)
                 .orElseThrow(() -> new AppException(ErrorCode.OTP_INVALID, "Mã OTP không hợp lệ hoặc đã hết hạn!"));
 
         if (otp.getFailCount() >= maxFailAttempts) {
