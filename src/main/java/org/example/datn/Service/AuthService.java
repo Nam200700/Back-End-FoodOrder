@@ -20,8 +20,13 @@ import org.example.datn.Exception.EmailNotVerifiedException;
 import org.example.datn.mapper.UserMapper;
 import org.example.datn.Repository.UserRepository;
 import org.example.datn.Repository.RestaurantRegisterRepository;
+import org.example.datn.Repository.RestaurantRepository;
 import org.example.datn.Repository.ShipperRegisterRepository;
 import org.example.datn.Repository.OtpRepository;
+import org.example.datn.domain.Otp;
+import org.example.datn.domain.enums.OtpPurpose;
+import java.security.SecureRandom;
+import java.time.LocalDateTime;
 import org.example.datn.Service.SmsService;
 import org.example.datn.Service.EmailService;
 import org.example.datn.security.JwtTokenProvider;
@@ -39,6 +44,7 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final UserMapper userMapper;
     private final RestaurantRegisterRepository restaurantRegisterRepository;
+    private final RestaurantRepository restaurantRepository;
     private final ShipperRegisterRepository shipperRegisterRepository;
     private final OtpRepository otpRepository;
     private final SmsService smsService;
@@ -69,6 +75,13 @@ public class AuthService {
                     && shipperRegisterRepository.existsByLicensePlate(req.getLicensePlate())) {
                 throw new AppException(ErrorCode.LICENSE_PLATE_EXISTS);
             }
+        }
+        // Check trùng SĐT quán (chỉ khi đăng ký OWNER và có nhập SĐT quán) — cả hồ sơ chờ duyệt lẫn quán đã duyệt
+        if ("OWNER".equalsIgnoreCase(req.getRole())
+                && req.getRestaurantPhone() != null && !req.getRestaurantPhone().isBlank()
+                && (restaurantRegisterRepository.existsByPhone(req.getRestaurantPhone())
+                    || restaurantRepository.existsByPhone(req.getRestaurantPhone()))) {
+            throw new AppException(ErrorCode.RESTAURANT_PHONE_EXISTS);
         }
 
 
@@ -127,28 +140,8 @@ public class AuthService {
             shipperRegisterRepository.save(reg);
         }
 
-        // Tạo mã OTP có 6 dãy số ngẫu nhiên
-        java.security.SecureRandom random = new java.security.SecureRandom();
-        StringBuilder codeBuilder = new StringBuilder(6);
-        for (int i = 0; i < 6; i++) {
-            codeBuilder.append(random.nextInt(10));
-        }
-        String code = codeBuilder.toString();
-
-        // Vô hiệu hóa OTP REGISTER cũ
-        otpRepository.invalidateOldOtps(user.getEmail(), org.example.datn.domain.enums.OtpPurpose.REGISTER);
-
-        // Lưu OTP mới với TTL 5 phút
-        otpRepository.save(org.example.datn.domain.Otp.builder()
-                .phone(user.getEmail())
-                .code(code)
-                .purpose(org.example.datn.domain.enums.OtpPurpose.REGISTER)
-                .expiredAt(java.time.LocalDateTime.now().plusMinutes(5))
-                .failCount(0)
-                .isUsed(false)
-                .build());
-
-        // Gửi OTP qua email
+        // Tạo & lưu OTP REGISTER mới rồi gửi qua email
+        String code = generateAndStoreOtp(user.getEmail(), OtpPurpose.REGISTER);
         emailService.sendOtp(user.getEmail(), code);
 
         return AuthResponse.builder()
@@ -224,28 +217,8 @@ public class AuthService {
             }
         });
 
-        // Vô hiệu hóa OTP cũ
-        otpRepository.invalidateOldOtps(email, org.example.datn.domain.enums.OtpPurpose.REGISTER);
-
-        // Tạo mã OTP 6 số mới
-        java.security.SecureRandom random = new java.security.SecureRandom();
-        StringBuilder codeBuilder = new StringBuilder(6);
-        for (int i = 0; i < 6; i++) {
-            codeBuilder.append(random.nextInt(10));
-        }
-        String code = codeBuilder.toString();
-
-        // Lưu OTP mới
-        otpRepository.save(org.example.datn.domain.Otp.builder()
-                .phone(email)
-                .code(code)
-                .purpose(org.example.datn.domain.enums.OtpPurpose.REGISTER)
-                .expiredAt(java.time.LocalDateTime.now().plusMinutes(5))
-                .failCount(0)
-                .isUsed(false)
-                .build());
-
-        // Gửi OTP qua email
+        // Tạo & lưu OTP REGISTER mới rồi gửi qua email
+        String code = generateAndStoreOtp(email, OtpPurpose.REGISTER);
         emailService.sendOtp(email, code);
     }
 
@@ -287,6 +260,12 @@ public class AuthService {
         }
         Long userId = jwtTokenProvider.getUserIdFromToken(token);
         User user = userRepository.findByIdOrThrow(userId, ErrorCode.USER_NOT_FOUND);
+        // Không cấp access token mới nếu tài khoản đã bị khoá sau khi đăng nhập
+        // (nếu không, user bị khoá vẫn tự làm mới token tới 7 ngày).
+        if (user.getLockedAt() != null) {
+            String reason = user.getLockedReason() != null ? user.getLockedReason() : "Không có lý do cụ thể";
+            throw new AppException(ErrorCode.FORBIDDEN, "Tài khoản của bạn đã bị khóa. Lý do: " + reason);
+        }
         return new RefreshResponse(jwtTokenProvider.generateAccessToken(user));
     }
 
@@ -296,6 +275,29 @@ public class AuthService {
                 .refreshToken(jwtTokenProvider.generateRefreshToken(user))
                 .user(userMapper.toResponse(user))
                 .build();
+    }
+
+    /**
+     * Vô hiệu hoá OTP cũ, tạo mã 6 số mới (TTL 5 phút) và lưu. Trả về mã để caller tự gửi (email/SMS).
+     * Gom logic trùng lặp ở register / resendRegisterOtp / forgotPasswordSendOtp.
+     */
+    private String generateAndStoreOtp(String target, OtpPurpose purpose) {
+        otpRepository.invalidateOldOtps(target, purpose);
+        SecureRandom random = new SecureRandom();
+        StringBuilder codeBuilder = new StringBuilder(6);
+        for (int i = 0; i < 6; i++) {
+            codeBuilder.append(random.nextInt(10));
+        }
+        String code = codeBuilder.toString();
+        otpRepository.save(Otp.builder()
+                .phone(target)
+                .code(code)
+                .purpose(purpose)
+                .expiredAt(LocalDateTime.now().plusMinutes(5))
+                .failCount(0)
+                .isUsed(false)
+                .build());
+        return code;
     }
 
     @Transactional
@@ -322,26 +324,8 @@ public class AuthService {
             }
         });
 
-        // Vô hiệu hóa OTP cũ
-        otpRepository.invalidateOldOtps(phoneOrEmail, org.example.datn.domain.enums.OtpPurpose.RESET_PASSWORD);
-
-        // Tạo mã OTP 6 số ngẫu nhiên
-        java.security.SecureRandom random = new java.security.SecureRandom();
-        StringBuilder codeBuilder = new StringBuilder(6);
-        for (int i = 0; i < 6; i++) {
-            codeBuilder.append(random.nextInt(10));
-        }
-        String code = codeBuilder.toString();
-
-        // Lưu OTP mới với TTL 5 phút
-        otpRepository.save(org.example.datn.domain.Otp.builder()
-                .phone(phoneOrEmail)
-                .code(code)
-                .purpose(org.example.datn.domain.enums.OtpPurpose.RESET_PASSWORD)
-                .expiredAt(java.time.LocalDateTime.now().plusMinutes(5))
-                .failCount(0)
-                .isUsed(false)
-                .build());
+        // Tạo & lưu OTP RESET_PASSWORD mới
+        String code = generateAndStoreOtp(phoneOrEmail, OtpPurpose.RESET_PASSWORD);
 
         // Gửi OTP theo phương thức yêu cầu
         if ("EMAIL".equalsIgnoreCase(method)) {

@@ -32,7 +32,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = extractToken(request);
         if (token != null
                 && SecurityContextHolder.getContext().getAuthentication() == null
-                && jwtTokenProvider.validateToken(token)) {
+                && jwtTokenProvider.validateToken(token)
+                // CHỈ chấp nhận access token: refresh token (7 ngày) gửi ở header sẽ KHÔNG xác thực.
+                // Refresh chỉ đi qua /auth/refresh đọc từ HttpOnly cookie.
+                && !jwtTokenProvider.isRefreshToken(token)) {
 
             Long userId = jwtTokenProvider.getUserIdFromToken(token);
             UserDetails userDetails = userDetailsService.loadUserById(userId);

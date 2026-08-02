@@ -19,6 +19,7 @@ import org.example.datn.DTO.response.report.ReportResponse;
 import org.example.datn.DTO.response.stats.StatsOverviewResponse;
 import org.example.datn.DTO.response.stats.AdminInsightsResponse;
 import org.example.datn.DTO.response.stats.AdminReportResponse;
+import org.example.datn.DTO.response.stats.VoucherAnalyticsResponse;
 import org.example.datn.security.CustomUserDetails;
 import org.example.datn.DTO.response.order.OrderResponse;
 import org.springframework.data.domain.Page;
@@ -57,8 +58,18 @@ public class AdminController {
     /** Báo cáo phân tích doanh thu hệ thống theo kỳ (gộp ở server) cho trang Thống kê admin. */
     @GetMapping("/stats/report")
     public ResponseEntity<ApiResponse<AdminReportResponse>> report(
-            @RequestParam(required = false, defaultValue = "all") String range) {
-        return ResponseEntity.ok(ApiResponse.ok(statisticsService.adminReport(range)));
+            @RequestParam(required = false, defaultValue = "all") String range,
+            @RequestParam(required = false) Integer dow,
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) Integer year) {
+        return ResponseEntity.ok(ApiResponse.ok(statisticsService.adminReport(range, dow, month, year)));
+    }
+
+    /** Phân tích voucher theo kỳ (lượt dùng, chi phí giảm giá, top voucher) cho dashboard admin. */
+    @GetMapping("/stats/vouchers")
+    public ResponseEntity<ApiResponse<VoucherAnalyticsResponse>> voucherAnalytics(
+            @RequestParam(required = false, defaultValue = "30days") String range) {
+        return ResponseEntity.ok(ApiResponse.ok(statisticsService.voucherAnalytics(range)));
     }
 
     @GetMapping("/orders")

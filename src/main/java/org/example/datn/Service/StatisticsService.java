@@ -12,7 +12,10 @@ import org.example.datn.DTO.response.stats.MerchantInsightsResponse;
 import org.example.datn.DTO.response.stats.MerchantReportResponse;
 import org.example.datn.DTO.response.stats.MerchantStatsResponse;
 import org.example.datn.DTO.response.stats.StatsOverviewResponse;
+import org.example.datn.DTO.response.stats.VoucherAnalyticsResponse;
+import org.example.datn.Repository.VoucherRepository;
 import org.example.datn.domain.enums.PaymentStatus;
+import org.example.datn.domain.enums.VoucherStatus;
 import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDate;
@@ -37,6 +40,16 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.time.DayOfWeek;
+import org.example.datn.domain.Order;
+import org.example.datn.domain.Shipper;
+import org.example.datn.DTO.response.stats.ShipperInsightsResponse;
+import org.example.datn.Exception.AppException;
 
 @Service
 @RequiredArgsConstructor
@@ -54,6 +67,7 @@ public class StatisticsService {
     private final ReportRepository reportRepository;
     private final ReviewRepository reviewRepository;
     private final FoodRepository foodRepository; // đếm sức khoẻ thực đơn cho dashboard insights
+    private final VoucherRepository voucherRepository; // phân tích voucher cho dashboard admin
 
     @Value("${platform.commission-rate:0.10}")
     private double commissionRate;
@@ -327,12 +341,21 @@ public class StatisticsService {
 
     /** Quy đổi range → cửa sổ [from, to). "all" dùng mốc rất cũ để bao toàn bộ. */
     private LocalDateTime[] resolveRange(String range) {
+        LocalDate today = LocalDate.now();
         LocalDateTime to = LocalDateTime.now();
         LocalDateTime from;
         switch (range == null ? "all" : range) {
+            case "today" -> from = today.atStartOfDay();
             case "7days" -> from = to.minusDays(7);
             case "30days" -> from = to.minusDays(30);
-            case "thisMonth" -> from = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+            case "90days" -> from = to.minusDays(90);
+            case "thisWeek" -> from = today.minusDays((today.getDayOfWeek().getValue() + 6) % 7).atStartOfDay(); // Thứ 2 đầu tuần
+            case "thisMonth" -> from = today.withDayOfMonth(1).atStartOfDay();
+            case "lastMonth" -> { // tháng trước trọn vẹn → to = đầu tháng này
+                from = today.withDayOfMonth(1).minusMonths(1).atStartOfDay();
+                to = today.withDayOfMonth(1).atStartOfDay();
+            }
+            case "thisYear" -> from = today.withDayOfYear(1).atStartOfDay();
             default -> from = LocalDateTime.of(2000, 1, 1, 0, 0); // "all"
         }
         return new LocalDateTime[]{from, to};
@@ -350,9 +373,9 @@ public class StatisticsService {
     /**
      * BÁO CÁO TÀI CHÍNH NHÀ HÀNG — gộp toàn bộ ở DB theo cửa sổ thời gian (thay tính client-side).
      */
-    @Cacheable(value = "merchantReport", key = "#restaurantId + '-' + #range")
+    @Cacheable(value = "merchantReport", key = "#restaurantId + '-' + #range + '-' + #dow + '-' + #month + '-' + #year")
     @Transactional(readOnly = true)
-    public MerchantReportResponse merchantReport(Long merchantId, Long restaurantId, String range) {
+    public MerchantReportResponse merchantReport(Long merchantId, Long restaurantId, String range, Integer dow, Integer month, Integer year) {
         Restaurant restaurant = restaurantRepository.findByIdOrThrow(restaurantId, ErrorCode.RESTAURANT_NOT_FOUND);
         ownershipGuard.checkRestaurantOwner(restaurant, merchantId);
 
@@ -361,19 +384,20 @@ public class StatisticsService {
         BigDecimal rate = BigDecimal.valueOf(commissionRate);
 
         // Tài chính đơn hoàn tất: {total, subtotal, shipping, count} (aggregate → đúng 1 hàng)
-        List<Object[]> finRows = orderRepository.financeCompletedByRestaurantBetween(restaurantId, from, to);
+        List<Object[]> finRows = orderRepository.financeCompletedByRestaurantBetween(restaurantId, from, to, dow, month, year);
         Object[] fin = finRows.isEmpty() ? new Object[]{null, null, null, 0L} : finRows.get(0);
         BigDecimal gtv = bd(fin[0]);
         BigDecimal subtotal = bd(fin[1]);
         BigDecimal shipping = bd(fin[2]);
-        long completedOrders = lng(fin[3]);
+        // Đơn hoàn tất TẠO DOANH THU (đã loại refund) — dùng làm mẫu số AOV để khớp doanh thu net.
+        long completedNet = lng(fin[3]);
         BigDecimal commission = subtotal.multiply(rate);
         BigDecimal earnings = subtotal.subtract(commission);
-        BigDecimal aov = completedOrders > 0
-                ? subtotal.divide(BigDecimal.valueOf(completedOrders), 0, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+        BigDecimal aov = completedNet > 0
+                ? subtotal.divide(BigDecimal.valueOf(completedNet), 0, RoundingMode.HALF_UP) : BigDecimal.ZERO;
 
         // Phân bố trạng thái đơn → suy ra tổng đơn & đơn huỷ
-        List<MerchantReportResponse.Bucket> statusDist = orderRepository.statusDistByRestaurantBetween(restaurantId, from, to)
+        List<MerchantReportResponse.Bucket> statusDist = orderRepository.statusDistByRestaurantBetween(restaurantId, from, to, dow, month, year)
                 .stream().map(r -> MerchantReportResponse.Bucket.builder()
                         .key(((Enum<?>) r[0]).name()).count(lng(r[1])).amount(bd(r[2])).build())
                 .toList();
@@ -381,21 +405,25 @@ public class StatisticsService {
         long cancelledOrders = statusDist.stream()
                 .filter(b -> b.getKey().equals(OrderStatus.CANCELLED.name()))
                 .mapToLong(MerchantReportResponse.Bucket::getCount).sum();
+        // Đơn hoàn tất HIỂN THỊ = MỌI đơn COMPLETED (kể cả đơn sau đó hoàn tiền) → KHỚP số ở Dashboard.
+        long completedOrders = statusDist.stream()
+                .filter(b -> b.getKey().equals(OrderStatus.COMPLETED.name()))
+                .mapToLong(MerchantReportResponse.Bucket::getCount).sum();
 
-        List<MerchantReportResponse.Bucket> paymentDist = orderRepository.paymentDistByRestaurantBetween(restaurantId, from, to)
+        List<MerchantReportResponse.Bucket> paymentDist = orderRepository.paymentDistByRestaurantBetween(restaurantId, from, to, dow, month, year)
                 .stream().map(r -> MerchantReportResponse.Bucket.builder()
                         .key(((Enum<?>) r[0]).name()).count(lng(r[1])).amount(bd(r[2])).build())
                 .toList();
 
-        List<MerchantReportResponse.DayPoint> daily = orderRepository.dailyByRestaurantBetween(restaurantId, from, to)
+        List<MerchantReportResponse.DayPoint> daily = orderRepository.dailyByRestaurantBetween(restaurantId, from, to, dow, month, year)
                 .stream().map(r -> MerchantReportResponse.DayPoint.builder()
                         .date(r[0].toString()).subtotal(bd(r[1])).orders(lng(r[2])).build())
                 .toList();
 
-        long uniqueCustomers = orderRepository.countDistinctCustomersByRestaurantBetween(restaurantId, from, to);
+        long uniqueCustomers = orderRepository.countDistinctCustomersByRestaurantBetween(restaurantId, from, to, dow, month, year);
 
         List<MerchantReportResponse.TopFood> topFoods = orderRepository
-                .topFoodsByRestaurantBetween(restaurantId, from, to, PageRequest.of(0, 5))
+                .topFoodsByRestaurantBetween(restaurantId, from, to, dow, month, year, PageRequest.of(0, 10))
                 .stream().map(r -> MerchantReportResponse.TopFood.builder()
                         .name((String) r[0]).qty(lng(r[1])).revenue(bd(r[2])).build())
                 .toList();
@@ -412,25 +440,26 @@ public class StatisticsService {
     /**
      * BÁO CÁO PHÂN TÍCH DOANH THU HỆ THỐNG — gộp toàn bộ ở DB (thay việc tải size=2000 đơn + size=1500 user).
      */
-    @Cacheable(value = "adminReport", key = "#range")
+    @Cacheable(value = "adminReport", key = "#range + '-' + #dow + '-' + #month + '-' + #year")
     @Transactional(readOnly = true)
-    public AdminReportResponse adminReport(String range) {
+    public AdminReportResponse adminReport(String range, Integer dow, Integer month, Integer year) {
         LocalDateTime[] w = resolveRange(range);
         LocalDateTime from = w[0], to = w[1];
         BigDecimal rate = BigDecimal.valueOf(commissionRate);
 
-        List<Object[]> finRows = orderRepository.financeCompletedSystemBetween(from, to);
+        List<Object[]> finRows = orderRepository.financeCompletedSystemBetween(from, to, dow, month, year);
         Object[] fin = finRows.isEmpty() ? new Object[]{null, null, null, 0L} : finRows.get(0);
         BigDecimal gtv = bd(fin[0]);
         BigDecimal subtotal = bd(fin[1]);
         BigDecimal shipping = bd(fin[2]);
-        long completedOrders = lng(fin[3]);
+        // Đơn hoàn tất TẠO DOANH THU (đã loại refund) — dùng làm mẫu số AOV để khớp doanh thu net.
+        long completedNet = lng(fin[3]);
         BigDecimal commission = subtotal.multiply(rate);
         BigDecimal merchantNet = subtotal.subtract(commission);
-        BigDecimal aov = completedOrders > 0
-                ? subtotal.divide(BigDecimal.valueOf(completedOrders), 0, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+        BigDecimal aov = completedNet > 0
+                ? subtotal.divide(BigDecimal.valueOf(completedNet), 0, RoundingMode.HALF_UP) : BigDecimal.ZERO;
 
-        List<AdminReportResponse.Bucket> statusDist = orderRepository.statusDistSystemBetween(from, to)
+        List<AdminReportResponse.Bucket> statusDist = orderRepository.statusDistSystemBetween(from, to, dow, month, year)
                 .stream().map(r -> AdminReportResponse.Bucket.builder()
                         .key(((Enum<?>) r[0]).name()).count(lng(r[1])).amount(bd(r[2])).build())
                 .toList();
@@ -438,21 +467,25 @@ public class StatisticsService {
         long cancelledOrders = statusDist.stream()
                 .filter(b -> b.getKey().equals(OrderStatus.CANCELLED.name()))
                 .mapToLong(AdminReportResponse.Bucket::getCount).sum();
+        // Đơn hoàn tất HIỂN THỊ = MỌI đơn COMPLETED (kể cả đơn sau đó hoàn tiền) → KHỚP số ở Dashboard/overview.
+        long completedOrders = statusDist.stream()
+                .filter(b -> b.getKey().equals(OrderStatus.COMPLETED.name()))
+                .mapToLong(AdminReportResponse.Bucket::getCount).sum();
 
-        List<AdminReportResponse.Bucket> paymentDist = orderRepository.paymentDistSystemBetween(from, to)
+        List<AdminReportResponse.Bucket> paymentDist = orderRepository.paymentDistSystemBetween(from, to, dow, month, year)
                 .stream().map(r -> AdminReportResponse.Bucket.builder()
                         .key(((Enum<?>) r[0]).name()).count(lng(r[1])).amount(bd(r[2])).build())
                 .toList();
 
-        List<AdminReportResponse.DayPoint> daily = orderRepository.dailySystemBetween(from, to)
+        List<AdminReportResponse.DayPoint> daily = orderRepository.dailySystemBetween(from, to, dow, month, year)
                 .stream().map(r -> AdminReportResponse.DayPoint.builder()
                         .date(r[0].toString()).gtv(bd(r[1])).subtotal(bd(r[2])).orders(lng(r[3])).build())
                 .toList();
 
-        long uniqueCustomers = orderRepository.countDistinctCustomersSystemBetween(from, to);
+        long uniqueCustomers = orderRepository.countDistinctCustomersSystemBetween(from, to, dow, month, year);
 
         List<AdminReportResponse.TopRestaurant> topRestaurants = orderRepository
-                .topRestaurantsSystemBetween(from, to, PageRequest.of(0, 5))
+                .topRestaurantsSystemBetween(from, to, dow, month, year, PageRequest.of(0, 10))
                 .stream().map(r -> {
                     BigDecimal sub = bd(r[2]);
                     BigDecimal comm = sub.multiply(rate);
@@ -468,6 +501,147 @@ public class StatisticsService {
                 .totalOrders(totalOrders).completedOrders(completedOrders).cancelledOrders(cancelledOrders)
                 .uniqueCustomers(uniqueCustomers)
                 .daily(daily).paymentDist(paymentDist).statusDist(statusDist).topRestaurants(topRestaurants)
+                .build();
+    }
+
+    /**
+     * PHÂN TÍCH VOUCHER cho dashboard admin — số thật từ đơn hoàn tất có gắn voucher.
+     */
+    @Cacheable(value = "voucherAnalytics", key = "#range")
+    @Transactional(readOnly = true)
+    public VoucherAnalyticsResponse voucherAnalytics(String range) {
+        LocalDateTime[] w = resolveRange(range);
+        LocalDateTime from = w[0], to = w[1];
+
+        List<Object[]> finRows = orderRepository.voucherFinanceBetween(from, to);
+        Object[] fin = finRows.isEmpty() ? new Object[]{0L, null, null} : finRows.get(0);
+        long redeemedOrders = lng(fin[0]);
+        BigDecimal discountCost = bd(fin[1]);
+        BigDecimal voucherRevenue = bd(fin[2]);
+        BigDecimal avgDiscount = redeemedOrders > 0
+                ? discountCost.divide(BigDecimal.valueOf(redeemedOrders), 0, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+
+        List<VoucherAnalyticsResponse.TopVoucher> topVouchers = orderRepository
+                .topVouchersBetween(from, to, PageRequest.of(0, 5))
+                .stream().map(r -> VoucherAnalyticsResponse.TopVoucher.builder()
+                        .code((String) r[0]).name((String) r[1]).uses(lng(r[2])).discount(bd(r[3])).build())
+                .toList();
+
+        List<VoucherAnalyticsResponse.DayUsage> dailyUsage = orderRepository.dailyVoucherUsageBetween(from, to)
+                .stream().map(r -> VoucherAnalyticsResponse.DayUsage.builder()
+                        .date(r[0].toString()).uses(lng(r[1])).discount(bd(r[2])).build())
+                .toList();
+
+        return VoucherAnalyticsResponse.builder()
+                .range(range)
+                .totalVouchers(voucherRepository.count())
+                .activeVouchers(voucherRepository.countByStatus(VoucherStatus.ACTIVE))
+                .redeemedOrders(redeemedOrders)
+                .discountCost(discountCost)
+                .voucherRevenue(voucherRevenue)
+                .avgDiscountPerOrder(avgDiscount)
+                .topVouchers(topVouchers)
+                .dailyUsage(dailyUsage)
+                .build();
+    }
+
+    // ─── Shipper: tổng hợp thu nhập (gộp server-side, không bị chặn size=1000) ───
+    private static String weekdayKey(DayOfWeek d) {
+        switch (d) {
+            case MONDAY:    return "T2";
+            case TUESDAY:   return "T3";
+            case WEDNESDAY: return "T4";
+            case THURSDAY:  return "T5";
+            case FRIDAY:    return "T6";
+            case SATURDAY:  return "T7";
+            default:        return "CN";
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public ShipperInsightsResponse shipperInsights(Long shipperUserId) {
+        Shipper shipper = shipperRepository.findByUserUserId(shipperUserId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        List<Order> completed = orderRepository.findByShipperUserIdAndOrderStatus(shipperUserId, OrderStatus.COMPLETED);
+
+        LocalDate today = LocalDate.now();
+        LocalDateTime startToday = today.atStartOfDay();
+        LocalDateTime start7d = today.minusDays(6).atStartOfDay();
+        LocalDateTime weekStart = today.minusDays((today.getDayOfWeek().getValue() + 6) % 7).atStartOfDay(); // Thứ 2 00:00
+        LocalDateTime weekEnd = weekStart.plusDays(7);
+        LocalDateTime monthStart = today.withDayOfMonth(1).atStartOfDay();
+        LocalDateTime lastMonthStart = monthStart.minusMonths(1);
+
+        String[] order = {"T2", "T3", "T4", "T5", "T6", "T7", "CN"};
+        Map<String, Long> dayMap = new HashMap<>();
+        Map<String, Long> weekdayAll = new HashMap<>();
+        long[] hourTotals = new long[24];
+
+        // 6 tháng gần đây (kể cả tháng hiện tại)
+        List<ShipperInsightsResponse.MonthAmount> monthly = new ArrayList<>();
+        Map<String, Integer> monthIndex = new HashMap<>();
+        for (int i = 5; i >= 0; i--) {
+            LocalDate d = today.minusMonths(i).withDayOfMonth(1);
+            monthIndex.put(d.getYear() + "-" + d.getMonthValue(), monthly.size());
+            monthly.add(ShipperInsightsResponse.MonthAmount.builder()
+                    .label(String.format("%02d/%d", d.getMonthValue(), d.getYear())).amount(0).build());
+        }
+
+        long totalEarnings = 0, todayEarnings = 0, week7dEarnings = 0, thisWeekEarnings = 0;
+        long thisMonthEarnings = 0, lastMonthEarnings = 0, maxFee = 0;
+        int todayCount = 0, week7dCount = 0, thisMonthCount = 0;
+        Set<LocalDate> activeDays = new HashSet<>();
+
+        for (Order o : completed) {
+            long fee = o.getShippingFee() == null ? 0 : o.getShippingFee().longValue();
+            LocalDateTime c = o.getCreatedAt();
+            if (c == null) continue;
+            totalEarnings += fee;
+            if (fee > maxFee) maxFee = fee;
+            String wk = weekdayKey(c.getDayOfWeek());
+            weekdayAll.merge(wk, fee, Long::sum);
+            hourTotals[c.getHour()] += fee;
+            if (!c.isBefore(weekStart) && c.isBefore(weekEnd)) { dayMap.merge(wk, fee, Long::sum); thisWeekEarnings += fee; }
+            if (!c.isBefore(startToday)) { todayEarnings += fee; todayCount++; }
+            if (!c.isBefore(start7d)) { week7dEarnings += fee; week7dCount++; }
+            if (!c.isBefore(monthStart)) { thisMonthEarnings += fee; thisMonthCount++; activeDays.add(c.toLocalDate()); }
+            else if (!c.isBefore(lastMonthStart)) { lastMonthEarnings += fee; }
+            Integer mi = monthIndex.get(c.getYear() + "-" + c.getMonthValue());
+            if (mi != null) { ShipperInsightsResponse.MonthAmount ma = monthly.get(mi); ma.setAmount(ma.getAmount() + fee); }
+        }
+
+        List<ShipperInsightsResponse.DayAmount> daily = new ArrayList<>();
+        for (String k : order) daily.add(ShipperInsightsResponse.DayAmount.builder().day(k).amount(dayMap.getOrDefault(k, 0L)).build());
+
+        String bestWeekday = null; long bestAmt = 0;
+        for (String k : order) { long v = weekdayAll.getOrDefault(k, 0L); if (v > bestAmt) { bestAmt = v; bestWeekday = k; } }
+
+        int peakHourIdx = 0; long peakAmt = 0;
+        for (int h = 0; h < 24; h++) { if (hourTotals[h] > peakAmt) { peakAmt = hourTotals[h]; peakHourIdx = h; } }
+
+        int monthDelta = lastMonthEarnings > 0
+                ? (int) Math.round((thisMonthEarnings - lastMonthEarnings) * 100.0 / lastMonthEarnings)
+                : (thisMonthEarnings > 0 ? 100 : 0);
+        int activeDayCount = activeDays.size();
+        long avgPerActiveDay = activeDayCount > 0 ? thisMonthEarnings / activeDayCount : 0;
+
+        Double liveAvg = reviewRepository.findAverageRatingByShipperId(shipper.getShipperId());
+        double rating = liveAvg != null ? liveAvg
+                : (shipper.getAvgRating() != null ? shipper.getAvgRating().doubleValue() : 0.0);
+        int ratedCount = (int) reviewRepository.countByShipperShipperIdAndShipperRatingIsNotNull(shipper.getShipperId());
+
+        return ShipperInsightsResponse.builder()
+                .totalEarnings(totalEarnings).completedCount(completed.size())
+                .todayEarnings(todayEarnings).todayCount(todayCount)
+                .week7dEarnings(week7dEarnings).week7dCount(week7dCount)
+                .thisWeekEarnings(thisWeekEarnings)
+                .thisMonthEarnings(thisMonthEarnings).thisMonthCount(thisMonthCount)
+                .lastMonthEarnings(lastMonthEarnings).monthDelta(monthDelta)
+                .activeDayCount(activeDayCount).avgPerActiveDay(avgPerActiveDay)
+                .bestWeekday(bestWeekday).bestWeekdayAmount(bestAmt)
+                .peakHourIdx(peakHourIdx).peakHourAmount(peakAmt).maxFee(maxFee)
+                .rating(rating).ratedCount(ratedCount)
+                .daily(daily).monthly(monthly)
                 .build();
     }
 }
