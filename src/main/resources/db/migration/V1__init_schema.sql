@@ -285,7 +285,7 @@ CREATE TABLE otps (
                       otp_id          BIGINT NOT NULL AUTO_INCREMENT,
                       updated_at      DATETIME(6),
                       code            VARCHAR(10) NOT NULL,
-                      phone           VARCHAR(15) NOT NULL,
+                      recipient       VARCHAR(100) NOT NULL,
                       purpose         ENUM('LOGIN','REGISTER','RESET_PASSWORD') NOT NULL,
                       PRIMARY KEY (otp_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -418,7 +418,7 @@ CREATE INDEX idx_orders_customer                ON orders           (customer_id
 CREATE INDEX idx_orders_restaurant              ON orders           (restaurant_id);
 CREATE INDEX idx_orders_shipper                 ON orders           (shipper_id);
 CREATE INDEX idx_orders_status                  ON orders           (order_status);
-CREATE INDEX idx_otps_phone_purpose             ON otps             (phone, purpose);
+CREATE INDEX idx_otps_recipient_purpose         ON otps             (recipient, purpose);
 CREATE INDEX idx_reviews_restaurant             ON reviews          (restaurant_id);
 CREATE INDEX idx_reviews_shipper                ON reviews          (shipper_id);                            -- [V2] tổng hợp rating shipper
 CREATE INDEX idx_restaurant_registers_owner     ON restaurant_registers (owner_id);                         -- [V2] query đơn mới nhất theo owner
