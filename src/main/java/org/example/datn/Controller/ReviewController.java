@@ -51,12 +51,22 @@ public class ReviewController {
                 reviewService.replyReview(user.getUserId(), reviewId, req.getReply())));
     }
 
-    /** Public: reviews of a restaurant. */
+    /** Public: reviews of a restaurant — lọc sao/ảnh + sắp xếp + phân trang (server-side) cho trang chi tiết quán. */
     @GetMapping("/restaurants/{restaurantId}/reviews")
     public ResponseEntity<ApiResponse<PageResponse<ReviewResponse>>> restaurantReviews(
-            @PathVariable Long restaurantId, Pageable pageable) {
+            @PathVariable Long restaurantId,
+            @RequestParam(required = false) Integer star,
+            @RequestParam(required = false, defaultValue = "false") boolean imageOnly,
+            Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.ok(
-                reviewService.getRestaurantReviews(restaurantId, pageable)));
+                reviewService.getRestaurantReviewsFiltered(restaurantId, star, imageOnly, pageable)));
+    }
+
+    /** Public: tóm tắt đánh giá của quán (điểm TB, phân bố sao, % hài lòng, khen/chê) cho trang chi tiết quán. */
+    @GetMapping("/restaurants/{restaurantId}/reviews/summary")
+    public ResponseEntity<ApiResponse<ShipperReviewSummaryResponse>> restaurantReviewSummary(
+            @PathVariable Long restaurantId) {
+        return ResponseEntity.ok(ApiResponse.ok(reviewService.restaurantReviewSummary(restaurantId)));
     }
 
     /** Đánh giá QUÁN của owner đang đăng nhập — lọc sao/ảnh + sắp xếp + phân trang (server-side). */

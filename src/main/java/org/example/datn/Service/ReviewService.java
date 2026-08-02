@@ -149,6 +149,20 @@ public class ReviewService {
                 .map(reviewMapper::toResponse));
     }
 
+    /** Công khai: danh sách đánh giá của quán có LỌC sao/ảnh + SORT (server-side) — dùng cho trang chi tiết quán. */
+    @Transactional(readOnly = true)
+    public PageResponse<ReviewResponse> getRestaurantReviewsFiltered(Long restaurantId, Integer star, boolean imageOnly, Pageable pageable) {
+        return PageResponse.from(reviewRepository
+                .findRestaurantReviewsFiltered(restaurantId, star, imageOnly, pageable)
+                .map(reviewMapper::toResponse));
+    }
+
+    /** Công khai: tóm tắt đánh giá của một quán (theo restaurantId) — cho trang chi tiết quán phía khách. */
+    @Transactional(readOnly = true)
+    public ShipperReviewSummaryResponse restaurantReviewSummary(Long restaurantId) {
+        return buildRestaurantSummary(restaurantId);
+    }
+
     @Transactional(readOnly = true)
     public ReviewResponse getReviewByOrderId(Long customerId, Long orderId) {
         Review review = reviewRepository.findByOrderOrderId(orderId)
@@ -243,8 +257,11 @@ public class ReviewService {
      */
     @Transactional(readOnly = true)
     public ShipperReviewSummaryResponse merchantReviewSummary(Long ownerUserId) {
-        Long rid = resolveOwnerRestaurantId(ownerUserId);
+        return buildRestaurantSummary(resolveOwnerRestaurantId(ownerUserId));
+    }
 
+    /** Gộp tóm tắt đánh giá của một quán theo restaurantId — dùng chung cho owner + trang chi tiết quán. */
+    private ShipperReviewSummaryResponse buildRestaurantSummary(Long rid) {
         List<Review> reviews = reviewRepository.findByRestaurantRestaurantIdAndRestaurantRatingIsNotNull(rid);
         long total = reviews.size();
         long[] dist = new long[6]; // index 1..5
