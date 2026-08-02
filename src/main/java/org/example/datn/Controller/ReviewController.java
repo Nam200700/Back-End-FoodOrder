@@ -51,12 +51,42 @@ public class ReviewController {
                 reviewService.replyReview(user.getUserId(), reviewId, req.getReply())));
     }
 
-    /** Public: reviews of a restaurant. */
+    /** Public: reviews of a restaurant — lọc sao/ảnh + sắp xếp + phân trang (server-side) cho trang chi tiết quán. */
     @GetMapping("/restaurants/{restaurantId}/reviews")
     public ResponseEntity<ApiResponse<PageResponse<ReviewResponse>>> restaurantReviews(
-            @PathVariable Long restaurantId, Pageable pageable) {
+            @PathVariable Long restaurantId,
+            @RequestParam(required = false) Integer star,
+            @RequestParam(required = false, defaultValue = "false") boolean imageOnly,
+            Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.ok(
-                reviewService.getRestaurantReviews(restaurantId, pageable)));
+                reviewService.getRestaurantReviewsFiltered(restaurantId, star, imageOnly, pageable)));
+    }
+
+    /** Public: tóm tắt đánh giá của quán (điểm TB, phân bố sao, % hài lòng, khen/chê) cho trang chi tiết quán. */
+    @GetMapping("/restaurants/{restaurantId}/reviews/summary")
+    public ResponseEntity<ApiResponse<ShipperReviewSummaryResponse>> restaurantReviewSummary(
+            @PathVariable Long restaurantId) {
+        return ResponseEntity.ok(ApiResponse.ok(reviewService.restaurantReviewSummary(restaurantId)));
+    }
+
+    /** Đánh giá QUÁN của owner đang đăng nhập — lọc sao/ảnh + sắp xếp + phân trang (server-side). */
+    @GetMapping("/merchant/reviews")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<ApiResponse<PageResponse<ReviewResponse>>> merchantReviews(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @RequestParam(required = false) Integer star,
+            @RequestParam(required = false, defaultValue = "false") boolean imageOnly,
+            Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                reviewService.getMerchantReviews(user.getUserId(), star, imageOnly, pageable)));
+    }
+
+    /** Tóm tắt đánh giá quán (gộp server-side) cho trang Đánh Giá owner. */
+    @GetMapping("/merchant/reviews/summary")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<ApiResponse<ShipperReviewSummaryResponse>> merchantReviewSummary(
+            @AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok(ApiResponse.ok(reviewService.merchantReviewSummary(user.getUserId())));
     }
 
     @GetMapping("/shipper/reviews")

@@ -156,7 +156,7 @@ public class AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy tài khoản với email này!"));
 
-        org.example.datn.domain.Otp otp = otpRepository.findFirstByPhoneAndPurposeAndIsUsedFalseOrderByCreatedAtDesc(email, org.example.datn.domain.enums.OtpPurpose.REGISTER)
+        org.example.datn.domain.Otp otp = otpRepository.findFirstByRecipientAndPurposeAndIsUsedFalseOrderByCreatedAtDesc(email, org.example.datn.domain.enums.OtpPurpose.REGISTER)
                 .orElseThrow(() -> new AppException(ErrorCode.OTP_INVALID, "Mã OTP không hợp lệ hoặc đã hết hạn!"));
 
         if (otp.getFailCount() >= maxFailAttempts) {
@@ -204,7 +204,7 @@ public class AuthService {
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy tài khoản với email này!"));
 
         // Kiểm tra lockout OTP gần nhất trước khi gửi lại
-        otpRepository.findFirstByPhoneAndPurposeOrderByCreatedAtDesc(email, org.example.datn.domain.enums.OtpPurpose.REGISTER).ifPresent(latest -> {
+        otpRepository.findFirstByRecipientAndPurposeOrderByCreatedAtDesc(email, org.example.datn.domain.enums.OtpPurpose.REGISTER).ifPresent(latest -> {
             if (latest.getFailCount() >= maxFailAttempts && latest.getCreatedAt() != null) {
                 java.time.LocalDateTime lockUntil = latest.getCreatedAt().plusMinutes(lockoutMinutes);
                 if (java.time.LocalDateTime.now().isBefore(lockUntil)) {
@@ -282,7 +282,7 @@ public class AuthService {
      * Gom logic trùng lặp ở register / resendRegisterOtp / forgotPasswordSendOtp.
      */
     private String generateAndStoreOtp(String target, OtpPurpose purpose) {
-        otpRepository.invalidateOldOtps(target, purpose);
+        otpRepository.invalidateOldOtps(target, purpose); // target = nơi nhận (email/SĐT)
         SecureRandom random = new SecureRandom();
         StringBuilder codeBuilder = new StringBuilder(6);
         for (int i = 0; i < 6; i++) {
@@ -290,7 +290,7 @@ public class AuthService {
         }
         String code = codeBuilder.toString();
         otpRepository.save(Otp.builder()
-                .phone(target)
+                .recipient(target)
                 .code(code)
                 .purpose(purpose)
                 .expiredAt(LocalDateTime.now().plusMinutes(5))
@@ -311,7 +311,7 @@ public class AuthService {
                         .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy tài khoản với thông tin đã cung cấp!")));
 
         // Kiểm tra lockout OTP gần nhất trước khi gửi lại
-        otpRepository.findFirstByPhoneAndPurposeOrderByCreatedAtDesc(phoneOrEmail, org.example.datn.domain.enums.OtpPurpose.RESET_PASSWORD).ifPresent(latest -> {
+        otpRepository.findFirstByRecipientAndPurposeOrderByCreatedAtDesc(phoneOrEmail, org.example.datn.domain.enums.OtpPurpose.RESET_PASSWORD).ifPresent(latest -> {
             if (latest.getFailCount() >= maxFailAttempts && latest.getCreatedAt() != null) {
                 java.time.LocalDateTime lockUntil = latest.getCreatedAt().plusMinutes(lockoutMinutes);
                 if (java.time.LocalDateTime.now().isBefore(lockUntil)) {
@@ -342,7 +342,7 @@ public class AuthService {
         String newPassword = req.getNewPassword();
 
         // Kiểm tra OTP
-        org.example.datn.domain.Otp otp = otpRepository.findFirstByPhoneAndPurposeAndIsUsedFalseOrderByCreatedAtDesc(phoneOrEmail, org.example.datn.domain.enums.OtpPurpose.RESET_PASSWORD)
+        org.example.datn.domain.Otp otp = otpRepository.findFirstByRecipientAndPurposeAndIsUsedFalseOrderByCreatedAtDesc(phoneOrEmail, org.example.datn.domain.enums.OtpPurpose.RESET_PASSWORD)
                 .orElseThrow(() -> new AppException(ErrorCode.OTP_INVALID, "Mã OTP không hợp lệ hoặc đã được sử dụng!"));
 
         if (otp.getFailCount() >= maxFailAttempts) {
