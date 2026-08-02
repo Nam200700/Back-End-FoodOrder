@@ -308,12 +308,18 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
                    COUNT(*) AS cnt
             FROM orders
             WHERE restaurant_id = :rid AND created_at >= :from AND created_at < :to
+              AND (:dow IS NULL OR DAYOFWEEK(created_at) = :dow)
+              AND (:month IS NULL OR MONTH(created_at) = :month)
+              AND (:year IS NULL OR YEAR(created_at) = :year)
             GROUP BY DATE(created_at)
             ORDER BY DATE(created_at)
             """, nativeQuery = true)
     List<Object[]> dailyByRestaurantBetween(@Param("rid") Long rid,
                                             @Param("from") java.time.LocalDateTime from,
-                                            @Param("to") java.time.LocalDateTime to);
+                                            @Param("to") java.time.LocalDateTime to,
+                                            @Param("dow") Integer dow,
+                                            @Param("month") Integer month,
+                                            @Param("year") Integer year);
 
     /** Số khách duy nhất của quán trong kỳ (mọi trạng thái). */
     @Query("""
