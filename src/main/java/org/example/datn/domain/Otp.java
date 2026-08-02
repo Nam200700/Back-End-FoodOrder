@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "otps", indexes = {
-        @Index(name = "idx_otps_phone_purpose", columnList = "phone, purpose")
+        @Index(name = "idx_otps_recipient_purpose", columnList = "recipient, purpose")
 })
 @Getter
 @Setter
@@ -22,8 +22,9 @@ public class Otp extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long otpId;
 
+    // Nơi nhận OTP: email (REGISTER), email hoặc SĐT (RESET_PASSWORD), SĐT (LOGIN).
     @Column(nullable = false, length = 100)
-    private String phone;
+    private String recipient;
 
     @Column(nullable = false, length = 10)
     private String code;
