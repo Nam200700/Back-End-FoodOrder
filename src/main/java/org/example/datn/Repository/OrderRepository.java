@@ -344,12 +344,18 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
             WHERE o.restaurant.restaurantId = :rid
               AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
               AND o.createdAt >= :from AND o.createdAt < :to
+              AND (:dow IS NULL OR FUNCTION('DAYOFWEEK', o.createdAt) = :dow)
+              AND (:month IS NULL OR FUNCTION('MONTH', o.createdAt) = :month)
+              AND (:year IS NULL OR FUNCTION('YEAR', o.createdAt) = :year)
             GROUP BY oi.foodName
             ORDER BY SUM(oi.quantity) DESC
             """)
     List<Object[]> topFoodsByRestaurantBetween(@Param("rid") Long rid,
                                                @Param("from") java.time.LocalDateTime from,
                                                @Param("to") java.time.LocalDateTime to,
+                                               @Param("dow") Integer dow,
+                                               @Param("month") Integer month,
+                                               @Param("year") Integer year,
                                                Pageable pageable);
 
     // ─── Admin (toàn hệ thống) ───
@@ -362,27 +368,45 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
             WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
               AND o.paymentStatus != org.example.datn.domain.enums.PaymentStatus.REFUNDED
               AND o.createdAt >= :from AND o.createdAt < :to
+              AND (:dow IS NULL OR FUNCTION('DAYOFWEEK', o.createdAt) = :dow)
+              AND (:month IS NULL OR FUNCTION('MONTH', o.createdAt) = :month)
+              AND (:year IS NULL OR FUNCTION('YEAR', o.createdAt) = :year)
             """)
     List<Object[]> financeCompletedSystemBetween(@Param("from") java.time.LocalDateTime from,
-                                                 @Param("to") java.time.LocalDateTime to);
+                                                 @Param("to") java.time.LocalDateTime to,
+                                                 @Param("dow") Integer dow,
+                                                 @Param("month") Integer month,
+                                                 @Param("year") Integer year);
 
     @Query("""
             SELECT o.orderStatus, COUNT(o), COALESCE(SUM(o.totalAmount),0)
             FROM Order o
             WHERE o.createdAt >= :from AND o.createdAt < :to
+              AND (:dow IS NULL OR FUNCTION('DAYOFWEEK', o.createdAt) = :dow)
+              AND (:month IS NULL OR FUNCTION('MONTH', o.createdAt) = :month)
+              AND (:year IS NULL OR FUNCTION('YEAR', o.createdAt) = :year)
             GROUP BY o.orderStatus
             """)
     List<Object[]> statusDistSystemBetween(@Param("from") java.time.LocalDateTime from,
-                                           @Param("to") java.time.LocalDateTime to);
+                                           @Param("to") java.time.LocalDateTime to,
+                                           @Param("dow") Integer dow,
+                                           @Param("month") Integer month,
+                                           @Param("year") Integer year);
 
     @Query("""
             SELECT o.paymentStatus, COUNT(o), COALESCE(SUM(o.totalAmount),0)
             FROM Order o
             WHERE o.createdAt >= :from AND o.createdAt < :to
+              AND (:dow IS NULL OR FUNCTION('DAYOFWEEK', o.createdAt) = :dow)
+              AND (:month IS NULL OR FUNCTION('MONTH', o.createdAt) = :month)
+              AND (:year IS NULL OR FUNCTION('YEAR', o.createdAt) = :year)
             GROUP BY o.paymentStatus
             """)
     List<Object[]> paymentDistSystemBetween(@Param("from") java.time.LocalDateTime from,
-                                            @Param("to") java.time.LocalDateTime to);
+                                            @Param("to") java.time.LocalDateTime to,
+                                            @Param("dow") Integer dow,
+                                            @Param("month") Integer month,
+                                            @Param("year") Integer year);
 
     /** Chuỗi ngày toàn sàn: {yyyy-MM-dd, gtv(hoàn tất), subtotal(hoàn tất), count(mọi đơn)}. */
     @Query(value = """
