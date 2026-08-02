@@ -59,6 +59,26 @@ public class ReviewController {
                 reviewService.getRestaurantReviews(restaurantId, pageable)));
     }
 
+    /** Đánh giá QUÁN của owner đang đăng nhập — lọc sao/ảnh + sắp xếp + phân trang (server-side). */
+    @GetMapping("/merchant/reviews")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<ApiResponse<PageResponse<ReviewResponse>>> merchantReviews(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @RequestParam(required = false) Integer star,
+            @RequestParam(required = false, defaultValue = "false") boolean imageOnly,
+            Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                reviewService.getMerchantReviews(user.getUserId(), star, imageOnly, pageable)));
+    }
+
+    /** Tóm tắt đánh giá quán (gộp server-side) cho trang Đánh Giá owner. */
+    @GetMapping("/merchant/reviews/summary")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<ApiResponse<ShipperReviewSummaryResponse>> merchantReviewSummary(
+            @AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok(ApiResponse.ok(reviewService.merchantReviewSummary(user.getUserId())));
+    }
+
     @GetMapping("/shipper/reviews")
     @PreAuthorize("hasRole('SHIPPER')")
     public ResponseEntity<ApiResponse<PageResponse<ReviewResponse>>> shipperReviews(
