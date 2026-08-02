@@ -451,11 +451,17 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
             WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
               AND o.paymentStatus != org.example.datn.domain.enums.PaymentStatus.REFUNDED
               AND o.createdAt >= :from AND o.createdAt < :to
+              AND (:dow IS NULL OR FUNCTION('DAYOFWEEK', o.createdAt) = :dow)
+              AND (:month IS NULL OR FUNCTION('MONTH', o.createdAt) = :month)
+              AND (:year IS NULL OR FUNCTION('YEAR', o.createdAt) = :year)
             GROUP BY o.restaurant.restaurantName
             ORDER BY SUM(o.subtotalAmount) DESC
             """)
     List<Object[]> topRestaurantsSystemBetween(@Param("from") java.time.LocalDateTime from,
                                                @Param("to") java.time.LocalDateTime to,
+                                               @Param("dow") Integer dow,
+                                               @Param("month") Integer month,
+                                               @Param("year") Integer year,
                                                Pageable pageable);
 
     // Tìm danh sách đơn hàng theo trạng thái và thời gian tạo trước một mốc thời gian cutoffTime
