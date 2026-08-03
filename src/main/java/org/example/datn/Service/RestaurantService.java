@@ -28,6 +28,15 @@ public class RestaurantService {
         return restaurantRepository.findByStatusTrue(pageable).map(restaurantMapper::toResponse);
     }
 
+    /** Danh sách quán đang mở có LỌC theo từ khoá (tên/địa chỉ) — dùng cho feed + tìm kiếm trang Khám phá. */
+    @Transactional(readOnly = true)
+    public Page<RestaurantResponse> listActive(String keyword, Pageable pageable) {
+        if (keyword == null || keyword.isBlank()) {
+            return restaurantRepository.findByStatusTrue(pageable).map(restaurantMapper::toResponse);
+        }
+        return restaurantRepository.searchActive(keyword.trim(), pageable).map(restaurantMapper::toResponse);
+    }
+
     @Transactional(readOnly = true)
     public RestaurantResponse getById(Long restaurantId) {
         Restaurant restaurant = restaurantRepository.findByIdOrThrow(restaurantId, ErrorCode.RESTAURANT_NOT_FOUND);
