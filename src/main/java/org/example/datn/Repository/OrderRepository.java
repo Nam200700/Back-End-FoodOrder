@@ -477,27 +477,28 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
 
     /** Tài chính đơn hoàn tất CÓ voucher trong [from,to): {count, SUM(discount), SUM(total)}. */
     @Query("""
-            SELECT COUNT(o), COALESCE(SUM(o.discountAmount),0), COALESCE(SUM(o.totalAmount),0)
-            FROM Order o
-            WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
-              AND o.paymentStatus != org.example.datn.domain.enums.PaymentStatus.REFUNDED
-              AND o.voucher IS NOT NULL
-              AND o.createdAt >= :from AND o.createdAt < :to
-            """)
+        SELECT COUNT(o), COALESCE(SUM(o.discountAmount),0), COALESCE(SUM(o.totalAmount),0)
+        FROM Order o
+        WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+          AND o.paymentStatus != org.example.datn.domain.enums.PaymentStatus.REFUNDED
+          AND o.userVoucher IS NOT NULL
+          AND o.createdAt >= :from AND o.createdAt < :to
+        """)
     List<Object[]> voucherFinanceBetween(@Param("from") java.time.LocalDateTime from,
                                          @Param("to") java.time.LocalDateTime to);
 
     /** Top voucher theo lượt dùng trong [from,to): {code, name, uses, SUM(discount)}. */
     @Query("""
-            SELECT o.voucher.code, o.voucher.name, COUNT(o), COALESCE(SUM(o.discountAmount),0)
-            FROM Order o
-            WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
-              AND o.paymentStatus != org.example.datn.domain.enums.PaymentStatus.REFUNDED
-              AND o.voucher IS NOT NULL
-              AND o.createdAt >= :from AND o.createdAt < :to
-            GROUP BY o.voucher.voucherId, o.voucher.code, o.voucher.name
-            ORDER BY COUNT(o) DESC
-            """)
+        SELECT uv.voucher.code, uv.voucher.name, COUNT(o), COALESCE(SUM(o.discountAmount),0)
+        FROM Order o
+        JOIN o.userVoucher uv
+        WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+          AND o.paymentStatus != org.example.datn.domain.enums.PaymentStatus.REFUNDED
+          AND o.userVoucher IS NOT NULL
+          AND o.createdAt >= :from AND o.createdAt < :to
+        GROUP BY uv.voucher.voucherId, uv.voucher.code, uv.voucher.name
+        ORDER BY COUNT(o) DESC
+        """)
     List<Object[]> topVouchersBetween(@Param("from") java.time.LocalDateTime from,
                                       @Param("to") java.time.LocalDateTime to,
                                       Pageable pageable);
