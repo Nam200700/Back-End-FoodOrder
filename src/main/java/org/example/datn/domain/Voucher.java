@@ -58,8 +58,4 @@ public class Voucher extends BaseEntity {
     @Builder.Default
     @OneToMany(mappedBy = "voucher")
     private List<UserVoucher> userVouchers = new ArrayList<>();
-
-    @Builder.Default
-    @OneToMany(mappedBy = "voucher")
-    private List<Order> orders = new ArrayList<>();
 }
