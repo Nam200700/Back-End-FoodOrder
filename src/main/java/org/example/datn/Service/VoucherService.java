@@ -37,14 +37,6 @@ public class VoucherService {
     private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
-    public List<VoucherResponse> getAllVouchers() {
-        return voucherRepository.findAll()
-                .stream()
-                .map(voucherMapper::toResponse)
-                .toList();
-    }
-
-    @Transactional(readOnly = true)
     public VoucherResponse getByIdVoucher(Long voucherId) {
         Voucher voucher = voucherRepository.findById(voucherId)
                 .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
@@ -102,7 +94,7 @@ public class VoucherService {
     //customer
     @Transactional(readOnly = true)
     public List<UserVoucherResponse> getMyVouchers(Long userId) {
-        List<UserVoucher> list = userVoucherRepository.findByUser_UserId(userId);
+        List<UserVoucher> list = userVoucherRepository.findByUser_UserIdAndUsed(userId, false);
         return list.stream().map(uv -> UserVoucherResponse.builder()
                 .userVoucherId(uv.getUserVoucherId())
                 .voucherId(uv.getVoucher().getVoucherId())
@@ -119,9 +111,9 @@ public class VoucherService {
     }
 
     @Transactional(readOnly = true)
-    public List<VoucherResponse> getPublicVouchers() {
-        List<Voucher> vouchers = voucherRepository.findByIssueTypeAndStatusAndEndDateAfter(
-                VoucherIssueType.EVENT, VoucherStatus.ACTIVE, LocalDateTime.now()
+    public List<VoucherResponse> getPublicVouchers(Long userId) {
+        List<Voucher> vouchers = voucherRepository.findUnclaimedPublicVouchersForUser(
+                VoucherIssueType.EVENT, VoucherStatus.ACTIVE, LocalDateTime.now(), userId
         );
         return vouchers.stream().map(voucherMapper::toResponse).toList();
     }
