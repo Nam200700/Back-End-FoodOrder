@@ -333,11 +333,9 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
-    public Page<OrderResponse> getCustomerOrders(Long customerId, OrderStatus status, Pageable pageable) {
-        Page<Order> page = (status == null)
-                ? orderRepository.findByCustomerUserIdOrderByCreatedAtDesc(customerId, pageable)
-                : orderRepository.findByCustomerUserIdAndOrderStatusOrderByCreatedAtDesc(customerId, status, pageable);
-        return page.map(orderMapper::toResponse).map(this::enrichOrderResponse);
+    public Page<OrderResponse> getCustomerOrders(Long customerId, OrderStatus status, String keyword, Pageable pageable) {
+        Page<Order> orderPage = orderRepository.searchCustomerOrders(customerId, status, keyword, pageable);
+        return orderPage.map(orderMapper::toResponse).map(this::enrichOrderResponse);
     }
 
     @Transactional(readOnly = true)
