@@ -4,6 +4,8 @@ import org.example.datn.domain.Restaurant;
 import org.example.datn.Repository.base.BaseRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -12,6 +14,15 @@ import java.util.List;
 public interface RestaurantRepository extends BaseRepository<Restaurant, Long> {
 
     Page<Restaurant> findByStatusTrue(Pageable pageable);
+
+    /** Quán đang mở, lọc theo từ khoá tên/địa chỉ (server-side) — cho tìm kiếm trang Khám phá. */
+    @Query("""
+            SELECT r FROM Restaurant r
+            WHERE r.status = true
+              AND (LOWER(r.restaurantName) LIKE LOWER(CONCAT('%', :kw, '%'))
+                   OR LOWER(r.address) LIKE LOWER(CONCAT('%', :kw, '%')))
+            """)
+    Page<Restaurant> searchActive(@Param("kw") String keyword, Pageable pageable);
 
     List<Restaurant> findByOwnerUserId(Long ownerId);
 
