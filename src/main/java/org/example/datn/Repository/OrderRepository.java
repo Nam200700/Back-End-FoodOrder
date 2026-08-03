@@ -5,6 +5,7 @@ import org.example.datn.domain.Order;
 import org.example.datn.domain.enums.OrderStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -465,6 +466,11 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
                                                Pageable pageable);
 
     // Tìm danh sách đơn hàng theo trạng thái và thời gian tạo trước một mốc thời gian cutoffTime
+    @EntityGraph(attributePaths = {
+            "customer",
+            "restaurant",
+            "restaurant.owner"
+    })
     List<Order> findByOrderStatusAndCreatedAtBefore(OrderStatus orderStatus, LocalDateTime cutoffTime);
 
     // ─────────────── VOUCHER ANALYTICS (đơn hoàn tất có gắn voucher) ───────────────
