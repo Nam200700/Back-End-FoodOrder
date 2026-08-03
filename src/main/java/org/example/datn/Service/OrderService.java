@@ -110,6 +110,7 @@ public class OrderService {
         order.setCancelReason("Hệ thống tự động hủy do quán không xác nhận đơn trong vòng 5 phút");
         order.setPaymentStatus(PaymentStatus.FAILED);
         voucherService.refundVoucher(order);
+        order.setUserVoucher(null);
         orderRepository.save(order);
         paymentService.markPaymentFailed(order);
 
@@ -409,6 +410,7 @@ public class OrderService {
         order.setCancelReason(req.getReason().trim());
 
         voucherService.refundVoucher(order);
+        order.setUserVoucher(null);
 
         Payment payment = paymentRepository.findByOrderOrderId(orderId).orElse(null);
         if (order.getPaymentStatus() == PaymentStatus.PAID) {
@@ -481,6 +483,7 @@ public class OrderService {
         order.setCancelledBy(order.getRestaurant().getOwner());
         order.setPaymentStatus(PaymentStatus.FAILED);
         voucherService.refundVoucher(order);
+        order.setUserVoucher(null);
         orderRepository.save(order);
 
         Payment payment = paymentRepository.findByOrderOrderId(orderId).orElse(null);
@@ -669,6 +672,13 @@ public class OrderService {
 
     private OrderResponse enrichOrderResponse(OrderResponse response) {
         if (response == null) return null;
+        orderRepository.findById(response.getOrderId()).ifPresent(order -> {
+            if (order.getUserVoucher() != null && order.getUserVoucher().getVoucher() != null) {
+                Voucher v = order.getUserVoucher().getVoucher();
+                response.setVoucherCode(v.getCode());
+            }
+        });
+
         boolean reviewed = reviewRepository.existsByOrderOrderId(response.getOrderId());
         response.setReviewed(reviewed);
         if (reviewed) {
