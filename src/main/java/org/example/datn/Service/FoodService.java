@@ -34,6 +34,29 @@ public class FoodService {
     private final OwnershipGuard ownershipGuard;
     private final ImageUploadService imageUploadService;
 
+    /** Công khai: tìm món theo tên (giới hạn số kết quả) — trang Khám phá tìm kiếm server-side, không nạp toàn bộ menu. */
+    @Transactional(readOnly = true)
+    public List<FoodResponse> searchFoods(String keyword, int limit) {
+        if (keyword == null || keyword.isBlank()) return List.of();
+        List<Food> foods = foodRepository.searchActiveByName(keyword.trim(), PageRequest.of(0, Math.max(1, Math.min(limit, 50))));
+        return foodMapper.toResponseList(foods);
+    }
+
+    /** Công khai: TOP món bán chạy thật (số lượt đặt thật) — cho mục "Món ăn xu hướng". Một truy vấn gộp. */
+    @Transactional(readOnly = true)
+    public List<FoodResponse> popularFoods(int limit) {
+        List<Object[]> rows = foodRepository.findPopularFoods(PageRequest.of(0, Math.max(1, Math.min(limit, 20))));
+        List<FoodResponse> out = new ArrayList<>();
+        for (Object[] row : rows) {
+            Food food = (Food) row[0];
+            Number sold = (Number) row[1];
+            FoodResponse res = foodMapper.toResponse(food);
+            res.setOrderCount(sold != null ? sold.intValue() : 0);
+            out.add(res);
+        }
+        return out;
+    }
+
     @Transactional(readOnly = true)
     public List<FoodResponse> getMenu(Long restaurantId) {
         if (!restaurantRepository.existsById(restaurantId)) {
