@@ -8,7 +8,7 @@ import java.util.List;
 public interface UserVoucherRepository extends BaseRepository<UserVoucher, Long>  {
 
     // Lấy danh sách voucher trong ví của user
-    List<UserVoucher> findByUser_UserId(Long userId);
+    List<UserVoucher> findByUser_UserIdAndUsed(Long userId, Boolean used);
 
     // Kiểm tra xem user đã lưu voucher này chưa
     boolean existsByUser_UserIdAndVoucher_VoucherId(Long userId, Long voucherId);
