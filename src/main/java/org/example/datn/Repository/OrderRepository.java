@@ -525,9 +525,10 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
             WHERE o.customer.userId = :customerId
             AND (:status IS NULL OR o.orderStatus = :status)
             AND (:keyword IS NULL OR :keyword = '' OR
-                   CAST(o.orderId AS string) LIKE LOWER(CONCAT('%', :keyword, '%')) OR 
-                   LOWER(r.restaurantName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR 
+                   CAST(o.orderId AS string) LIKE LOWER(CONCAT('%', :keyword, '%')) OR
+                   LOWER(r.restaurantName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR
                    LOWER(oi.foodName) LIKE LOWER(CONCAT('%', :keyword, '%')))
+            ORDER BY o.createdAt DESC, o.orderId DESC
             """)
     Page<Order> searchCustomerOrders(
             @Param("customerId") Long customerId,
