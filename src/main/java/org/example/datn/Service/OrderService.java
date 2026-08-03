@@ -31,6 +31,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -79,7 +80,7 @@ public class OrderService {
      */
     @Scheduled(fixedRate = 30000)
     public void autoCancelExpiredPendingOrders() {
-        LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(5);
+        LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(2);
 
         // 1. Tìm các đơn PENDING tạo trước (quá 5 phút)
         List<Order> expiredOrders = orderRepository.findByOrderStatusAndCreatedAtBefore(OrderStatus.PENDING, cutoffTime);
@@ -88,7 +89,7 @@ public class OrderService {
             return;
         }
 
-        // 2. Tìm Voucher đền bù (ORDER_CANCELLED) có sẵn trong DB
+        // 2. Tìm Voucher đền bù (ORDER_CANCELLED)
         Voucher compensationVoucher = voucherRepository.findActiveVoucherByIssueType(VoucherIssueType.ORDER_CANCELLED)
                 .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
 
@@ -103,7 +104,7 @@ public class OrderService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void cancelAndCompensateOrder(Order order, Voucher compensationVoucher) {
-        // 3. Cập nhật trạng thái đơn hàng sang CANCELLED
+        // 1. Cập nhật trạng thái đơn hàng sang CANCELLED
         order.setOrderStatus(OrderStatus.CANCELLED);
         order.setCancelReason("Hệ thống tự động hủy do quán không xác nhận đơn trong vòng 5 phút");
         order.setPaymentStatus(PaymentStatus.FAILED);
@@ -112,7 +113,7 @@ public class OrderService {
 
         User customer = order.getCustomer();
 
-        // 4. Phát Voucher đền bù cho khách hàng
+        // 2. Phát Voucher đền bù cho khách hàng
         if (compensationVoucher != null && customer != null) {
             LocalDateTime expiredAt = (compensationVoucher.getEndDate() != null)
                     ? compensationVoucher.getEndDate()
@@ -128,31 +129,27 @@ public class OrderService {
             userVoucherRepository.save(userVoucher);
         }
 
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                try {
-                    if (order.getRestaurant() != null && order.getRestaurant().getOwner() != null) {
-                        notificationService.notifyUser(
-                                order.getRestaurant().getOwner().getUserId(),
-                                NotificationType.ORDER_CANCELLED,
-                                order.getOrderId()
-                        );
-                    }
-                    if (customer != null) {
-                        notificationService.notifyUser(
-                                customer.getUserId(),
-                                NotificationType.ORDER_CANCELLED,
-                                order.getOrderId()
-                        );
-                    }
-
-                    webSocketService.broadcastOrderStatus(order);
-                } catch (Exception e) {
-                    log.error("Lỗi khi gửi thông báo/websocket sau commit cho đơn hàng ID: {}", order.getOrderId(), e);
-                }
+        // 3. Gửi thông báo
+        try {
+            if (order.getRestaurant() != null && order.getRestaurant().getOwner() != null) {
+                notificationService.notifyUser(
+                        order.getRestaurant().getOwner().getUserId(),
+                        NotificationType.ORDER_CANCELLED,
+                        order.getOrderId()
+                );
             }
-        });
+            if (customer != null) {
+                notificationService.notifyUser(
+                        customer.getUserId(),
+                        NotificationType.ORDER_CANCELLED,
+                        order.getOrderId()
+                );
+            }
+
+            webSocketService.broadcastOrderStatus(order);
+        } catch (Exception e) {
+            log.error("Lỗi khi gửi thông báo/websocket cho đơn hàng tự hủy ID: {}", order.getOrderId(), e);
+        }
     }
 
     // ─── Customer ────────────────────────────────────────────
@@ -161,14 +158,21 @@ public class OrderService {
     public List<OrderResponse> createOrder(Long customerId, CreateOrderRequest req) {
         User customer = userRepository.getReferenceById(customerId);
 
-        List<Order> savedOrders = req.getRestaurantId().stream().map(restaurantId -> {
+        List<Order> ordersToSave = new ArrayList<>();
+        List<Cart> cartsToDelete = new ArrayList<>();
+        List<UserVoucher> vouchersToUpdate = new ArrayList<>();
+        List<Voucher> rawVouchersToUpdate = new ArrayList<>();
+
+        // 1. Validate và chuẩn bị dữ liệu cho tất cả các quán trước (Fail-fast)
+        for (Long restaurantId : req.getRestaurantId()) {
             Cart cart = cartRepository.findByCustomerUserIdAndRestaurantRestaurantId(customerId, restaurantId)
                     .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
+
             if (cart.getItems().isEmpty()) {
                 throw new AppException(ErrorCode.CART_ITEM_NOT_FOUND);
             }
 
-            // 1. Kiểm tra và lấy thông tin Voucher riêng cho từng quán (nếu có)
+            // Xử lý Voucher của quán này
             Long userVoucherId = (req.getRestaurantVouchers() != null) ? req.getRestaurantVouchers().get(restaurantId) : null;
             UserVoucher userVoucher = null;
             Voucher voucher = null;
@@ -189,109 +193,139 @@ public class OrderService {
                 voucher = userVoucher.getVoucher();
             }
 
-            Order order = Order.builder()
-                    .customer(customer)
-                    .restaurant(cart.getRestaurant())
-                    .deliveryAddress(req.getDeliveryAddress())
-                    .deliveryLat(req.getDeliveryLat())
-                    .deliveryLng(req.getDeliveryLng())
-                    .paymentMethod(req.getPaymentMethod())
-                    .discountAmount(BigDecimal.ZERO)
-                    .orderStatus(PENDING)
-                    .note(req.getNote())
-                    .voucher(voucher) // Lưu voucher vào đơn hàng của quán này
-                    .build();
+            // Tạo và tính toán chi tiết cho đơn hàng của quán
+            Order order = buildOrderEntity(customer, cart, req, voucher);
+            ordersToSave.add(order);
+            cartsToDelete.add(cart);
 
-            // Snapshot giá + tên tại thời điểm đặt hàng
-            List<OrderItem> items = cart.getItems().stream().map(ci -> {
-                Food food = ci.getFood();
-                if (!Boolean.TRUE.equals(food.getStatus())) {
-                    throw new AppException(ErrorCode.FOOD_NOT_FOUND, "Món " + food.getFoodName() + " đã ngừng bán.");
-                }
-                if (!Boolean.TRUE.equals(food.getIsAvailable())) {
-                    throw new AppException(ErrorCode.FOOD_NOT_FOUND, "Món " + food.getFoodName() + " hiện đã tạm hết hàng.");
-                }
-
-                return OrderItem.builder()
-                        .order(order)
-                        .food(food)
-                        .foodName(food.getFoodName())
-                        .quantity(ci.getQuantity())
-                        .priceAtOrder(food.getPrice())
-                        .note(ci.getNote())
-                        .build();
-            }).toList();
-
-            order.getItems().addAll(items);
-
-            double distance = shippingService.getDistanceKm(
-                    cart.getRestaurant().getLatitude().doubleValue(), cart.getRestaurant().getLongitude().doubleValue(),
-                    req.getDeliveryLat().doubleValue(), req.getDeliveryLng().doubleValue()
-            );
-
-            long shippingFee = ShippingFeeCalculator.calculate(distance);
-            BigDecimal shippingFeeBd = BigDecimal.valueOf(shippingFee);
-            order.setShippingFee(shippingFeeBd);
-
-            BigDecimal subtotal = items.stream()
-                    .map(i -> i.getPriceAtOrder().multiply(BigDecimal.valueOf(i.getQuantity())))
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            order.setSubtotalAmount(subtotal);
-
-            // Tổng giá trị ban đầu trước khi giảm giá (Tiền hàng + Phí ship)
-            BigDecimal totalBeforeDiscount = subtotal.add(shippingFeeBd);
-
-            // 2. Tính toán discountAmount dựa theo loại DiscountType (FIXED, PERCENT, FREESHIP)
-            BigDecimal discountAmount = BigDecimal.ZERO;
-            if (voucher != null) {
-                switch (voucher.getDiscountType()) {
-                    case FIXED -> discountAmount = voucher.getDiscountValue();
-                    case PERCENT -> {
-                        discountAmount = subtotal.multiply(voucher.getDiscountValue())
-                                .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
-                    }
-                    case FREESHIP -> {
-                        discountAmount = shippingFeeBd; // FREESHIP trừ đúng bằng phí ship của quán này
-                    }
-                }
-            }
-
-            // 3. Kiểm tra nếu số tiền giảm lớn hơn tổng giá trị đơn hàng của quán -> Bắn lỗi
-            if (discountAmount.compareTo(totalBeforeDiscount) > 0) {
-                throw new AppException(ErrorCode.VOUCHER_DISCOUNT_EXCEEDED);
-            }
-
-            order.setDiscountAmount(discountAmount);
-
-            // 4. Tính lại tổng tiền sau khi trừ giảm giá
-            BigDecimal totalAmount = totalBeforeDiscount.subtract(discountAmount);
-            if (totalAmount.compareTo(BigDecimal.ZERO) < 0) {
-                totalAmount = BigDecimal.ZERO;
-            }
-            order.setTotalAmount(totalAmount);
-
-            // 5. Đánh dấu UserVoucher đã được sử dụng
+            // Chuẩn bị dữ liệu cập nhật Voucher nếu có
             if (userVoucher != null) {
                 userVoucher.setUsed(true);
                 userVoucher.setUsedAt(LocalDateTime.now());
-                userVoucherRepository.save(userVoucher);
+                vouchersToUpdate.add(userVoucher);
 
                 if (voucher != null) {
                     voucher.setUsedQuantity((voucher.getUsedQuantity() != null ? voucher.getUsedQuantity() : 0) + 1);
+                    rawVouchersToUpdate.add(voucher);
                 }
             }
+        }
 
-            Order saved = orderRepository.save(order);
-            cartRepository.delete(cart);
+        // 2. Thực hiện lưu hàng loạt (Batch Save) để tối ưu hiệu năng Database
+        List<Order> savedOrders = orderRepository.saveAll(ordersToSave);
+
+        // Lưu các thay đổi của Voucher
+        if (!vouchersToUpdate.isEmpty()) {
+            userVoucherRepository.saveAll(vouchersToUpdate);
+        }
+        if (!rawVouchersToUpdate.isEmpty()) {
+            voucherRepository.saveAll(rawVouchersToUpdate);
+        }
+
+        // Tạo bản ghi Payment
+        for (Order saved : savedOrders) {
             paymentService.createForOrder(saved);
+        }
 
-            notificationService.notifyUser(saved.getRestaurant().getOwner().getUserId(),
-                    NotificationType.ORDER_NEW, saved.getOrderId());
-            webSocketService.broadcastOrderStatus(saved);
-            return saved;
-        }).toList();
+        cartRepository.deleteAll(cartsToDelete);
+
+        // 3. Gửi thông báo và WebSocket
+        for (Order saved : savedOrders) {
+            try {
+                if (saved.getRestaurant() != null && saved.getRestaurant().getOwner() != null) {
+                    notificationService.notifyUser(
+                            saved.getRestaurant().getOwner().getUserId(),
+                            NotificationType.ORDER_NEW,
+                            saved.getOrderId()
+                    );
+                }
+                webSocketService.broadcastOrderStatus(saved);
+            } catch (Exception e) {
+                log.error("Lỗi khi gửi thông báo/websocket cho đơn hàng mới ID: {}", saved.getOrderId(), e);
+            }
+        }
 
         return savedOrders.stream().map(orderMapper::toResponse).toList();
+    }
+
+    private Order buildOrderEntity(User customer, Cart cart, CreateOrderRequest req, Voucher voucher) {
+        Order order = Order.builder()
+                .customer(customer)
+                .restaurant(cart.getRestaurant())
+                .deliveryAddress(req.getDeliveryAddress())
+                .deliveryLat(req.getDeliveryLat())
+                .deliveryLng(req.getDeliveryLng())
+                .paymentMethod(req.getPaymentMethod())
+                .discountAmount(BigDecimal.ZERO)
+                .orderStatus(PENDING)
+                .note(req.getNote())
+                .voucher(voucher)
+                .build();
+
+        // Snapshot món ăn
+        List<OrderItem> items = cart.getItems().stream().map(ci -> {
+            Food food = ci.getFood();
+            if (!Boolean.TRUE.equals(food.getStatus())) {
+                throw new AppException(ErrorCode.FOOD_NOT_FOUND, "Món " + food.getFoodName() + " đã ngừng bán.");
+            }
+            if (!Boolean.TRUE.equals(food.getIsAvailable())) {
+                throw new AppException(ErrorCode.FOOD_NOT_FOUND, "Món " + food.getFoodName() + " hiện đã tạm hết hàng.");
+            }
+
+            return OrderItem.builder()
+                    .order(order)
+                    .food(food)
+                    .foodName(food.getFoodName())
+                    .quantity(ci.getQuantity())
+                    .priceAtOrder(food.getPrice())
+                    .note(ci.getNote())
+                    .build();
+        }).toList();
+
+        order.getItems().addAll(items);
+
+        // Tính phí ship
+        double distance = shippingService.getDistanceKm(
+                cart.getRestaurant().getLatitude().doubleValue(), cart.getRestaurant().getLongitude().doubleValue(),
+                req.getDeliveryLat().doubleValue(), req.getDeliveryLng().doubleValue()
+        );
+
+        long shippingFee = ShippingFeeCalculator.calculate(distance);
+        BigDecimal shippingFeeBd = BigDecimal.valueOf(shippingFee);
+        order.setShippingFee(shippingFeeBd);
+
+        // Tính tiền món ăn (Subtotal)
+        BigDecimal subtotal = items.stream()
+                .map(i -> i.getPriceAtOrder().multiply(BigDecimal.valueOf(i.getQuantity())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        order.setSubtotalAmount(subtotal);
+
+        BigDecimal totalBeforeDiscount = subtotal.add(shippingFeeBd);
+
+        // Tính giá trị giảm giá từ Voucher
+        BigDecimal discountAmount = BigDecimal.ZERO;
+        if (voucher != null) {
+            switch (voucher.getDiscountType()) {
+                case FIXED -> discountAmount = voucher.getDiscountValue();
+                case PERCENT -> discountAmount = subtotal.multiply(voucher.getDiscountValue())
+                        .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+                case FREESHIP -> discountAmount = shippingFeeBd;
+            }
+        }
+
+        if (discountAmount.compareTo(totalBeforeDiscount) > 0) {
+            throw new AppException(ErrorCode.VOUCHER_DISCOUNT_EXCEEDED);
+        }
+
+        order.setDiscountAmount(discountAmount);
+
+        BigDecimal totalAmount = totalBeforeDiscount.subtract(discountAmount);
+        if (totalAmount.compareTo(BigDecimal.ZERO) < 0) {
+            totalAmount = BigDecimal.ZERO;
+        }
+        order.setTotalAmount(totalAmount);
+
+        return order;
     }
 
     @Transactional(readOnly = true)
