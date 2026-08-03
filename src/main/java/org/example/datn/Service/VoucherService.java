@@ -95,7 +95,7 @@ public class VoucherService {
     //customer
     @Transactional(readOnly = true)
     public List<UserVoucherResponse> getMyVouchers(Long userId) {
-        List<UserVoucher> list = userVoucherRepository.findByUser_UserIdAndUsed(userId, false);
+        List<UserVoucher> list = userVoucherRepository.findValidUserVouchers(userId, false, LocalDateTime.now());
         return list.stream().map(uv -> UserVoucherResponse.builder()
                 .userVoucherId(uv.getUserVoucherId())
                 .voucherId(uv.getVoucher().getVoucherId())
