@@ -107,7 +107,7 @@ public class Order extends BaseEntity {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItem> items = new ArrayList<>();
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "voucher_id")
-    private Voucher voucher;
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_voucher_id")
+    private UserVoucher userVoucher;
 }
