@@ -24,7 +24,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -75,11 +78,10 @@ public class OrderService {
      * đồng thời tặng Voucher đền bù (ORDER_CANCELLED) cho khách hàng.
      */
     @Scheduled(fixedRate = 30000)
-    @Transactional
     public void autoCancelExpiredPendingOrders() {
         LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(5);
 
-        // 1. Tìm các đơn PENDING tạo trước cutoffTime (quá 5 phút)
+        // 1. Tìm các đơn PENDING tạo trước (quá 5 phút)
         List<Order> expiredOrders = orderRepository.findByOrderStatusAndCreatedAtBefore(OrderStatus.PENDING, cutoffTime);
 
         if (expiredOrders.isEmpty()) {
@@ -88,57 +90,69 @@ public class OrderService {
 
         // 2. Tìm Voucher đền bù (ORDER_CANCELLED) có sẵn trong DB
         Voucher compensationVoucher = voucherRepository.findActiveVoucherByIssueType(VoucherIssueType.ORDER_CANCELLED)
-                .orElse(null);
+                .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
 
         for (Order order : expiredOrders) {
             try {
-                // 3. Cập nhật trạng thái đơn hàng sang CANCELLED
-                order.setOrderStatus(OrderStatus.CANCELLED);
-                order.setCancelReason("Hệ thống tự động hủy do quán không xác nhận đơn trong vòng 5 phút");
-                order.setPaymentStatus(PaymentStatus.FAILED);
-                orderRepository.save(order);
-
-                User customer = order.getCustomer();
-
-                // 4. Phát Voucher đền bù cho khách hàng (nếu tìm thấy Voucher đền bù)
-                if (compensationVoucher != null && customer != null) {
-                    LocalDateTime expiredAt = (compensationVoucher.getEndDate() != null)
-                            ? compensationVoucher.getEndDate()
-                            : LocalDateTime.now().plusDays(30); // Hạn mặc định 30 ngày nếu voucher không set endDate
-
-                    UserVoucher userVoucher = UserVoucher.builder()
-                            .user(customer)
-                            .voucher(compensationVoucher)
-                            .used(false)
-                            .receivedAt(LocalDateTime.now())
-                            .expiredAt(expiredAt)
-                            .build();
-                    userVoucherRepository.save(userVoucher);
-                }
-
-                // 5. Gửi thông báo & WebSocket tới Chủ quán và Khách hàng
-                if (order.getRestaurant() != null && order.getRestaurant().getOwner() != null) {
-                    notificationService.notifyUser(
-                            order.getRestaurant().getOwner().getUserId(),
-                            NotificationType.ORDER_CANCELLED,
-                            order.getOrderId()
-                    );
-                }
-
-                if (customer != null) {
-                    notificationService.notifyUser(
-                            customer.getUserId(),
-                            NotificationType.ORDER_CANCELLED,
-                            order.getOrderId()
-                    );
-                }
-
-                webSocketService.broadcastOrderStatus(order);
-
+                cancelAndCompensateOrder(order, compensationVoucher);
             } catch (Exception e) {
                 log.error("Lỗi khi tự động hủy đơn hàng ID: {}", order.getOrderId(), e);
             }
         }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void cancelAndCompensateOrder(Order order, Voucher compensationVoucher) {
+        // 3. Cập nhật trạng thái đơn hàng sang CANCELLED
+        order.setOrderStatus(OrderStatus.CANCELLED);
+        order.setCancelReason("Hệ thống tự động hủy do quán không xác nhận đơn trong vòng 5 phút");
+        order.setPaymentStatus(PaymentStatus.FAILED);
+        orderRepository.save(order);
+        paymentService.markPaymentFailed(order);
+
+        User customer = order.getCustomer();
+
+        // 4. Phát Voucher đền bù cho khách hàng
+        if (compensationVoucher != null && customer != null) {
+            LocalDateTime expiredAt = (compensationVoucher.getEndDate() != null)
+                    ? compensationVoucher.getEndDate()
+                    : LocalDateTime.now().plusDays(30);
+
+            UserVoucher userVoucher = UserVoucher.builder()
+                    .user(customer)
+                    .voucher(compensationVoucher)
+                    .used(false)
+                    .receivedAt(LocalDateTime.now())
+                    .expiredAt(expiredAt)
+                    .build();
+            userVoucherRepository.save(userVoucher);
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    if (order.getRestaurant() != null && order.getRestaurant().getOwner() != null) {
+                        notificationService.notifyUser(
+                                order.getRestaurant().getOwner().getUserId(),
+                                NotificationType.ORDER_CANCELLED,
+                                order.getOrderId()
+                        );
+                    }
+                    if (customer != null) {
+                        notificationService.notifyUser(
+                                customer.getUserId(),
+                                NotificationType.ORDER_CANCELLED,
+                                order.getOrderId()
+                        );
+                    }
+
+                    webSocketService.broadcastOrderStatus(order);
+                } catch (Exception e) {
+                    log.error("Lỗi khi gửi thông báo/websocket sau commit cho đơn hàng ID: {}", order.getOrderId(), e);
+                }
+            }
+        });
     }
 
     // ─── Customer ────────────────────────────────────────────
@@ -547,6 +561,7 @@ public class OrderService {
         validateTransition(order.getOrderStatus(), COMPLETED);
         order.setOrderStatus(COMPLETED);
         order.setCompletedAt(LocalDateTime.now());
+        order.setPaymentStatus(PaymentStatus.PAID);
         orderRepository.save(order);
 
         Shipper shipper = shipperRepository.findByUserUserId(shipperId)
