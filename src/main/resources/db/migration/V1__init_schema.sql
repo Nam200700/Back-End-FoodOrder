@@ -428,6 +428,7 @@ CREATE INDEX idx_transactions_order             ON transactions     (order_id);
 CREATE INDEX idx_carts_customer                 ON carts            (customer_id);                        -- [V2] tìm tất cả cart của 1 customer
 CREATE INDEX idx_customer_addresses_customer    ON customer_addresses (customer_id);                     -- [V2]
 CREATE INDEX idx_review_images_review           ON review_images    (review_id);                         -- [V2]
+CREATE INDEX idx_orders_user_voucher ON orders (user_voucher_id);
 
 
 -- ─── Foreign keys ─────────────────────────────────────────────
@@ -492,7 +493,7 @@ WHERE last_message_at < NOW() - INTERVAL 3 DAY
    OR (last_message_at IS NULL AND created_at < NOW() - INTERVAL 3 DAY)
     LIMIT 500;
 
-ALTER TABLE orders ADD COLUMN voucher_id BIGINT NULL;
-ALTER TABLE orders ADD CONSTRAINT fk_orders_voucher FOREIGN KEY (voucher_id) REFERENCES vouchers(voucher_id);
+ALTER TABLE orders ADD COLUMN user_voucher_id BIGINT NULL;
+ALTER TABLE orders ADD CONSTRAINT fk_orders_user_voucher FOREIGN KEY (user_voucher_id) REFERENCES user_vouchers(user_voucher_id);
 -- ALTER TABLE user_vouchers ADD CONSTRAINT uk_user_voucher UNIQUE(user_id, voucher_id);
 -- ALTER TABLE user_vouchers ADD CONSTRAINT uk_user_voucher_order UNIQUE

@@ -99,4 +99,13 @@ public class PaymentService {
             throw new AppException(ErrorCode.FORBIDDEN);
         }
     }
+
+    @Transactional
+    @EvictStatsCaches
+    public void markPaymentFailed(Order order) {
+        paymentRepository.findByOrderOrderId(order.getOrderId()).ifPresent(p -> {
+            p.setStatus(PaymentStatus.FAILED);
+            paymentRepository.save(p);
+        });
+    }
 }

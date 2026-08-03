@@ -39,4 +39,7 @@ public class UserVoucher extends BaseEntity {
 
     @Column(name = "used_at")
     private LocalDateTime usedAt;
+
+    @OneToOne(mappedBy = "userVoucher")
+    private Order order;
 }

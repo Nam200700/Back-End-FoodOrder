@@ -11,6 +11,7 @@ import org.example.datn.Repository.UserRepository;
 import org.example.datn.Repository.UserVoucherRepository;
 import org.example.datn.Repository.VoucherRepository;
 import org.example.datn.common.PageResponse;
+import org.example.datn.domain.Order;
 import org.example.datn.domain.User;
 import org.example.datn.domain.UserVoucher;
 import org.example.datn.domain.Voucher;
@@ -35,14 +36,6 @@ public class VoucherService {
 
     private final UserVoucherRepository userVoucherRepository;
     private final UserRepository userRepository;
-
-    @Transactional(readOnly = true)
-    public List<VoucherResponse> getAllVouchers() {
-        return voucherRepository.findAll()
-                .stream()
-                .map(voucherMapper::toResponse)
-                .toList();
-    }
 
     @Transactional(readOnly = true)
     public VoucherResponse getByIdVoucher(Long voucherId) {
@@ -102,7 +95,7 @@ public class VoucherService {
     //customer
     @Transactional(readOnly = true)
     public List<UserVoucherResponse> getMyVouchers(Long userId) {
-        List<UserVoucher> list = userVoucherRepository.findByUser_UserId(userId);
+        List<UserVoucher> list = userVoucherRepository.findValidUserVouchers(userId, false, LocalDateTime.now());
         return list.stream().map(uv -> UserVoucherResponse.builder()
                 .userVoucherId(uv.getUserVoucherId())
                 .voucherId(uv.getVoucher().getVoucherId())
@@ -119,9 +112,9 @@ public class VoucherService {
     }
 
     @Transactional(readOnly = true)
-    public List<VoucherResponse> getPublicVouchers() {
-        List<Voucher> vouchers = voucherRepository.findByIssueTypeAndStatusAndEndDateAfter(
-                VoucherIssueType.EVENT, VoucherStatus.ACTIVE, LocalDateTime.now()
+    public List<VoucherResponse> getPublicVouchers(Long userId) {
+        List<Voucher> vouchers = voucherRepository.findUnclaimedPublicVouchersForUser(
+                VoucherIssueType.EVENT, VoucherStatus.ACTIVE, LocalDateTime.now(), userId
         );
         return vouchers.stream().map(voucherMapper::toResponse).toList();
     }
@@ -158,5 +151,29 @@ public class VoucherService {
                 .build();
 
         userVoucherRepository.save(userVoucher);
+    }
+
+    //hoàn lại voucher cho khách hàng khi đơn hàng bị hủy
+    public void refundVoucher(Order order) {
+        if (order.getUserVoucher() != null && order.getCustomer() != null) {
+            UserVoucher userVoucher = order.getUserVoucher();
+
+            userVoucherRepository.findById(userVoucher.getUserVoucherId())
+                    .ifPresent(uv -> {
+                        // Kiểm tra trạng thái đã sử dụng của UserVoucher
+                        if (Boolean.TRUE.equals(uv.getUsed())) {
+                            uv.setUsed(false);
+                            uv.setUsedAt(null);
+                            userVoucherRepository.save(uv);
+
+                            // Giảm số lượng đã sử dụng (usedQuantity) của Voucher gốc
+                            Voucher voucher = uv.getVoucher();
+                            if (voucher != null && voucher.getUsedQuantity() != null && voucher.getUsedQuantity() > 0) {
+                                voucher.setUsedQuantity(voucher.getUsedQuantity() - 1);
+                                voucherRepository.save(voucher);
+                            }
+                        }
+                    });
+        }
     }
 }

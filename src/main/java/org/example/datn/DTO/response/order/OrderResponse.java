@@ -35,6 +35,8 @@ public class OrderResponse {
     private BigDecimal discountAmount;
     private BigDecimal totalAmount;
 
+    private String voucherCode;
+
     private String deliveryAddress;
     private BigDecimal deliveryLat;
     private BigDecimal deliveryLng;

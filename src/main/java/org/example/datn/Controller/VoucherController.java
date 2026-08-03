@@ -80,11 +80,13 @@ public class VoucherController {
 
     @GetMapping("/public")
     @PreAuthorize("hasRole('CUSTOMER')")
-    public ResponseEntity<ApiResponse<List<VoucherResponse>>> getPublicVouchers() {
-        return ResponseEntity.ok(ApiResponse.ok(voucherService.getPublicVouchers()));
+    public ResponseEntity<ApiResponse<List<VoucherResponse>>> getPublicVouchers(
+            @AuthenticationPrincipal CustomUserDetails user
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok(voucherService.getPublicVouchers(user.getUserId())));
     }
 
-    @PostMapping("/{voucherId}/claim")
+    @PostMapping("/{voucherId}/add")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<ApiResponse<Void>> claimPublicVoucher(
             @AuthenticationPrincipal CustomUserDetails user,

@@ -35,4 +35,15 @@ public interface VoucherRepository extends BaseRepository<Voucher, Long> {
 
     @Query("SELECT v FROM Voucher v WHERE v.issueType = :issueType AND v.status = 'ACTIVE' AND (v.endDate IS NULL OR v.endDate > CURRENT_TIMESTAMP)")
     Optional<Voucher> findActiveVoucherByIssueType(@Param("issueType") VoucherIssueType issueType);
+
+    @Query("SELECT v FROM Voucher v " +
+            "LEFT JOIN v.userVouchers uv ON uv.user.userId = :userId " +
+            "WHERE v.issueType = :issueType " +
+            "AND v.status = :status " +
+            "AND v.endDate > :now " +
+            "AND uv.userVoucherId IS NULL")
+    List<Voucher> findUnclaimedPublicVouchersForUser(@Param("issueType") VoucherIssueType issueType,
+                                                     @Param("status") VoucherStatus status,
+                                                     @Param("now") LocalDateTime now,
+                                                     @Param("userId") Long userId);
 }
