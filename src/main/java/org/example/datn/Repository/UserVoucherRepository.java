@@ -4,6 +4,7 @@ import org.example.datn.Repository.base.BaseRepository;
 import org.example.datn.domain.UserVoucher;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface UserVoucherRepository extends BaseRepository<UserVoucher, Long>  {
 
@@ -12,5 +13,7 @@ public interface UserVoucherRepository extends BaseRepository<UserVoucher, Long>
 
     // Kiểm tra xem user đã lưu voucher này chưa
     boolean existsByUser_UserIdAndVoucher_VoucherId(Long userId, Long voucherId);
+
+    Optional<UserVoucher> findByUserUserIdAndVoucherVoucherId(Long userId, Long voucherId);
 
 }
