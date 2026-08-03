@@ -36,6 +36,31 @@ public interface FoodRepository extends BaseRepository<Food, Long> {
 
     List<Food> findByCategoryCategoryId(Long categoryId);
 
+    /** Công khai: tìm món theo tên trên các quán đang mở (1 truy vấn, giới hạn qua Pageable) — cho trang Khám phá. */
+    @Query("""
+            SELECT f FROM Food f
+            WHERE f.status = true AND f.isAvailable = true AND f.restaurant.status = true
+              AND LOWER(f.foodName) LIKE LOWER(CONCAT('%', :kw, '%'))
+            ORDER BY f.foodId DESC
+            """)
+    List<Food> searchActiveByName(@Param("kw") String keyword, Pageable pageable);
+
+    /**
+     * Công khai: TOP món bán chạy THẬT — gộp theo tổng số lượng đã bán từ đơn COMPLETED (1 truy vấn).
+     * Trả về [Food, sold] để service map ra orderCount thật — thay cho việc nạp toàn bộ menu của mọi quán.
+     */
+    @Query("""
+            SELECT f, COALESCE(SUM(oi.quantity), 0) AS sold
+            FROM Order o
+            JOIN o.items oi
+            JOIN oi.food f
+            WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+              AND f.status = true AND f.isAvailable = true AND f.restaurant.status = true
+            GROUP BY f
+            ORDER BY sold DESC
+            """)
+    List<Object[]> findPopularFoods(Pageable pageable);
+
     // ─── Đếm sức khoẻ thực đơn cho dashboard merchant ───
     long countByRestaurantRestaurantId(Long restaurantId);                                      // tổng số món
     long countByRestaurantRestaurantIdAndStatusTrueAndIsAvailableTrue(Long restaurantId);       // đang bán
