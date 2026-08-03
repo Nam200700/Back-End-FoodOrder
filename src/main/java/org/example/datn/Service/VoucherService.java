@@ -11,6 +11,7 @@ import org.example.datn.Repository.UserRepository;
 import org.example.datn.Repository.UserVoucherRepository;
 import org.example.datn.Repository.VoucherRepository;
 import org.example.datn.common.PageResponse;
+import org.example.datn.domain.Order;
 import org.example.datn.domain.User;
 import org.example.datn.domain.UserVoucher;
 import org.example.datn.domain.Voucher;
@@ -150,5 +151,29 @@ public class VoucherService {
                 .build();
 
         userVoucherRepository.save(userVoucher);
+    }
+
+    //hoàn lại voucher cho khách hàng khi đơn hàng bị hủy
+    public void refundVoucher(Order order) {
+        if (order.getUserVoucher() != null && order.getCustomer() != null) {
+            UserVoucher userVoucher = order.getUserVoucher();
+
+            userVoucherRepository.findById(userVoucher.getUserVoucherId())
+                    .ifPresent(uv -> {
+                        // Kiểm tra trạng thái đã sử dụng của UserVoucher
+                        if (Boolean.TRUE.equals(uv.getUsed())) {
+                            uv.setUsed(false);
+                            uv.setUsedAt(null);
+                            userVoucherRepository.save(uv);
+
+                            // Giảm số lượng đã sử dụng (usedQuantity) của Voucher gốc
+                            Voucher voucher = uv.getVoucher();
+                            if (voucher != null && voucher.getUsedQuantity() != null && voucher.getUsedQuantity() > 0) {
+                                voucher.setUsedQuantity(voucher.getUsedQuantity() - 1);
+                                voucherRepository.save(voucher);
+                            }
+                        }
+                    });
+        }
     }
 }
