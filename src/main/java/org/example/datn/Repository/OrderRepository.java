@@ -515,4 +515,24 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
             """, nativeQuery = true)
     List<Object[]> dailyVoucherUsageBetween(@Param("from") java.time.LocalDateTime from,
                                             @Param("to") java.time.LocalDateTime to);
+
+
+    @Query("""
+            SELECT DISTINCT o FROM Order o
+            JOIN FETCH o.customer c
+            JOIN FETCH o.restaurant r
+            LEFT JOIN o.items oi
+            WHERE o.customer.userId = :customerId
+            AND (:status IS NULL OR o.orderStatus = :status)
+            AND (:keyword IS NULL OR :keyword = '' OR
+                   CAST(o.orderId AS string) LIKE LOWER(CONCAT('%', :keyword, '%')) OR 
+                   LOWER(r.restaurantName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR 
+                   LOWER(oi.foodName) LIKE LOWER(CONCAT('%', :keyword, '%')))
+            """)
+    Page<Order> searchCustomerOrders(
+            @Param("customerId") Long customerId,
+            @Param("status") OrderStatus status,
+            @Param("keyword") String keyword,
+            Pageable pageable
+    );
 }
