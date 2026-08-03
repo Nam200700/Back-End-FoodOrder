@@ -63,6 +63,7 @@ public class OrderService {
     private final DeliveryRepository deliveryRepository;
     private final UserVoucherRepository userVoucherRepository;
     private final VoucherRepository voucherRepository;
+    private final VoucherService voucherService;
 
     private static final Map<OrderStatus, Set<OrderStatus>> VALID_TRANSITIONS = Map.of(
             PENDING, Set.of(CONFIRMED, CANCELLED),
@@ -108,6 +109,7 @@ public class OrderService {
         order.setOrderStatus(OrderStatus.CANCELLED);
         order.setCancelReason("Hệ thống tự động hủy do quán không xác nhận đơn trong vòng 5 phút");
         order.setPaymentStatus(PaymentStatus.FAILED);
+        voucherService.refundVoucher(order);
         orderRepository.save(order);
         paymentService.markPaymentFailed(order);
 
@@ -194,7 +196,7 @@ public class OrderService {
             }
 
             // Tạo và tính toán chi tiết cho đơn hàng của quán
-            Order order = buildOrderEntity(customer, cart, req, voucher);
+            Order order = buildOrderEntity(customer, cart, req, userVoucher);
             ordersToSave.add(order);
             cartsToDelete.add(cart);
 
@@ -248,7 +250,7 @@ public class OrderService {
         return savedOrders.stream().map(orderMapper::toResponse).toList();
     }
 
-    private Order buildOrderEntity(User customer, Cart cart, CreateOrderRequest req, Voucher voucher) {
+    private Order buildOrderEntity(User customer, Cart cart, CreateOrderRequest req, UserVoucher userVoucher) {
         Order order = Order.builder()
                 .customer(customer)
                 .restaurant(cart.getRestaurant())
@@ -259,7 +261,7 @@ public class OrderService {
                 .discountAmount(BigDecimal.ZERO)
                 .orderStatus(PENDING)
                 .note(req.getNote())
-                .voucher(voucher)
+                .userVoucher(userVoucher)
                 .build();
 
         // Snapshot món ăn
@@ -302,6 +304,7 @@ public class OrderService {
 
         BigDecimal totalBeforeDiscount = subtotal.add(shippingFeeBd);
 
+        Voucher voucher = (userVoucher != null) ? userVoucher.getVoucher() : null;
         // Tính giá trị giảm giá từ Voucher
         BigDecimal discountAmount = BigDecimal.ZERO;
         if (voucher != null) {
@@ -405,6 +408,8 @@ public class OrderService {
         order.setCancelledBy(current);
         order.setCancelReason(req.getReason().trim());
 
+        voucherService.refundVoucher(order);
+
         Payment payment = paymentRepository.findByOrderOrderId(orderId).orElse(null);
         if (order.getPaymentStatus() == PaymentStatus.PAID) {
             refundService.refundOrder(order, payment);
@@ -475,6 +480,7 @@ public class OrderService {
         order.setCancelReason(reason);
         order.setCancelledBy(order.getRestaurant().getOwner());
         order.setPaymentStatus(PaymentStatus.FAILED);
+        voucherService.refundVoucher(order);
         orderRepository.save(order);
 
         Payment payment = paymentRepository.findByOrderOrderId(orderId).orElse(null);
