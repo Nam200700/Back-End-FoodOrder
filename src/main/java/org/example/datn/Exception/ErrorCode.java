@@ -73,6 +73,8 @@ public enum ErrorCode {
     VOUCHER_NOT_OWNED(403, "Voucher không thuộc về bạn"),
     VOUCHER_DISCOUNT_EXCEEDED(400, "Số tiền giảm giá vượt quá tổng giá trị đơn hàng"),
 
+    RESTAURANT_CLOSED(400, "Quán ăn hiện không nằm trong khung giờ hoạt động"),
+
     // Generic
     VALIDATION_FAILED(400, "Dữ liệu không hợp lệ"),
     NOT_FOUND(404, "Không tìm thấy tài nguyên"),
