@@ -26,8 +26,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -74,11 +72,6 @@ public class OrderService {
             DELIVERING, Set.of(COMPLETED)
     );
 
-    // ─── Scheduled Task ──────────────────────────────────────
-    /**
-     * Tự động quét và hủy đơn PENDING quá 5 phút chưa xác nhận,
-     * đồng thời tặng Voucher đền bù (ORDER_CANCELLED) cho khách hàng.
-     */
     @Scheduled(fixedRate = 30000)
     public void autoCancelExpiredPendingOrders() {
         LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(2);
@@ -214,7 +207,6 @@ public class OrderService {
             }
         }
 
-        // 2. Thực hiện lưu hàng loạt (Batch Save) để tối ưu hiệu năng Database
         List<Order> savedOrders = orderRepository.saveAll(ordersToSave);
 
         // Lưu các thay đổi của Voucher
