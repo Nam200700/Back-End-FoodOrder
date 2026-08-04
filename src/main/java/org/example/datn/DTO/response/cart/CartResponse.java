@@ -4,6 +4,8 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 @Data
@@ -16,4 +18,6 @@ public class CartResponse {
     private BigDecimal subtotal;
     private BigDecimal latitude;
     private BigDecimal longitude;
+    private LocalTime opensAt;
+    private LocalTime closesAt;
 }
