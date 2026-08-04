@@ -244,9 +244,37 @@ public class OrderService {
     }
 
     private Order buildOrderEntity(User customer, Cart cart, CreateOrderRequest req, UserVoucher userVoucher) {
+        Restaurant restaurant = cart.getRestaurant();
+
+        // =========================================================================
+        // 1. KIỂM TRA KHUNG GIỜ HOẠT ĐỘNG CỦA QUÁN (opensAt - closesAt)
+        // =========================================================================
+        if (restaurant.getOpensAt() != null && restaurant.getClosesAt() != null) {
+            java.time.LocalTime now = java.time.LocalTime.now();
+            java.time.LocalTime opensAt = restaurant.getOpensAt();
+            java.time.LocalTime closesAt = restaurant.getClosesAt();
+
+            boolean isOpen;
+            if (opensAt.isBefore(closesAt)) {
+                // Giờ mở cửa bình thường trong ngày (VD: 07:00 -> 22:00)
+                isOpen = !now.isBefore(opensAt) && !now.isAfter(closesAt);
+            } else {
+                // Giờ mở cửa qua đêm (VD: 18:00 -> 02:00 sáng hôm sau)
+                isOpen = !now.isBefore(opensAt) || !now.isAfter(closesAt);
+            }
+
+            if (!isOpen) {
+                String timeMsg = String.format("Quán '%s' hiện không trong khung giờ hoạt động (Giờ mở cửa: %s - %s). Vui lòng quay lại sau!",
+                        restaurant.getRestaurantName(),
+                        opensAt.toString(),
+                        closesAt.toString());
+                throw new AppException(ErrorCode.RESTAURANT_CLOSED, timeMsg);
+            }
+        }
+
         Order order = Order.builder()
                 .customer(customer)
-                .restaurant(cart.getRestaurant())
+                .restaurant(restaurant)
                 .deliveryAddress(req.getDeliveryAddress())
                 .deliveryLat(req.getDeliveryLat())
                 .deliveryLng(req.getDeliveryLng())
@@ -279,11 +307,26 @@ public class OrderService {
 
         order.getItems().addAll(items);
 
-        // Tính phí ship
+        // =========================================================================
+        // 2. TÍNH KHOẢNG CÁCH VÀ KIỂM TRA GIỚI HẠN 10KM
+        // =========================================================================
+        if (restaurant.getLatitude() == null || restaurant.getLongitude() == null) {
+            throw new AppException(ErrorCode.RESTAURANT_NOT_FOUND, "Quán chưa cập nhật tọa độ vị trí.");
+        }
+        if (req.getDeliveryLat() == null || req.getDeliveryLng() == null) {
+            throw new AppException(ErrorCode.ADDRESS_NOT_FOUND, "Vui lòng chọn địa chỉ giao hàng hợp lệ.");
+        }
+
         double distance = shippingService.getDistanceKm(
-                cart.getRestaurant().getLatitude().doubleValue(), cart.getRestaurant().getLongitude().doubleValue(),
+                restaurant.getLatitude().doubleValue(), restaurant.getLongitude().doubleValue(),
                 req.getDeliveryLat().doubleValue(), req.getDeliveryLng().doubleValue()
         );
+
+        if (distance > 10.0) {
+            String distMsg = String.format("Quán '%s' cách bạn %.1f km (vượt quá bán kính giao hàng tối đa 10km). Vui lòng chọn địa chỉ gần hơn!",
+                    restaurant.getRestaurantName(), distance);
+            throw new AppException(ErrorCode.DISTANCE_TOO_FAR, distMsg);
+        }
 
         long shippingFee = ShippingFeeCalculator.calculate(distance);
         BigDecimal shippingFeeBd = BigDecimal.valueOf(shippingFee);
