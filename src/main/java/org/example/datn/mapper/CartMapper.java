@@ -22,6 +22,8 @@ public interface CartMapper {
     @Mapping(target = "restaurantName", source = "restaurant.restaurantName")
     @Mapping(target = "latitude",       source = "restaurant.latitude")
     @Mapping(target = "longitude",      source = "restaurant.longitude")
+    @Mapping(target = "opensAt",        source = "restaurant.opensAt")
+    @Mapping(target = "closesAt",       source = "restaurant.closesAt")
     @Mapping(target = "subtotal",       ignore = true)
     CartResponse toResponse(Cart cart);
 
