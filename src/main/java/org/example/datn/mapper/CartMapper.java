@@ -26,7 +26,7 @@ public interface CartMapper {
     @Mapping(target = "longitude",      source = "restaurant.longitude")
     @Mapping(target = "opensAt",        source = "restaurant.opensAt")
     @Mapping(target = "closesAt",       source = "restaurant.closesAt")
-    @Mapping(target = "open", expression = "java(isRestaurantOpen(cart.getRestaurant()))")
+    @Mapping(target = "isOpen",          expression = "java(isRestaurantOpen(cart.getRestaurant()))")
     @Mapping(target = "subtotal",       ignore = true)
     CartResponse toResponse(Cart cart);
 
@@ -50,7 +50,7 @@ public interface CartMapper {
                 .longitude(restaurant.getLongitude())
                 .opensAt(restaurant.getOpensAt())
                 .closesAt(restaurant.getClosesAt())
-                .open(isRestaurantOpen(restaurant))
+                .isOpen(isRestaurantOpen(restaurant))
                 .build();
     }
 
