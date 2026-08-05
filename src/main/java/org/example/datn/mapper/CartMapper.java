@@ -11,6 +11,8 @@ import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 
 import java.math.BigDecimal;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 
 @Mapper(componentModel = "spring",
@@ -24,6 +26,7 @@ public interface CartMapper {
     @Mapping(target = "longitude",      source = "restaurant.longitude")
     @Mapping(target = "opensAt",        source = "restaurant.opensAt")
     @Mapping(target = "closesAt",       source = "restaurant.closesAt")
+    @Mapping(target = "open", expression = "java(isRestaurantOpen(cart.getRestaurant()))")
     @Mapping(target = "subtotal",       ignore = true)
     CartResponse toResponse(Cart cart);
 
@@ -45,6 +48,26 @@ public interface CartMapper {
                 .subtotal(BigDecimal.ZERO)
                 .latitude(restaurant.getLatitude())
                 .longitude(restaurant.getLongitude())
+                .opensAt(restaurant.getOpensAt())
+                .closesAt(restaurant.getClosesAt())
+                .open(isRestaurantOpen(restaurant))
                 .build();
+    }
+
+    default boolean isRestaurantOpen(Restaurant restaurant) {
+        if (restaurant == null || restaurant.getOpensAt() == null || restaurant.getClosesAt() == null) {
+            return true;
+        }
+        LocalTime now = LocalTime.now();
+        LocalTime opensAt = restaurant.getOpensAt();
+        LocalTime closesAt = restaurant.getClosesAt();
+
+        if (opensAt.isBefore(closesAt)) {
+            // Mở và đóng trong cùng một ngày (VD: 08:00 - 22:00)
+            return !now.isBefore(opensAt) && !now.isAfter(closesAt);
+        } else {
+            // Mở cửa qua đêm (VD: 22:00 - 04:00 sáng hôm sau)
+            return !now.isBefore(opensAt) || !now.isAfter(closesAt);
+        }
     }
 }
