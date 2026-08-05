@@ -20,4 +20,5 @@ public class CartResponse {
     private BigDecimal longitude;
     private LocalTime opensAt;
     private LocalTime closesAt;
+    private boolean open;
 }
