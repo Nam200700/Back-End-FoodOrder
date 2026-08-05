@@ -18,7 +18,5 @@ public class CartResponse {
     private BigDecimal subtotal;
     private BigDecimal latitude;
     private BigDecimal longitude;
-    private LocalTime opensAt;
-    private LocalTime closesAt;
     private boolean isOpen;
 }
