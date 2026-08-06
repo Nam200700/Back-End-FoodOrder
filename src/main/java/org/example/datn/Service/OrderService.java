@@ -266,7 +266,7 @@ public class OrderService {
             }
 
             if (!isOpen) {
-                String timeMsg = String.format("Quán '%s' hiện không trong khung giờ hoạt động (Giờ mở cửa: %s - %s). Vui lòng quay lại sau!",
+                String timeMsg = String.format("Quán '%s' hiện đã đóng cửa (Giờ mở cửa: %s - %s). Vui lòng quay lại sau!",
                         restaurant.getRestaurantName(),
                         opensAt.toString(),
                         closesAt.toString());
@@ -309,9 +309,6 @@ public class OrderService {
 
         order.getItems().addAll(items);
 
-        // =========================================================================
-        // 2. TÍNH KHOẢNG CÁCH VÀ KIỂM TRA GIỚI HẠN 10KM
-        // =========================================================================
         if (restaurant.getLatitude() == null || restaurant.getLongitude() == null) {
             throw new AppException(ErrorCode.RESTAURANT_NOT_FOUND, "Quán chưa cập nhật tọa độ vị trí.");
         }
@@ -325,7 +322,7 @@ public class OrderService {
         );
 
         if (distance > 10.0) {
-            String distMsg = String.format("Quán '%s' cách bạn %.1f km (vượt quá bán kính giao hàng tối đa 10km). Vui lòng chọn địa chỉ gần hơn!",
+            String distMsg = String.format("Quán '%s' cách bạn %.1f km. Hệ thống chỉ hỗ trợ đặt quán trong phạm vi 10 km!",
                     restaurant.getRestaurantName(), distance);
             throw new AppException(ErrorCode.DISTANCE_TOO_FAR, distMsg);
         }
