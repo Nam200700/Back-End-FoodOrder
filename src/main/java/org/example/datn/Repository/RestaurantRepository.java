@@ -15,12 +15,10 @@ public interface RestaurantRepository extends BaseRepository<Restaurant, Long> {
 
     Page<Restaurant> findByStatusTrue(Pageable pageable);
 
-    /** Quán đang mở, lọc theo từ khoá tên/địa chỉ (server-side) — cho tìm kiếm trang Khám phá. */
     @Query("""
             SELECT r FROM Restaurant r
             WHERE r.status = true
-              AND (LOWER(r.restaurantName) LIKE LOWER(CONCAT('%', :kw, '%'))
-                   OR LOWER(r.address) LIKE LOWER(CONCAT('%', :kw, '%')))
+              AND (LOWER(r.restaurantName) LIKE LOWER(CONCAT('%', :kw, '%')))
             """)
     Page<Restaurant> searchActive(@Param("kw") String keyword, Pageable pageable);
 
