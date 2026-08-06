@@ -24,6 +24,8 @@ public interface CartMapper {
     @Mapping(target = "restaurantName", source = "restaurant.restaurantName")
     @Mapping(target = "latitude",       source = "restaurant.latitude")
     @Mapping(target = "longitude",      source = "restaurant.longitude")
+    @Mapping(target = "opensAt",        source = "restaurant.opensAt")
+    @Mapping(target = "closesAt",       source = "restaurant.closesAt")
     @Mapping(target = "isOpen",          expression = "java(isRestaurantOpen(cart.getRestaurant()))")
     @Mapping(target = "subtotal",       ignore = true)
     CartResponse toResponse(Cart cart);
@@ -46,6 +48,8 @@ public interface CartMapper {
                 .subtotal(BigDecimal.ZERO)
                 .latitude(restaurant.getLatitude())
                 .longitude(restaurant.getLongitude())
+                .closesAt(restaurant.getClosesAt())
+                .opensAt(restaurant.getOpensAt())
                 .isOpen(isRestaurantOpen(restaurant))
                 .build();
     }
