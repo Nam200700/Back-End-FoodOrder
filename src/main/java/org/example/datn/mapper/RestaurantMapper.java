@@ -8,6 +8,8 @@ import org.example.datn.Repository.ReviewRepository;
 import org.example.datn.Repository.OrderRepository;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -55,6 +57,7 @@ public class RestaurantMapper {
                 .orderCount((int) ordersCount)
                 .opensAt(r.getOpensAt())
                 .closesAt(r.getClosesAt())
+                .isOpen(isRestaurantOpen(r))
                 .build();
     }
 
@@ -63,5 +66,22 @@ public class RestaurantMapper {
             return Collections.emptyList();
         }
         return list.stream().map(this::toResponse).collect(Collectors.toList());
+    }
+
+    private boolean isRestaurantOpen(Restaurant restaurant) {
+        if (restaurant == null || restaurant.getOpensAt() == null || restaurant.getClosesAt() == null) {
+            return true;
+        }
+        LocalTime now = LocalTime.now(ZoneId.of("Asia/Ho_Chi_Minh"));
+        LocalTime opensAt = restaurant.getOpensAt();
+        LocalTime closesAt = restaurant.getClosesAt();
+
+        if (opensAt.isBefore(closesAt)) {
+            // Trường hợp bình thường trong ngày (VD: 08:00 - 22:00)
+            return !now.isBefore(opensAt) && !now.isAfter(closesAt);
+        } else {
+            // Trường hợp bán qua đêm (VD: 22:00 - 04:00 sáng hôm sau)
+            return !now.isBefore(opensAt) || !now.isAfter(closesAt);
+        }
     }
 }
