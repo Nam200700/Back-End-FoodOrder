@@ -26,6 +26,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -654,11 +656,22 @@ public class OrderService {
         deliveryService.completeDelivery(order);
         transactionService.recordOrderTransactions(order);
 
-        notificationService.notifyUser(order.getCustomer().getUserId(),
-                NotificationType.ORDER_COMPLETED, order.getOrderId());
-        notificationService.notifyUser(order.getRestaurant().getOwner().getUserId(),
-                NotificationType.ORDER_COMPLETED, order.getOrderId());
-        webSocketService.broadcastOrderStatus(order);
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    notificationService.notifyUser(order.getCustomer().getUserId(),
+                            NotificationType.ORDER_COMPLETED, order.getOrderId());
+                    notificationService.notifyUser(order.getRestaurant().getOwner().getUserId(),
+                            NotificationType.ORDER_COMPLETED, order.getOrderId());
+
+                    webSocketService.broadcastOrderStatus(order);
+                } catch (Exception e) {
+                    log.error("Lỗi khi gửi thông báo/websocket sau khi commit đơn hàng hoàn thành ID: {}", order.getOrderId(), e);
+                }
+            }
+        });
+
         return enrichOrderResponse(orderMapper.toResponse(order));
     }
 
