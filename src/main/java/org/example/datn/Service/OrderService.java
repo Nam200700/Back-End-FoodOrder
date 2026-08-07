@@ -470,16 +470,11 @@ public class OrderService {
 
     // ─── Merchant ────────────────────────────────────────────
     @Transactional(readOnly = true)
-    public Page<OrderResponse> getMerchantOrders(Long merchantId, Long restaurantId, OrderStatus status, Pageable pageable) {
+    public Page<OrderResponse> getMerchantOrders(Long merchantId, Long restaurantId, OrderStatus status, String keyword, Pageable pageable) {
         Restaurant restaurant = restaurantRepository.findByIdOrThrow(restaurantId, ErrorCode.RESTAURANT_NOT_FOUND);
         ownershipGuard.checkRestaurantOwner(restaurant, merchantId);
-        Page<Order> page;
-        if (status == null) {
-            page = orderRepository.findByRestaurantRestaurantIdOrderByCreatedAtDesc(restaurantId, pageable);
-        } else {
-            page = orderRepository.findByRestaurantRestaurantIdAndOrderStatusOrderByCreatedAtDesc(restaurantId, status, pageable);
-        }
-        return page.map(orderMapper::toResponse).map(this::enrichOrderResponse);
+        Page<Order> orderPage = orderRepository.searchMerchantOrders(restaurantId, status, keyword, pageable);
+        return orderPage.map(orderMapper::toResponse).map(this::enrichOrderResponse);
     }
 
     @Transactional(readOnly = true)
