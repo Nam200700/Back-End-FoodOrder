@@ -76,7 +76,7 @@ public class OrderService {
 
     @Scheduled(fixedRate = 30000)
     public void autoCancelExpiredPendingOrders() {
-        LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(2);
+        LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(5);
 
         // 1. Tìm các đơn PENDING tạo trước (quá 5 phút)
         List<Order> expiredOrders = orderRepository.findByOrderStatusAndCreatedAtBefore(OrderStatus.PENDING, cutoffTime);
@@ -113,9 +113,7 @@ public class OrderService {
 
         // 2. Phát Voucher đền bù cho khách hàng
         if (compensationVoucher != null && customer != null) {
-            LocalDateTime expiredAt = (compensationVoucher.getEndDate() != null)
-                    ? compensationVoucher.getEndDate()
-                    : LocalDateTime.now().plusDays(30);
+            LocalDateTime expiredAt = LocalDateTime.now().plusDays(30);
 
             UserVoucher userVoucher = UserVoucher.builder()
                     .user(customer)
