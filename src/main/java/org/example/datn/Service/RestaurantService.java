@@ -72,6 +72,9 @@ public class RestaurantService {
         restaurant.setLongitude(req.getLongitude());
         restaurant.setPhone(req.getPhone());
         restaurant.setDescription(req.getDescription());
+        restaurant.setImageUrl(req.getImageUrl());
+        restaurant.setClosesAt(req.getClosesAt());
+        restaurant.setOpensAt(req.getOpensAt());
         if (req.getImageUrl() != null && !req.getImageUrl().isBlank()) {
             String oldImageUrl = restaurant.getImageUrl();
             String newImageUrl = req.getImageUrl().trim();

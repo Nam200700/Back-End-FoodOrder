@@ -74,14 +74,9 @@ public class OrderService {
             DELIVERING, Set.of(COMPLETED)
     );
 
-    // ─── Scheduled Task ──────────────────────────────────────
-    /**
-     * Tự động quét và hủy đơn PENDING quá 5 phút chưa xác nhận,
-     * đồng thời tặng Voucher đền bù (ORDER_CANCELLED) cho khách hàng.
-     */
     @Scheduled(fixedRate = 30000)
     public void autoCancelExpiredPendingOrders() {
-        LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(2);
+        LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(5);
 
         // 1. Tìm các đơn PENDING tạo trước (quá 5 phút)
         List<Order> expiredOrders = orderRepository.findByOrderStatusAndCreatedAtBefore(OrderStatus.PENDING, cutoffTime);
@@ -118,9 +113,7 @@ public class OrderService {
 
         // 2. Phát Voucher đền bù cho khách hàng
         if (compensationVoucher != null && customer != null) {
-            LocalDateTime expiredAt = (compensationVoucher.getEndDate() != null)
-                    ? compensationVoucher.getEndDate()
-                    : LocalDateTime.now().plusDays(30);
+            LocalDateTime expiredAt = LocalDateTime.now().plusDays(30);
 
             UserVoucher userVoucher = UserVoucher.builder()
                     .user(customer)
@@ -214,7 +207,6 @@ public class OrderService {
             }
         }
 
-        // 2. Thực hiện lưu hàng loạt (Batch Save) để tối ưu hiệu năng Database
         List<Order> savedOrders = orderRepository.saveAll(ordersToSave);
 
         // Lưu các thay đổi của Voucher
@@ -252,9 +244,37 @@ public class OrderService {
     }
 
     private Order buildOrderEntity(User customer, Cart cart, CreateOrderRequest req, UserVoucher userVoucher) {
+        Restaurant restaurant = cart.getRestaurant();
+
+        // =========================================================================
+        // 1. KIỂM TRA KHUNG GIỜ HOẠT ĐỘNG CỦA QUÁN (opensAt - closesAt)
+        // =========================================================================
+        if (restaurant.getOpensAt() != null && restaurant.getClosesAt() != null) {
+            java.time.LocalTime now = java.time.LocalTime.now();
+            java.time.LocalTime opensAt = restaurant.getOpensAt();
+            java.time.LocalTime closesAt = restaurant.getClosesAt();
+
+            boolean isOpen;
+            if (opensAt.isBefore(closesAt)) {
+                // Giờ mở cửa bình thường trong ngày (VD: 07:00 -> 22:00)
+                isOpen = !now.isBefore(opensAt) && !now.isAfter(closesAt);
+            } else {
+                // Giờ mở cửa qua đêm (VD: 18:00 -> 02:00 sáng hôm sau)
+                isOpen = !now.isBefore(opensAt) || !now.isAfter(closesAt);
+            }
+
+            if (!isOpen) {
+                String timeMsg = String.format("Quán '%s' hiện đã đóng cửa (Giờ mở cửa: %s - %s). Vui lòng quay lại sau!",
+                        restaurant.getRestaurantName(),
+                        opensAt.toString(),
+                        closesAt.toString());
+                throw new AppException(ErrorCode.RESTAURANT_CLOSED, timeMsg);
+            }
+        }
+
         Order order = Order.builder()
                 .customer(customer)
-                .restaurant(cart.getRestaurant())
+                .restaurant(restaurant)
                 .deliveryAddress(req.getDeliveryAddress())
                 .deliveryLat(req.getDeliveryLat())
                 .deliveryLng(req.getDeliveryLng())
@@ -287,11 +307,23 @@ public class OrderService {
 
         order.getItems().addAll(items);
 
-        // Tính phí ship
+        if (restaurant.getLatitude() == null || restaurant.getLongitude() == null) {
+            throw new AppException(ErrorCode.RESTAURANT_NOT_FOUND, "Quán chưa cập nhật tọa độ vị trí.");
+        }
+        if (req.getDeliveryLat() == null || req.getDeliveryLng() == null) {
+            throw new AppException(ErrorCode.ADDRESS_NOT_FOUND, "Vui lòng chọn địa chỉ giao hàng hợp lệ.");
+        }
+
         double distance = shippingService.getDistanceKm(
-                cart.getRestaurant().getLatitude().doubleValue(), cart.getRestaurant().getLongitude().doubleValue(),
+                restaurant.getLatitude().doubleValue(), restaurant.getLongitude().doubleValue(),
                 req.getDeliveryLat().doubleValue(), req.getDeliveryLng().doubleValue()
         );
+
+        if (distance > 10.0) {
+            String distMsg = String.format("Quán '%s' cách bạn %.1f km. Hệ thống chỉ hỗ trợ đặt quán trong phạm vi 10 km!",
+                    restaurant.getRestaurantName(), distance);
+            throw new AppException(ErrorCode.DISTANCE_TOO_FAR, distMsg);
+        }
 
         long shippingFee = ShippingFeeCalculator.calculate(distance);
         BigDecimal shippingFeeBd = BigDecimal.valueOf(shippingFee);
@@ -619,11 +651,22 @@ public class OrderService {
         deliveryService.completeDelivery(order);
         transactionService.recordOrderTransactions(order);
 
-        notificationService.notifyUser(order.getCustomer().getUserId(),
-                NotificationType.ORDER_COMPLETED, order.getOrderId());
-        notificationService.notifyUser(order.getRestaurant().getOwner().getUserId(),
-                NotificationType.ORDER_COMPLETED, order.getOrderId());
-        webSocketService.broadcastOrderStatus(order);
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    notificationService.notifyUser(order.getCustomer().getUserId(),
+                            NotificationType.ORDER_COMPLETED, order.getOrderId());
+                    notificationService.notifyUser(order.getRestaurant().getOwner().getUserId(),
+                            NotificationType.ORDER_COMPLETED, order.getOrderId());
+
+                    webSocketService.broadcastOrderStatus(order);
+                } catch (Exception e) {
+                    log.error("Lỗi khi gửi thông báo/websocket sau khi commit đơn hàng hoàn thành ID: {}", order.getOrderId(), e);
+                }
+            }
+        });
+
         return enrichOrderResponse(orderMapper.toResponse(order));
     }
 
