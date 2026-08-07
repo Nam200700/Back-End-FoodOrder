@@ -16,10 +16,10 @@ public interface RestaurantRepository extends BaseRepository<Restaurant, Long> {
     Page<Restaurant> findByStatusTrue(Pageable pageable);
 
     @Query("""
-            SELECT r FROM Restaurant r
-            WHERE r.status = true
-              AND (LOWER(r.restaurantName) LIKE LOWER(CONCAT('%', :kw, '%')))
-            """)
+        SELECT r FROM Restaurant r
+        WHERE r.status = true
+        AND (LOWER(r.restaurantName) LIKE LOWER(CONCAT('%', :kw, '%')))
+        """)
     Page<Restaurant> searchActive(@Param("kw") String keyword, Pageable pageable);
 
     List<Restaurant> findByOwnerUserId(Long ownerId);
