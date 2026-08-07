@@ -28,9 +28,10 @@ public class MerchantOrderController {
             @AuthenticationPrincipal CustomUserDetails user,
             @RequestParam Long restaurantId,
             @RequestParam(required = false) OrderStatus status,
+            @RequestParam(required = false) String keyword,
             Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(
-                orderService.getMerchantOrders(user.getUserId(), restaurantId, status, pageable))));
+                orderService.getMerchantOrders(user.getUserId(), restaurantId, status, keyword, pageable))));
     }
 
     @GetMapping("/{id}")
