@@ -15,6 +15,8 @@ public enum ErrorCode {
     TOKEN_INVALID(401, "Token không hợp lệ"),
     BAD_CREDENTIALS(401, "Sai số điện thoại hoặc mật khẩu"),
     EMAIL_NOT_VERIFIED(403, "Tài khoản chưa xác thực OTP/email"),
+    QR_SESSION_INVALID(400, "Mã QR không hợp lệ hoặc đã được sử dụng"),
+    QR_SESSION_EXPIRED(400, "Mã QR đã hết hạn, vui lòng tạo mã mới"),
 
     // User
     USER_NOT_FOUND(404, "Không tìm thấy người dùng"),
