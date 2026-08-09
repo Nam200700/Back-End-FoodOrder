@@ -269,12 +269,26 @@ public class AuthService {
         return new RefreshResponse(jwtTokenProvider.generateAccessToken(user));
     }
 
-    private AuthResponse buildAuthResponse(User user) {
+    public AuthResponse buildAuthResponse(User user) {
         return AuthResponse.builder()
                 .token(jwtTokenProvider.generateAccessToken(user))
                 .refreshToken(jwtTokenProvider.generateRefreshToken(user))
                 .user(userMapper.toResponse(user))
                 .build();
+    }
+
+    /**
+     * Cấp token cho userId đã được xác nhận (dùng cho luồng đăng nhập QR sau khi
+     * người dùng đã duyệt trên điện thoại). Kiểm tra khoá tài khoản như các luồng khác.
+     */
+    @Transactional(readOnly = true)
+    public AuthResponse issueTokensForUserId(Long userId) {
+        User user = userRepository.findByIdOrThrow(userId, ErrorCode.USER_NOT_FOUND);
+        if (user.getLockedAt() != null) {
+            String reason = user.getLockedReason() != null ? user.getLockedReason() : "Không có lý do cụ thể";
+            throw new AppException(ErrorCode.FORBIDDEN, "Tài khoản của bạn đã bị khóa. Lý do: " + reason);
+        }
+        return buildAuthResponse(user);
     }
 
     /**

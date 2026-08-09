@@ -55,6 +55,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest req) {
-        return !req.getServletPath().startsWith("/api/v1/auth/");
+        String path = req.getServletPath();
+        // Chỉ chặn brute-force ở nhóm nhạy cảm (login/OTP/refresh...).
+        // Bỏ qua nhóm đăng nhập QR: desktop phải poll /qr/status liên tục nên sẽ
+        // luôn vượt ngưỡng; các endpoint này đã tự bảo vệ bằng pollSecret + phiên
+        // dùng-một-lần, hết hạn 2', nên không cần rate-limit.
+        return !path.startsWith("/api/v1/auth/") || path.startsWith("/api/v1/auth/qr/");
     }
 }
