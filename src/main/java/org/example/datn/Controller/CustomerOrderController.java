@@ -39,9 +39,10 @@ public class CustomerOrderController {
     public ResponseEntity<ApiResponse<PageResponse<OrderResponse>>> myOrders(
             @AuthenticationPrincipal CustomUserDetails user,
             @RequestParam(required = false) OrderStatus status,
+            @RequestParam(required = false) String keyword,
             Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.ok(
-                PageResponse.from(orderService.getCustomerOrders(user.getUserId(), status, pageable))));
+                PageResponse.from(orderService.getCustomerOrders(user.getUserId(), status, keyword, pageable))));
     }
 
     @GetMapping("/{id}")

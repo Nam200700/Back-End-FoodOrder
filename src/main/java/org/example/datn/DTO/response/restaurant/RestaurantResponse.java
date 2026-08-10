@@ -26,5 +26,6 @@ public class RestaurantResponse {
     private Integer orderCount;
     private LocalTime opensAt;
     private LocalTime closesAt;
+    private Boolean isOpen;
 }
 

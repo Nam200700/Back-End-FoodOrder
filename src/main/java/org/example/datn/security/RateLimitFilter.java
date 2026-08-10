@@ -56,6 +56,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest req) {
         String path = req.getServletPath();
-        return !path.startsWith("/api/v1/auth/") || path.startsWith("/api/v1/auth/chatbot");
+        // Chỉ chặn brute-force ở nhóm nhạy cảm (login/OTP/refresh...).
+        // Bỏ qua nhóm đăng nhập QR và Chatbot để tránh bị rate-limit.
+        return !path.startsWith("/api/v1/auth/") 
+                || path.startsWith("/api/v1/auth/qr/") 
+                || path.startsWith("/api/v1/auth/chatbot");
     }
 }

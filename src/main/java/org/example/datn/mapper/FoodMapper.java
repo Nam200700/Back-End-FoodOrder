@@ -15,6 +15,7 @@ public interface FoodMapper {
 
     @Mapping(source = "foodId", target = "id")
     @Mapping(source = "restaurant.restaurantId", target = "restaurantId")
+    @Mapping(source = "restaurant.restaurantName", target = "restaurantName")
     @Mapping(source = "category.categoryId", target = "categoryId")
     FoodResponse toResponse(Food food);
 

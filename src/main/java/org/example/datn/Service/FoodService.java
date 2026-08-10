@@ -15,10 +15,14 @@ import org.example.datn.Repository.FoodRepository;
 import org.example.datn.Repository.RestaurantRepository;
 import org.example.datn.Repository.OrderRepository;
 import org.example.datn.security.OwnershipGuard;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -32,21 +36,45 @@ public class FoodService {
     private final OwnershipGuard ownershipGuard;
     private final ImageUploadService imageUploadService;
 
+    /** Công khai: tìm món theo tên (giới hạn số kết quả) — trang Khám phá tìm kiếm server-side, không nạp toàn bộ menu. */
+    @Transactional(readOnly = true)
+    public List<FoodResponse> searchFoods(String keyword, int limit) {
+        if (keyword == null || keyword.isBlank()) return List.of();
+        List<Food> foods = foodRepository.searchActiveByName(keyword.trim(), PageRequest.of(0, Math.max(1, Math.min(limit, 50))));
+        return foodMapper.toResponseList(foods);
+    }
+
+    /** Công khai: TOP món bán chạy thật (số lượt đặt thật) — cho mục "Món ăn xu hướng". Một truy vấn gộp + 1 lần nạp món. */
+    @Transactional(readOnly = true)
+    public List<FoodResponse> popularFoods(int limit) {
+        List<Object[]> rows = foodRepository.findPopularFoodIds(PageRequest.of(0, Math.max(1, Math.min(limit, 20))));
+        if (rows.isEmpty()) return List.of();
+
+        List<Long> ids = new ArrayList<>();
+        for (Object[] row : rows) ids.add(((Number) row[0]).longValue());
+
+        java.util.Map<Long, Food> byId = new java.util.HashMap<>();
+        for (Food f : foodRepository.findAllById(ids)) byId.put(f.getFoodId(), f);
+
+        List<FoodResponse> out = new ArrayList<>();
+        for (Object[] row : rows) {
+            Long id = ((Number) row[0]).longValue();
+            Food food = byId.get(id);
+            if (food == null) continue; // giữ đúng thứ tự bán chạy giảm dần
+            FoodResponse res = foodMapper.toResponse(food);
+            res.setOrderCount(((Number) row[1]).intValue());
+            out.add(res);
+        }
+        return out;
+    }
+
     @Transactional(readOnly = true)
     public List<FoodResponse> getMenu(Long restaurantId) {
         if (!restaurantRepository.existsById(restaurantId)) {
             throw new AppException(ErrorCode.RESTAURANT_NOT_FOUND);
         }
         List<Food> foods = foodRepository.findActiveByRestaurantId(restaurantId);
-        List<FoodResponse> list = foodMapper.toResponseList(foods);
-        for (int i = 0; i < foods.size(); i++) {
-            Food foodEntity = foods.get(i);
-            FoodResponse res = list.get(i);
-            res.setIsAvailable(foodEntity.getIsAvailable());
-            Integer count = orderRepository.countCompletedQuantityByFoodId(res.getId());
-            res.setOrderCount(count != null ? count : 0);
-        }
-        return list;
+        return withSoldCount(foods);
     }
 
     @Transactional(readOnly = true)
@@ -55,13 +83,27 @@ public class FoodService {
         ownershipGuard.checkRestaurantOwner(restaurant, ownerId);
 
         List<Food> foods = foodRepository.findByRestaurantIdForMerchant(restaurantId);
+        return withSoldCount(foods);
+    }
+
+    /**
+     * Map danh sách món + gắn số "đã bán" (SUM quantity đơn hoàn tất) bằng 1 câu gộp
+     * theo danh sách foodId thay vì 1 query MỖI món → khử N+1 khi dựng menu.
+     */
+    private List<FoodResponse> withSoldCount(List<Food> foods) {
         List<FoodResponse> list = foodMapper.toResponseList(foods);
+        if (foods.isEmpty()) return list;
+
+        List<Long> foodIds = foods.stream().map(Food::getFoodId).toList();
+        Map<Long, Integer> soldMap = new HashMap<>();
+        for (Object[] row : orderRepository.sumCompletedQuantityByFoodIds(foodIds)) {
+            soldMap.put((Long) row[0], ((Number) row[1]).intValue());
+        }
+
         for (int i = 0; i < foods.size(); i++) {
-            Food foodEntity = foods.get(i);
             FoodResponse res = list.get(i);
-            res.setIsAvailable(foodEntity.getIsAvailable());
-            Integer count = orderRepository.countCompletedQuantityByFoodId(res.getId());
-            res.setOrderCount(count != null ? count : 0);
+            res.setIsAvailable(foods.get(i).getIsAvailable());
+            res.setOrderCount(soldMap.getOrDefault(res.getId(), 0));
         }
         return list;
     }

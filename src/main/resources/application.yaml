@@ -7,6 +7,9 @@ spring:
     open-in-view: false
     properties:
       hibernate.format_sql: true
+      # Gom các lazy-load (collection & *-to-one) thành câu IN(...) theo lô thay vì N
+      # câu lẻ → khử N+1 khi render danh sách (đơn hàng, items, shipper...). Toàn app.
+      hibernate.default_batch_fetch_size: 100
       # Pin the dialect so `validate` matches the Flyway DDL (generated with the
       # same dialect). Avoids MySQL version-detection drift.
       hibernate.dialect: org.hibernate.dialect.MySQLDialect

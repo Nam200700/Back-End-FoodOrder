@@ -94,13 +94,23 @@ public class DatabaseCleanupRunner implements CommandLineRunner {
                 log.info("No old unique constraint on column 'customer_id' found in carts table.");
             }
 
-            // 8. Ensure 'otps' table 'phone' column can store email (VARCHAR(100))
+            // 8. Ensure legacy 'otps.phone' column can store email (VARCHAR(100)).
+            //    Schema hiện tại (Flyway V1) dùng cột 'recipient' — KHÔNG có 'phone'.
+            //    Chỉ ALTER khi cột 'phone' thực sự tồn tại (DB cũ), tránh spam lỗi vô hại.
             try {
-                log.info("Ensuring otps.phone column is VARCHAR(100) for email OTP compatibility...");
-                jdbcTemplate.execute("ALTER TABLE otps MODIFY COLUMN phone VARCHAR(100) NOT NULL");
-                log.info("Successfully checked/altered otps.phone column to VARCHAR(100).");
+                Integer hasPhoneCol = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM information_schema.COLUMNS " +
+                                "WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'otps' AND COLUMN_NAME = 'phone'",
+                        Integer.class, schemaName);
+                if (hasPhoneCol != null && hasPhoneCol > 0) {
+                    log.info("Ensuring legacy otps.phone column is VARCHAR(100) for email OTP compatibility...");
+                    jdbcTemplate.execute("ALTER TABLE otps MODIFY COLUMN phone VARCHAR(100) NOT NULL");
+                    log.info("Successfully altered otps.phone column to VARCHAR(100).");
+                } else {
+                    log.info("otps.phone column not present (schema uses 'recipient') — skip.");
+                }
             } catch (Exception e) {
-                log.error("Failed to alter otps.phone column: {}", e.getMessage());
+                log.warn("Skipped otps.phone check: {}", e.getMessage());
             }
 
         } catch (Exception e) {

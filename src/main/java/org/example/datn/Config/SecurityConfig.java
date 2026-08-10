@@ -61,7 +61,10 @@ public class SecurityConfig {
                                 "/api/v1/restaurants",
                                 "/api/v1/restaurants/*",
                                 "/api/v1/restaurants/*/foods",
-                                "/api/v1/restaurants/*/reviews"
+                                "/api/v1/restaurants/*/reviews",
+                                "/api/v1/restaurants/*/reviews/summary",
+                                "/api/v1/foods/search",
+                                "/api/v1/foods/popular"
                         ).permitAll()
                         // Role-scoped areas
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")

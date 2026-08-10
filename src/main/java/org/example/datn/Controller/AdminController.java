@@ -2,8 +2,12 @@ package org.example.datn.Controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.example.datn.DTO.response.stats.OrderStatsResponse;
+import org.example.datn.DTO.response.stats.UserStatsResponse;
+import org.example.datn.Service.*;
 import org.example.datn.common.ApiResponse;
 import org.example.datn.common.PageResponse;
+import org.example.datn.domain.enums.OrderStatus;
 import org.example.datn.domain.enums.ReportStatus;
 import org.example.datn.domain.enums.RegisterStatus;
 import org.example.datn.DTO.request.report.ResolveReportRequest;
@@ -13,13 +17,16 @@ import org.example.datn.DTO.response.restaurant.RestaurantRegisterResponse;
 import org.example.datn.DTO.response.auth.ShipperRegisterResponse;
 import org.example.datn.DTO.response.report.ReportResponse;
 import org.example.datn.DTO.response.stats.StatsOverviewResponse;
+import org.example.datn.DTO.response.stats.AdminInsightsResponse;
+import org.example.datn.DTO.response.stats.AdminReportResponse;
+import org.example.datn.DTO.response.stats.VoucherAnalyticsResponse;
 import org.example.datn.security.CustomUserDetails;
-import org.example.datn.Service.AdminService;
-import org.example.datn.Service.ReportService;
-import org.example.datn.Service.StatisticsService;
-import org.example.datn.Service.OrderService;
 import org.example.datn.DTO.response.order.OrderResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -35,20 +42,63 @@ public class AdminController {
     private final ReportService reportService;
     private final StatisticsService statisticsService;
     private final OrderService orderService;
+    private final UserService userService;
 
     @GetMapping("/stats/overview")
     public ResponseEntity<ApiResponse<StatsOverviewResponse>> overview() {
         return ResponseEntity.ok(ApiResponse.ok(statisticsService.adminOverview()));
     }
 
+    /** Tổng quan nghiệp vụ toàn hệ thống (xu hướng, tăng trưởng, GTV theo ngày, giờ cao điểm, toàn vẹn thanh toán). */
+    @GetMapping("/stats/insights")
+    public ResponseEntity<ApiResponse<AdminInsightsResponse>> insights() {
+        return ResponseEntity.ok(ApiResponse.ok(statisticsService.adminInsights()));
+    }
+
+    /** Báo cáo phân tích doanh thu hệ thống theo kỳ (gộp ở server) cho trang Thống kê admin. */
+    @GetMapping("/stats/report")
+    public ResponseEntity<ApiResponse<AdminReportResponse>> report(
+            @RequestParam(required = false, defaultValue = "all") String range,
+            @RequestParam(required = false) Integer dow,
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) Integer year) {
+        return ResponseEntity.ok(ApiResponse.ok(statisticsService.adminReport(range, dow, month, year)));
+    }
+
+    /** Phân tích voucher theo kỳ (lượt dùng, chi phí giảm giá, top voucher) cho dashboard admin. */
+    @GetMapping("/stats/vouchers")
+    public ResponseEntity<ApiResponse<VoucherAnalyticsResponse>> voucherAnalytics(
+            @RequestParam(required = false, defaultValue = "30days") String range) {
+        return ResponseEntity.ok(ApiResponse.ok(statisticsService.voucherAnalytics(range)));
+    }
+
     @GetMapping("/orders")
-    public ResponseEntity<ApiResponse<PageResponse<OrderResponse>>> orders(Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(orderService.getAllOrders(pageable))));
+    public ResponseEntity<ApiResponse<PageResponse<OrderResponse>>> getAdminOrders(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) OrderStatus status,
+            @RequestParam(required = false) String statusGroup,
+            Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.ok(adminService.listOrders(keyword, status, statusGroup, pageable)));
+    }
+
+    @GetMapping("/orders/stats")
+    public ResponseEntity<ApiResponse<OrderStatsResponse>> getOrderStats() {
+        return ResponseEntity.ok(ApiResponse.ok(adminService.getOrderStats()));
     }
 
     @GetMapping("/users")
-    public ResponseEntity<ApiResponse<PageResponse<UserResponse>>> users(Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.ok(adminService.listUsers(pageable)));
+    public ResponseEntity<ApiResponse<PageResponse<UserResponse>>> users(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String role,
+            @RequestParam(required = false) Boolean active,
+            @PageableDefault(page = 0, size = 10, sort = "userId", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok(adminService.listUsers(keyword, role, active, pageable)));
+    }
+
+    @GetMapping("/users/stats")
+    public ResponseEntity<ApiResponse<UserStatsResponse>> getUserStats() {
+        return ResponseEntity.ok(ApiResponse.ok(adminService.getUserStats()));
     }
 
     @PatchMapping("/users/{id}/status")

@@ -13,11 +13,11 @@ import java.util.Optional;
 @Repository
 public interface OtpRepository extends BaseRepository<Otp, Long> {
 
-    Optional<Otp> findFirstByPhoneAndPurposeOrderByCreatedAtDesc(String phone, OtpPurpose purpose);
+    Optional<Otp> findFirstByRecipientAndPurposeOrderByCreatedAtDesc(String recipient, OtpPurpose purpose);
 
-    Optional<Otp> findFirstByPhoneAndPurposeAndIsUsedFalseOrderByCreatedAtDesc(String phone, OtpPurpose purpose);
+    Optional<Otp> findFirstByRecipientAndPurposeAndIsUsedFalseOrderByCreatedAtDesc(String recipient, OtpPurpose purpose);
 
     @Modifying
-    @Query("UPDATE Otp o SET o.isUsed = true WHERE o.phone = :phone AND o.purpose = :purpose AND o.isUsed = false")
-    void invalidateOldOtps(@Param("phone") String phone, @Param("purpose") OtpPurpose purpose);
+    @Query("UPDATE Otp o SET o.isUsed = true WHERE o.recipient = :recipient AND o.purpose = :purpose AND o.isUsed = false")
+    void invalidateOldOtps(@Param("recipient") String recipient, @Param("purpose") OtpPurpose purpose);
 }

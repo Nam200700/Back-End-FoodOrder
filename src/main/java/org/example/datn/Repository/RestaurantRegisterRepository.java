@@ -14,4 +14,7 @@ public interface RestaurantRegisterRepository extends BaseRepository<RestaurantR
 
     // Đếm hồ sơ quán đang chờ duyệt cho badge/alert dashboard admin
     long countByStatus(RegisterStatus status);
+
+    // Chống trùng số điện thoại quán ngay từ khâu đăng ký đối tác
+    boolean existsByPhone(String phone);
 }

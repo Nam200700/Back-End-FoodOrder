@@ -26,9 +26,11 @@ public class RestaurantController {
     private final CategoryService categoryService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<PageResponse<RestaurantResponse>>> list(Pageable pageable) {
+    public ResponseEntity<ApiResponse<PageResponse<RestaurantResponse>>> list(
+            @RequestParam(required = false) String keyword,
+            Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.ok(
-                PageResponse.from(restaurantService.listActive(pageable))));
+                PageResponse.from(restaurantService.listActive(keyword, pageable))));
     }
 
     @GetMapping("/{id}")

@@ -130,6 +130,7 @@ CREATE TABLE orders (
                         shipper_id          BIGINT,
                         cancelled_by        BIGINT                  NULL,           -- [V2] ai hủy đơn
                         address_id          BIGINT                  NULL,           -- [V2] địa chỉ từ customer_addresses, NULL nếu nhập mới
+                        user_voucher_id     BIGINT                  NULL,           -- voucher người dùng áp cho đơn (khai báo tại đây để index/FK bên dưới hợp lệ)
                         updated_at          DATETIME(6),
                         cancel_reason       VARCHAR(300),
                         delivery_address    VARCHAR(255) NOT NULL,
@@ -285,7 +286,7 @@ CREATE TABLE otps (
                       otp_id          BIGINT NOT NULL AUTO_INCREMENT,
                       updated_at      DATETIME(6),
                       code            VARCHAR(10) NOT NULL,
-                      phone           VARCHAR(15) NOT NULL,
+                      recipient       VARCHAR(100) NOT NULL,
                       purpose         ENUM('LOGIN','REGISTER','RESET_PASSWORD') NOT NULL,
                       PRIMARY KEY (otp_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -352,6 +353,43 @@ CREATE TABLE shippers (
                           PRIMARY KEY (shipper_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE vouchers (
+                          voucher_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                          code VARCHAR(50) NOT NULL UNIQUE,
+                          name VARCHAR(255) NOT NULL,
+                          discount_type ENUM('FIXED','PERCENT','FREESHIP') NOT NULL,
+                          discount_value DECIMAL(10,2) NOT NULL,
+--                           quantity INT NOT NULL,
+                          used_quantity INT NOT NULL DEFAULT 0,
+                          start_date DATETIME NOT NULL,
+                          end_date DATETIME NOT NULL,
+                          status ENUM('ACTIVE','INACTIVE', 'EXPIRED') NOT NULL DEFAULT 'ACTIVE',
+                          issue_type ENUM('NEW_USER', 'BIRTHDAY', 'EVENT', 'ORDER_CANCELLED') NOT NULL,
+                          created_at DATETIME,
+                          updated_at DATETIME
+);
+
+CREATE TABLE user_vouchers (
+                               user_voucher_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                               user_id BIGINT NOT NULL,
+                               voucher_id BIGINT NOT NULL,
+                               received_at DATETIME NOT NULL,
+                               expired_at DATETIME,
+                               used BOOLEAN NOT NULL DEFAULT FALSE,
+                               used_at DATETIME,
+                               created_at DATETIME,
+                               updated_at DATETIME,
+
+                               CONSTRAINT fk_uv_user
+                                   FOREIGN KEY(user_id) REFERENCES users(user_id),
+
+                               CONSTRAINT fk_uv_voucher
+                                   FOREIGN KEY(voucher_id) REFERENCES vouchers(voucher_id),
+
+                               CONSTRAINT uk_user_voucher
+                                   UNIQUE(user_id, voucher_id)
+);
+
 
 -- ─── Unique constraints ───────────────────────────────────────
 
@@ -381,7 +419,7 @@ CREATE INDEX idx_orders_customer                ON orders           (customer_id
 CREATE INDEX idx_orders_restaurant              ON orders           (restaurant_id);
 CREATE INDEX idx_orders_shipper                 ON orders           (shipper_id);
 CREATE INDEX idx_orders_status                  ON orders           (order_status);
-CREATE INDEX idx_otps_phone_purpose             ON otps             (phone, purpose);
+CREATE INDEX idx_otps_recipient_purpose         ON otps             (recipient, purpose);
 CREATE INDEX idx_reviews_restaurant             ON reviews          (restaurant_id);
 CREATE INDEX idx_reviews_shipper                ON reviews          (shipper_id);                            -- [V2] tổng hợp rating shipper
 CREATE INDEX idx_restaurant_registers_owner     ON restaurant_registers (owner_id);                         -- [V2] query đơn mới nhất theo owner
@@ -391,6 +429,7 @@ CREATE INDEX idx_transactions_order             ON transactions     (order_id);
 CREATE INDEX idx_carts_customer                 ON carts            (customer_id);                        -- [V2] tìm tất cả cart của 1 customer
 CREATE INDEX idx_customer_addresses_customer    ON customer_addresses (customer_id);                     -- [V2]
 CREATE INDEX idx_review_images_review           ON review_images    (review_id);                         -- [V2]
+CREATE INDEX idx_orders_user_voucher ON orders (user_voucher_id);
 
 
 -- ─── Foreign keys ─────────────────────────────────────────────
@@ -420,6 +459,7 @@ ALTER TABLE orders                  ADD CONSTRAINT fk_orders_restaurant         
 ALTER TABLE orders                  ADD CONSTRAINT fk_orders_shipper                FOREIGN KEY (shipper_id)        REFERENCES users            (user_id);
 ALTER TABLE orders                  ADD CONSTRAINT fk_orders_address                FOREIGN KEY (address_id)        REFERENCES customer_addresses (address_id);
 ALTER TABLE orders                  ADD CONSTRAINT fk_orders_cancelled_by           FOREIGN KEY (cancelled_by)      REFERENCES users            (user_id);  -- [V2]
+ALTER TABLE orders                  ADD CONSTRAINT fk_orders_user_voucher          FOREIGN KEY (user_voucher_id)   REFERENCES user_vouchers    (user_voucher_id);
 ALTER TABLE payments                ADD CONSTRAINT fk_payments_order                FOREIGN KEY (order_id)          REFERENCES orders           (order_id);
 ALTER TABLE payments                ADD CONSTRAINT fk_payments_confirmed_by         FOREIGN KEY (confirmed_by)      REFERENCES users            (user_id);
 ALTER TABLE transactions            ADD CONSTRAINT fk_transactions_payment          FOREIGN KEY (payment_id)        REFERENCES payments         (payment_id);
@@ -442,15 +482,7 @@ ALTER TABLE users                   ADD CONSTRAINT fk_users_deleted_by          
 
 
 -- ─── Auto cleanup conversations ──────────────────────────────
---  Xóa conversation không có tin nhắn mới trong 3 ngày.
---  Messages tự xóa theo nhờ ON DELETE CASCADE trên fk_messages_conversation.
---  Bật MySQL Event Scheduler: SET GLOBAL event_scheduler = ON;
-
-CREATE EVENT evt_cleanup_conversations
-ON SCHEDULE EVERY 1 DAY
-STARTS (CURRENT_DATE + INTERVAL 1 DAY + INTERVAL 2 HOUR)
-DO
-DELETE FROM conversations
-WHERE last_message_at < NOW() - INTERVAL 3 DAY
-   OR (last_message_at IS NULL AND created_at < NOW() - INTERVAL 3 DAY)
-    LIMIT 500;
+--  Xóa conversation không có tin nhắn mới trong 3 ngày; messages tự xóa theo nhờ
+--  ON DELETE CASCADE trên fk_messages_conversation.
+--  Trước dùng MySQL EVENT (cần quyền EVENT + event_scheduler=ON → dễ fail khi deploy
+--  trên host chia sẻ), nay chuyển sang Spring @Scheduled: ConversationCleanupScheduler.

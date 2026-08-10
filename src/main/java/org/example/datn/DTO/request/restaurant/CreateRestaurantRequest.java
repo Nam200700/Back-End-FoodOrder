@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalTime;
 
 @Data
 public class CreateRestaurantRequest {
@@ -17,4 +18,6 @@ public class CreateRestaurantRequest {
     private String phone;
     private String description;
     private String imageUrl;
+    private LocalTime opensAt;
+    private LocalTime closesAt;
 }

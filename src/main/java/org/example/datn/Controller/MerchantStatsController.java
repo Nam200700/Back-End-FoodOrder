@@ -3,6 +3,7 @@ package org.example.datn.Controller;
 import lombok.RequiredArgsConstructor;
 import org.example.datn.common.ApiResponse;
 import org.example.datn.DTO.response.stats.MerchantInsightsResponse;
+import org.example.datn.DTO.response.stats.MerchantReportResponse;
 import org.example.datn.DTO.response.stats.MerchantStatsResponse;
 import org.example.datn.security.CustomUserDetails;
 import org.example.datn.Service.StatisticsService;
@@ -37,5 +38,18 @@ public class MerchantStatsController {
             @RequestParam Long restaurantId) {
         return ResponseEntity.ok(ApiResponse.ok(
                 statisticsService.merchantInsights(user.getUserId(), restaurantId)));
+    }
+
+    /** Báo cáo tài chính đầy đủ theo kỳ (gộp ở server) cho trang Thống kê owner. */
+    @GetMapping("/report")
+    public ResponseEntity<ApiResponse<MerchantReportResponse>> report(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @RequestParam Long restaurantId,
+            @RequestParam(required = false, defaultValue = "all") String range,
+            @RequestParam(required = false) Integer dow,
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) Integer year) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                statisticsService.merchantReport(user.getUserId(), restaurantId, range, dow, month, year)));
     }
 }

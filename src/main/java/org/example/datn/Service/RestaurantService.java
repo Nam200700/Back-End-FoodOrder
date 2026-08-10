@@ -8,24 +8,78 @@ import org.example.datn.DTO.response.restaurant.RestaurantResponse;
 import org.example.datn.Exception.ErrorCode;
 import org.example.datn.mapper.RestaurantMapper;
 import org.example.datn.Repository.RestaurantRepository;
+import org.example.datn.Repository.ReviewRepository;
+import org.example.datn.Repository.OrderRepository;
 import org.example.datn.Repository.UserRepository;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class RestaurantService {
 
     private final RestaurantRepository restaurantRepository;
+    private final ReviewRepository reviewRepository;
+    private final OrderRepository orderRepository;
     private final UserRepository userRepository;
     private final RestaurantMapper restaurantMapper;
     private final ImageUploadService imageUploadService;
 
     @Transactional(readOnly = true)
     public Page<RestaurantResponse> listActive(Pageable pageable) {
-        return restaurantRepository.findByStatusTrue(pageable).map(restaurantMapper::toResponse);
+        return enrichPage(restaurantRepository.findByStatusTrue(pageable));
+    }
+
+    /** Danh sách quán đang mở có LỌC theo từ khoá (tên/địa chỉ) — dùng cho feed + tìm kiếm trang Khám phá. */
+    @Transactional(readOnly = true)
+    public Page<RestaurantResponse> listActive(String keyword, Pageable pageable) {
+        Page<Restaurant> page = (keyword == null || keyword.isBlank())
+                ? restaurantRepository.findByStatusTrue(pageable)
+                : restaurantRepository.searchActive(keyword.trim(), pageable);
+        return enrichPage(page);
+    }
+
+    /**
+     * Map cả TRANG quán với rating/số review/số đơn hoàn tất được gộp bằng 2 câu
+     * GROUP BY ... IN(ids) thay vì 3 query MỖI quán → khử N+1 (trang chủ, Khám phá).
+     */
+    private Page<RestaurantResponse> enrichPage(Page<Restaurant> page) {
+        List<Restaurant> list = page.getContent();
+        if (list.isEmpty()) {
+            return new PageImpl<>(List.of(), page.getPageable(), page.getTotalElements());
+        }
+
+        List<Long> ids = list.stream().map(Restaurant::getRestaurantId).toList();
+
+        Map<Long, Double> avgMap = new HashMap<>();
+        Map<Long, Long> reviewCountMap = new HashMap<>();
+        for (Object[] row : reviewRepository.aggregateRatingByRestaurantIds(ids)) {
+            Long rid = (Long) row[0];
+            avgMap.put(rid, row[1] != null ? ((Number) row[1]).doubleValue() : null);
+            reviewCountMap.put(rid, ((Number) row[2]).longValue());
+        }
+
+        Map<Long, Long> orderCountMap = new HashMap<>();
+        for (Object[] row : orderRepository.countCompletedByRestaurantIds(ids)) {
+            orderCountMap.put((Long) row[0], ((Number) row[1]).longValue());
+        }
+
+        List<RestaurantResponse> content = list.stream()
+                .map(r -> restaurantMapper.toResponse(
+                        r,
+                        avgMap.get(r.getRestaurantId()),
+                        reviewCountMap.getOrDefault(r.getRestaurantId(), 0L),
+                        orderCountMap.getOrDefault(r.getRestaurantId(), 0L)))
+                .toList();
+
+        return new PageImpl<>(content, page.getPageable(), page.getTotalElements());
     }
 
     @Transactional(readOnly = true)
@@ -63,6 +117,9 @@ public class RestaurantService {
         restaurant.setLongitude(req.getLongitude());
         restaurant.setPhone(req.getPhone());
         restaurant.setDescription(req.getDescription());
+        restaurant.setImageUrl(req.getImageUrl());
+        restaurant.setClosesAt(req.getClosesAt());
+        restaurant.setOpensAt(req.getOpensAt());
         if (req.getImageUrl() != null && !req.getImageUrl().isBlank()) {
             String oldImageUrl = restaurant.getImageUrl();
             String newImageUrl = req.getImageUrl().trim();

@@ -32,7 +32,7 @@ public class OtpService {
 
     @Transactional
     public void sendOtp(String phone, OtpPurpose purpose) {
-        otpRepository.findFirstByPhoneAndPurposeOrderByCreatedAtDesc(phone, purpose).ifPresent(latest -> {
+        otpRepository.findFirstByRecipientAndPurposeOrderByCreatedAtDesc(phone, purpose).ifPresent(latest -> {
             if (latest.getFailCount() >= maxFailAttempts && latest.getCreatedAt() != null) {
                 LocalDateTime lockUntil = latest.getCreatedAt().plusMinutes(lockoutMinutes);
                 if (LocalDateTime.now().isBefore(lockUntil)) {
@@ -46,7 +46,7 @@ public class OtpService {
 
         String code = generateCode();
         otpRepository.save(Otp.builder()
-                .phone(phone)
+                .recipient(phone)
                 .code(code)
                 .purpose(purpose)
                 .expiredAt(LocalDateTime.now().plusMinutes(ttlMinutes))
@@ -59,7 +59,7 @@ public class OtpService {
 
     @Transactional
     public boolean verifyOtp(String phone, String code, OtpPurpose purpose) {
-        Otp otp = otpRepository.findFirstByPhoneAndPurposeAndIsUsedFalseOrderByCreatedAtDesc(phone, purpose)
+        Otp otp = otpRepository.findFirstByRecipientAndPurposeAndIsUsedFalseOrderByCreatedAtDesc(phone, purpose)
                 .orElseThrow(() -> new AppException(ErrorCode.OTP_INVALID));
 
         if (otp.getFailCount() >= maxFailAttempts) {

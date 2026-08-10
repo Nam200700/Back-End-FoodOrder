@@ -15,6 +15,8 @@ public enum ErrorCode {
     TOKEN_INVALID(401, "Token không hợp lệ"),
     BAD_CREDENTIALS(401, "Sai số điện thoại hoặc mật khẩu"),
     EMAIL_NOT_VERIFIED(403, "Tài khoản chưa xác thực OTP/email"),
+    QR_SESSION_INVALID(400, "Mã QR không hợp lệ hoặc đã được sử dụng"),
+    QR_SESSION_EXPIRED(400, "Mã QR đã hết hạn, vui lòng tạo mã mới"),
 
     // User
     USER_NOT_FOUND(404, "Không tìm thấy người dùng"),
@@ -23,6 +25,7 @@ public enum ErrorCode {
     //Them phan thong bao cho CCCD và Bien so xe neu bi trung hoac da co
     ID_CARD_EXISTS(409, "Số CCCD/CMND đã được đăng ký"),
     LICENSE_PLATE_EXISTS(409, "Biển số xe đã được đăng ký"),
+    RESTAURANT_PHONE_EXISTS(409, "Số điện thoại quán đã được đăng ký"),
 
     // Restaurant / Food / Category
     RESTAURANT_NOT_FOUND(404, "Không tìm thấy quán ăn"),
@@ -63,6 +66,16 @@ public enum ErrorCode {
     SHIPPER_HAS_ACTIVE_DELIVERY(400, "Không thể offline khi đang có đơn hàng đang giao"),
 
     ADDRESS_NOT_FOUND(404, "Không tìm thấy địa chỉ"),
+
+    VOUCHER_NOT_FOUND(404, "Không tìm thấy voucher"),
+    VOUCHER_CODE_EXISTS(409, "Mã voucher đã tồn tại"),
+    VOUCHER_EXPIRED(400, "Voucher đã hết hạn sử dụng"),
+    VOUCHER_ALREADY_CLAIMED(409, "Bạn đã nhận voucher này rồi"),
+    VOUCHER_ALREADY_USED(400, "Voucher đã được sử dụng"),
+    VOUCHER_NOT_OWNED(403, "Voucher không thuộc về bạn"),
+    VOUCHER_DISCOUNT_EXCEEDED(400, "Số tiền giảm giá vượt quá tổng giá trị đơn hàng"),
+
+    RESTAURANT_CLOSED(400, "Quán ăn hiện không nằm trong khung giờ hoạt động"),
 
     // Generic
     VALIDATION_FAILED(400, "Dữ liệu không hợp lệ"),
