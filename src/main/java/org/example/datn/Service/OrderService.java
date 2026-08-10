@@ -477,7 +477,7 @@ public class OrderService {
         Restaurant restaurant = restaurantRepository.findByIdOrThrow(restaurantId, ErrorCode.RESTAURANT_NOT_FOUND);
         ownershipGuard.checkRestaurantOwner(restaurant, merchantId);
         Page<Order> orderPage = orderRepository.searchMerchantOrders(restaurantId, status, keyword, pageable);
-        return orderPage.map(orderMapper::toResponse).map(this::enrichOrderResponse);
+        return new PageImpl<>(enrichPage(orderPage.getContent()), orderPage.getPageable(), orderPage.getTotalElements());
     }
 
     @Transactional(readOnly = true)
@@ -558,13 +558,11 @@ public class OrderService {
     // ─── Shipper ─────────────────────────────────────────────
     @Transactional(readOnly = true)
     public List<OrderResponse> getAvailableOrders() {
-        return orderRepository.findAvailableOrders().stream()
-                .map(orderMapper::toResponse)
-                .map(this::enrichOrderResponse)
-                // Bảo vệ PII: KHÔNG lộ SĐT khách khi đơn còn ở pool (chưa ai nhận).
-                // Sau khi shipper nhận đơn, các endpoint khác mới trả đủ số điện thoại để liên hệ giao hàng.
-                .map(r -> { r.setCustomerPhone(null); return r; })
-                .toList();
+        List<OrderResponse> res = enrichPage(orderRepository.findAvailableOrders());
+        // Bảo vệ PII: KHÔNG lộ SĐT khách khi đơn còn ở pool (chưa ai nhận).
+        // Sau khi shipper nhận đơn, các endpoint khác mới trả đủ số điện thoại để liên hệ giao hàng.
+        res.forEach(r -> r.setCustomerPhone(null));
+        return res;
     }
 
     @Transactional(isolation = Isolation.SERIALIZABLE)
