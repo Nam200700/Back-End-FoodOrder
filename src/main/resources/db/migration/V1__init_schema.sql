@@ -130,6 +130,7 @@ CREATE TABLE orders (
                         shipper_id          BIGINT,
                         cancelled_by        BIGINT                  NULL,           -- [V2] ai hủy đơn
                         address_id          BIGINT                  NULL,           -- [V2] địa chỉ từ customer_addresses, NULL nếu nhập mới
+                        user_voucher_id     BIGINT                  NULL,           -- voucher người dùng áp cho đơn (khai báo tại đây để index/FK bên dưới hợp lệ)
                         updated_at          DATETIME(6),
                         cancel_reason       VARCHAR(300),
                         delivery_address    VARCHAR(255) NOT NULL,
@@ -461,6 +462,7 @@ ALTER TABLE orders                  ADD CONSTRAINT fk_orders_restaurant         
 ALTER TABLE orders                  ADD CONSTRAINT fk_orders_shipper                FOREIGN KEY (shipper_id)        REFERENCES users            (user_id);
 ALTER TABLE orders                  ADD CONSTRAINT fk_orders_address                FOREIGN KEY (address_id)        REFERENCES customer_addresses (address_id);
 ALTER TABLE orders                  ADD CONSTRAINT fk_orders_cancelled_by           FOREIGN KEY (cancelled_by)      REFERENCES users            (user_id);  -- [V2]
+ALTER TABLE orders                  ADD CONSTRAINT fk_orders_user_voucher          FOREIGN KEY (user_voucher_id)   REFERENCES user_vouchers    (user_voucher_id);
 ALTER TABLE payments                ADD CONSTRAINT fk_payments_order                FOREIGN KEY (order_id)          REFERENCES orders           (order_id);
 ALTER TABLE payments                ADD CONSTRAINT fk_payments_confirmed_by         FOREIGN KEY (confirmed_by)      REFERENCES users            (user_id);
 ALTER TABLE transactions            ADD CONSTRAINT fk_transactions_payment          FOREIGN KEY (payment_id)        REFERENCES payments         (payment_id);
@@ -483,20 +485,7 @@ ALTER TABLE users                   ADD CONSTRAINT fk_users_deleted_by          
 
 
 -- ─── Auto cleanup conversations ──────────────────────────────
---  Xóa conversation không có tin nhắn mới trong 3 ngày.
---  Messages tự xóa theo nhờ ON DELETE CASCADE trên fk_messages_conversation.
---  Bật MySQL Event Scheduler: SET GLOBAL event_scheduler = ON;
-
-CREATE EVENT evt_cleanup_conversations
-ON SCHEDULE EVERY 1 DAY
-STARTS (CURRENT_DATE + INTERVAL 1 DAY + INTERVAL 2 HOUR)
-DO
-DELETE FROM conversations
-WHERE last_message_at < NOW() - INTERVAL 3 DAY
-   OR (last_message_at IS NULL AND created_at < NOW() - INTERVAL 3 DAY)
-    LIMIT 500;
-
-ALTER TABLE orders ADD COLUMN user_voucher_id BIGINT NULL;
-ALTER TABLE orders ADD CONSTRAINT fk_orders_user_voucher FOREIGN KEY (user_voucher_id) REFERENCES user_vouchers(user_voucher_id);
--- ALTER TABLE user_vouchers ADD CONSTRAINT uk_user_voucher UNIQUE(user_id, voucher_id);
--- ALTER TABLE user_vouchers ADD CONSTRAINT uk_user_voucher_order UNIQUE
+--  Xóa conversation không có tin nhắn mới trong 3 ngày; messages tự xóa theo nhờ
+--  ON DELETE CASCADE trên fk_messages_conversation.
+--  Trước dùng MySQL EVENT (cần quyền EVENT + event_scheduler=ON → dễ fail khi deploy
+--  trên host chia sẻ), nay chuyển sang Spring @Scheduled: ConversationCleanupScheduler.
