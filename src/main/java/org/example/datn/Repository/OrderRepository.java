@@ -66,12 +66,32 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
 
     long countByRestaurantRestaurantIdAndOrderStatus(Long restaurantId, OrderStatus status);
 
+    /** Gộp {restaurantId, COUNT} đơn hoàn tất cho NHIỀU quán trong 1 câu — khử N+1 khi map danh sách quán. */
+    @Query("""
+            SELECT o.restaurant.restaurantId, COUNT(o)
+            FROM Order o
+            WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+              AND o.restaurant.restaurantId IN :ids
+            GROUP BY o.restaurant.restaurantId
+            """)
+    List<Object[]> countCompletedByRestaurantIds(@Param("ids") java.util.Collection<Long> ids);
+
     @Query("""
             SELECT COALESCE(SUM(oi.quantity), 0) FROM Order o
             JOIN o.items oi
             WHERE oi.food.foodId = :foodId AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
             """)
     Integer countCompletedQuantityByFoodId(@Param("foodId") Long foodId);
+
+    /** Gộp {foodId, SUM(quantity)} đơn hoàn tất cho NHIỀU món trong 1 câu — khử N+1 khi dựng menu. */
+    @Query("""
+            SELECT oi.food.foodId, COALESCE(SUM(oi.quantity), 0)
+            FROM Order o JOIN o.items oi
+            WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+              AND oi.food.foodId IN :ids
+            GROUP BY oi.food.foodId
+            """)
+    List<Object[]> sumCompletedQuantityByFoodIds(@Param("ids") java.util.Collection<Long> ids);
 
     @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.orderStatus = :status")
     BigDecimal sumRevenueByStatus(@Param("status") OrderStatus status);

@@ -18,6 +18,9 @@ public interface ReviewRepository extends BaseRepository<Review, Long> {
 
     Optional<Review> findByOrderOrderId(Long orderId);
 
+    /** Lấy review của nhiều đơn cùng lúc (1 câu IN) — khử N+1 khi enrich danh sách đơn. */
+    List<Review> findByOrderOrderIdIn(java.util.Collection<Long> orderIds);
+
     Page<Review> findByRestaurantRestaurantIdOrderByCreatedAtDesc(Long restaurantId, Pageable pageable);
 
     Page<Review> findByShipperShipperIdOrderByCreatedAtDesc(Long shipperId, Pageable pageable);
@@ -26,6 +29,15 @@ public interface ReviewRepository extends BaseRepository<Review, Long> {
 
     @Query("SELECT AVG(r.restaurantRating) FROM Review r WHERE r.restaurant.restaurantId = :restaurantId")
     Double findAverageRatingByRestaurantId(@Param("restaurantId") Long restaurantId);
+
+    /** Gộp {restaurantId, AVG(rating), COUNT} cho NHIỀU quán trong 1 câu — khử N+1 khi map danh sách quán. */
+    @Query("""
+            SELECT r.restaurant.restaurantId, AVG(r.restaurantRating), COUNT(r)
+            FROM Review r
+            WHERE r.restaurant.restaurantId IN :ids
+            GROUP BY r.restaurant.restaurantId
+            """)
+    List<Object[]> aggregateRatingByRestaurantIds(@Param("ids") java.util.Collection<Long> ids);
 
     @Query("SELECT AVG(r.shipperRating) FROM Review r WHERE r.shipper.shipperId = :shipperId AND r.shipperRating IS NOT NULL")
     Double findAverageRatingByShipperId(@Param("shipperId") Long shipperId);
