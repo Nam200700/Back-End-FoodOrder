@@ -41,6 +41,12 @@ public class Voucher extends BaseEntity {
     @Column(name = "used_quantity", nullable = false)
     private Integer usedQuantity = 0;
 
+    @Column(name = "min_order_amount", precision = 12, scale = 2)
+    private BigDecimal minOrderAmount;
+
+    @Column(name = "max_discount_amount", precision = 12, scale = 2)
+    private BigDecimal maxDiscountAmount;
+
     @Column(name = "start_date", nullable = false)
     private LocalDateTime startDate;
 
