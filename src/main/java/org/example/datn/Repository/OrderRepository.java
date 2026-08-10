@@ -66,6 +66,16 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
 
     long countByRestaurantRestaurantIdAndOrderStatus(Long restaurantId, OrderStatus status);
 
+    /** Gộp {restaurantId, COUNT} đơn hoàn tất cho NHIỀU quán trong 1 câu — khử N+1 khi map danh sách quán. */
+    @Query("""
+            SELECT o.restaurant.restaurantId, COUNT(o)
+            FROM Order o
+            WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+              AND o.restaurant.restaurantId IN :ids
+            GROUP BY o.restaurant.restaurantId
+            """)
+    List<Object[]> countCompletedByRestaurantIds(@Param("ids") java.util.Collection<Long> ids);
+
     @Query("""
             SELECT COALESCE(SUM(oi.quantity), 0) FROM Order o
             JOIN o.items oi
