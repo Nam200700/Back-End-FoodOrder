@@ -404,6 +404,9 @@ ALTER TABLE users                ADD CONSTRAINT uk_users_phone                UN
 ALTER TABLE users                ADD CONSTRAINT uk_users_email                UNIQUE (email);
 ALTER TABLE users                ADD CONSTRAINT uk_users_google_id            UNIQUE (google_id);
 ALTER TABLE shippers             ADD CONSTRAINT uk_shippers_user              UNIQUE (user_id);
+ALTER TABLE vouchers
+    ADD COLUMN min_order_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00 AFTER discount_value,
+    ADD COLUMN max_discount_amount DECIMAL(12,2) NULL AFTER min_order_amount;
 
 
 
