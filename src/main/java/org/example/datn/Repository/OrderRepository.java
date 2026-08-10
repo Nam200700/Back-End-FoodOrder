@@ -83,6 +83,16 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
             """)
     Integer countCompletedQuantityByFoodId(@Param("foodId") Long foodId);
 
+    /** Gộp {foodId, SUM(quantity)} đơn hoàn tất cho NHIỀU món trong 1 câu — khử N+1 khi dựng menu. */
+    @Query("""
+            SELECT oi.food.foodId, COALESCE(SUM(oi.quantity), 0)
+            FROM Order o JOIN o.items oi
+            WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+              AND oi.food.foodId IN :ids
+            GROUP BY oi.food.foodId
+            """)
+    List<Object[]> sumCompletedQuantityByFoodIds(@Param("ids") java.util.Collection<Long> ids);
+
     @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.orderStatus = :status")
     BigDecimal sumRevenueByStatus(@Param("status") OrderStatus status);
 
