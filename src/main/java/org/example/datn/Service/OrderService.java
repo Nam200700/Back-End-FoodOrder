@@ -77,17 +77,14 @@ public class OrderService {
     @Scheduled(fixedRate = 30000)
     public void autoCancelExpiredPendingOrders() {
         LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(5);
-
-        // 1. Tìm các đơn PENDING tạo trước (quá 5 phút)
         List<Order> expiredOrders = orderRepository.findByOrderStatusAndCreatedAtBefore(OrderStatus.PENDING, cutoffTime);
 
         if (expiredOrders.isEmpty()) {
             return;
         }
 
-        // 2. Tìm Voucher đền bù (ORDER_CANCELLED)
         Voucher compensationVoucher = voucherRepository.findActiveVoucherByIssueType(VoucherIssueType.ORDER_CANCELLED)
-                .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
+                .orElse(null);
 
         for (Order order : expiredOrders) {
             try {
@@ -338,19 +335,29 @@ public class OrderService {
         BigDecimal totalBeforeDiscount = subtotal.add(shippingFeeBd);
 
         Voucher voucher = (userVoucher != null) ? userVoucher.getVoucher() : null;
-        // Tính giá trị giảm giá từ Voucher
         BigDecimal discountAmount = BigDecimal.ZERO;
+
         if (voucher != null) {
+            // 1. Kiểm tra đơn hàng đã đủ giá trị tối thiểu chưa (Min Order Amount)
+            if (voucher.getMinOrderAmount() != null && subtotal.compareTo(voucher.getMinOrderAmount()) < 0) {
+                throw new AppException(ErrorCode.VALIDATION_FAILED,
+                        String.format("Đơn hàng phải đạt tối thiểu %,d VNĐ mới được sử dụng mã giảm giá này!",
+                                voucher.getMinOrderAmount().longValue()));
+            }
+
+            // 2. Tính toán tiền giảm
             switch (voucher.getDiscountType()) {
                 case FIXED -> discountAmount = voucher.getDiscountValue();
-                case PERCENT -> discountAmount = subtotal.multiply(voucher.getDiscountValue())
-                        .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+                case PERCENT -> {
+                    discountAmount = subtotal.multiply(voucher.getDiscountValue())
+                            .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+                    // Áp dụng trần giảm tối đa (nếu có)
+                    if (voucher.getMaxDiscountAmount() != null && discountAmount.compareTo(voucher.getMaxDiscountAmount()) > 0) {
+                        discountAmount = voucher.getMaxDiscountAmount();
+                    }
+                }
                 case FREESHIP -> discountAmount = shippingFeeBd;
             }
-        }
-
-        if (discountAmount.compareTo(totalBeforeDiscount) > 0) {
-            throw new AppException(ErrorCode.VOUCHER_DISCOUNT_EXCEEDED);
         }
 
         order.setDiscountAmount(discountAmount);
