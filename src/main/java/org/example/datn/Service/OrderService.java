@@ -693,18 +693,14 @@ public class OrderService {
     @Transactional(readOnly = true)
     public Page<OrderResponse> getShipperOrders(Long shipperId, OrderStatus status, Pageable pageable) {
         Page<Delivery> deliveryPage = deliveryRepository.findByShipperIdAndOrderStatus(shipperId, status, pageable);
-        return deliveryPage.map(delivery -> {
-            Order order = delivery.getOrder();
-            OrderResponse response = orderMapper.toResponse(order);
-            return enrichOrderResponse(response);
-        });
+        List<Order> orders = deliveryPage.getContent().stream().map(Delivery::getOrder).toList();
+        return new PageImpl<>(enrichPage(orders), deliveryPage.getPageable(), deliveryPage.getTotalElements());
     }
 
     @Transactional(readOnly = true)
     public Page<OrderResponse> getAllOrders(Pageable pageable) {
-        return orderRepository.findAll(pageable)
-                .map(orderMapper::toResponse)
-                .map(this::enrichOrderResponse);
+        Page<Order> orderPage = orderRepository.findAll(pageable);
+        return new PageImpl<>(enrichPage(orderPage.getContent()), orderPage.getPageable(), orderPage.getTotalElements());
     }
 
     private OrderResponse enrichOrderResponse(OrderResponse response) {
