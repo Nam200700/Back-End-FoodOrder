@@ -338,20 +338,23 @@ public class OrderService {
         BigDecimal discountAmount = BigDecimal.ZERO;
 
         if (voucher != null) {
-            // 1. Kiểm tra đơn hàng đã đủ giá trị tối thiểu chưa (Min Order Amount)
+            // 1. KIỂM TRA ĐIỀU KIỆN ĐƠN HÀNG TỐI THIỂU (minOrderAmount)
             if (voucher.getMinOrderAmount() != null && subtotal.compareTo(voucher.getMinOrderAmount()) < 0) {
                 throw new AppException(ErrorCode.VALIDATION_FAILED,
-                        String.format("Đơn hàng phải đạt tối thiểu %,d VNĐ mới được sử dụng mã giảm giá này!",
-                                voucher.getMinOrderAmount().longValue()));
+                        String.format("Quán '%s': Tiền món (%,d VNĐ) chưa đạt giá trị tối thiểu %,d VNĐ để áp dụng mã '%s'!",
+                                restaurant.getRestaurantName(),
+                                subtotal.longValue(),
+                                voucher.getMinOrderAmount().longValue(),
+                                voucher.getCode()));
             }
 
-            // 2. Tính toán tiền giảm
+            // 2. TÍNH TOÁN TIỀN GIẢM VÀ ÁP DỤNG TRẦN GIẢM TỐI ĐA (maxDiscountAmount)
             switch (voucher.getDiscountType()) {
                 case FIXED -> discountAmount = voucher.getDiscountValue();
                 case PERCENT -> {
                     discountAmount = subtotal.multiply(voucher.getDiscountValue())
                             .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
-                    // Áp dụng trần giảm tối đa (nếu có)
+                    // Giới hạn giảm tối đa
                     if (voucher.getMaxDiscountAmount() != null && discountAmount.compareTo(voucher.getMaxDiscountAmount()) > 0) {
                         discountAmount = voucher.getMaxDiscountAmount();
                     }
