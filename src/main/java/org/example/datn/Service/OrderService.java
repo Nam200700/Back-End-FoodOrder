@@ -377,7 +377,7 @@ public class OrderService {
     public OrderResponse getCustomerOrder(Long customerId, Long orderId) {
         Order order = loadWithItems(orderId);
         ownershipGuard.checkOrderOwner(order, customerId);
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     @Transactional
@@ -394,7 +394,7 @@ public class OrderService {
         notificationService.notifyUser(order.getRestaurant().getOwner().getUserId(),
                 NotificationType.ORDER_CANCELLED, order.getOrderId());
         webSocketService.broadcastOrderStatus(order);
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     @Transactional
@@ -468,7 +468,7 @@ public class OrderService {
         notificationService.notifyOrderCancelled(order, role);
         webSocketService.broadcastOrderStatus(order);
 
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     // ─── Merchant ────────────────────────────────────────────
@@ -483,7 +483,7 @@ public class OrderService {
     @Transactional(readOnly = true)
     public OrderResponse getMerchantOrder(Long merchantId, Long orderId) {
         Order order = getOrderForMerchant(merchantId, orderId);
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     @Transactional
@@ -498,7 +498,7 @@ public class OrderService {
         notificationService.notifyUser(order.getCustomer().getUserId(),
                 NotificationType.ORDER_CONFIRMED, order.getOrderId());
         webSocketService.broadcastOrderStatus(order);
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     @Transactional
@@ -522,7 +522,7 @@ public class OrderService {
         notificationService.notifyUser(order.getCustomer().getUserId(),
                 NotificationType.ORDER_CANCELLED, order.getOrderId());
         webSocketService.broadcastOrderStatus(order);
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     @Transactional
@@ -537,7 +537,7 @@ public class OrderService {
         notificationService.notifyUser(order.getCustomer().getUserId(),
                 NotificationType.ORDER_PREPARING, order.getOrderId());
         webSocketService.broadcastOrderStatus(order);
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     @Transactional
@@ -552,7 +552,7 @@ public class OrderService {
         notificationService.broadcastToShippers(order.getOrderId(), NotificationType.ORDER_READY_PICKUP);
         webSocketService.broadcastOrderStatus(order);
         webSocketService.broadcastAvailableOrder(order);
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     // ─── Shipper ─────────────────────────────────────────────
@@ -599,7 +599,7 @@ public class OrderService {
         notificationService.notifyUser(order.getCustomer().getUserId(),
                 NotificationType.SHIPPER_ASSIGNED, order.getOrderId());
         webSocketService.broadcastOrderStatus(order);
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     @Transactional
@@ -611,7 +611,7 @@ public class OrderService {
         order.setPickedUpAt(LocalDateTime.now());
         orderRepository.save(order);
         webSocketService.broadcastOrderStatus(order);
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     @Transactional
@@ -622,7 +622,7 @@ public class OrderService {
         order.setOrderStatus(DELIVERING);
         orderRepository.save(order);
         webSocketService.broadcastOrderStatus(order);
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     @Transactional
@@ -665,7 +665,7 @@ public class OrderService {
             }
         });
 
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     // ─── Helpers ─────────────────────────────────────────────
