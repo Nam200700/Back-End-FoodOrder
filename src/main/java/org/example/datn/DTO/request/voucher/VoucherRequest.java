@@ -34,9 +34,6 @@ public class VoucherRequest {
     @DecimalMin(value = "0.0", message = "Giá trị đơn tối thiểu không được âm")
     private BigDecimal minOrderAmount;
 
-    @DecimalMin(value = "0.0", message = "Mức giảm tối đa không được âm")
-    private BigDecimal maxDiscountAmount;
-
     @NotNull(message = "Ngày bắt đầu không được để trống")
     private LocalDateTime startDate;
 
