@@ -20,6 +20,7 @@ import org.example.datn.mapper.OrderMapper;
 import org.example.datn.security.OwnershipGuard;
 import org.example.datn.util.ShippingFeeCalculator;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -34,7 +35,9 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.example.datn.domain.enums.OrderStatus.*;
 
