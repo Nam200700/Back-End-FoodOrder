@@ -703,30 +703,79 @@ public class OrderService {
         return new PageImpl<>(enrichPage(orderPage.getContent()), orderPage.getPageable(), orderPage.getTotalElements());
     }
 
-    private OrderResponse enrichOrderResponse(OrderResponse response) {
-        if (response == null) return null;
-        orderRepository.findById(response.getOrderId()).ifPresent(order -> {
-            if (order.getUserVoucher() != null && order.getUserVoucher().getVoucher() != null) {
-                Voucher v = order.getUserVoucher().getVoucher();
-                response.setVoucherCode(v.getCode());
-            }
-        });
+    /**
+     * Enrich cho MỘT đơn (đã có entity trong tay → KHÔNG findById lại).
+     * Voucher đọc thẳng từ entity; review + hồ sơ shipper mỗi loại 1 query.
+     */
+    private OrderResponse enrichOne(Order order, OrderResponse res) {
+        if (res == null) return null;
 
-        boolean reviewed = reviewRepository.existsByOrderOrderId(response.getOrderId());
-        response.setReviewed(reviewed);
-        if (reviewed) {
-            reviewRepository.findByOrderOrderId(response.getOrderId())
-                    .ifPresent(r -> {
-                        response.setRestaurantRating(r.getRestaurantRating());
-                        response.setShipperRating(r.getShipperRating());
-                    });
+        if (order.getUserVoucher() != null && order.getUserVoucher().getVoucher() != null) {
+            res.setVoucherCode(order.getUserVoucher().getVoucher().getCode());
         }
-        if (response.getShipperId() != null) {
-            shipperRegisterRepository.findByUserUserId(response.getShipperId()).ifPresent(reg -> {
-                response.setShipperVehicleType(reg.getVehicleType() != null ? reg.getVehicleType().name() : null);
-                response.setShipperLicensePlate(reg.getLicensePlate());
+
+        reviewRepository.findByOrderOrderId(order.getOrderId()).ifPresentOrElse(r -> {
+            res.setReviewed(true);
+            res.setRestaurantRating(r.getRestaurantRating());
+            res.setShipperRating(r.getShipperRating());
+        }, () -> res.setReviewed(false));
+
+        if (res.getShipperId() != null) {
+            shipperRegisterRepository.findByUserUserId(res.getShipperId()).ifPresent(reg -> {
+                res.setShipperVehicleType(reg.getVehicleType() != null ? reg.getVehicleType().name() : null);
+                res.setShipperLicensePlate(reg.getLicensePlate());
             });
         }
-        return response;
+        return res;
+    }
+
+    /**
+     * Enrich cả TRANG theo lô: review + hồ sơ shipper của tất cả đơn được lấy bằng
+     * 2 câu IN(...) thay vì mỗi đơn vài query → khử N+1. Voucher/quan hệ khác đọc từ
+     * entity đã nạp (batch-fetch toàn cục lo phần lazy còn lại).
+     */
+    private List<OrderResponse> enrichPage(List<Order> orders) {
+        List<OrderResponse> res = orders.stream().map(orderMapper::toResponse).collect(Collectors.toList());
+        if (orders.isEmpty()) return res;
+
+        List<Long> orderIds = orders.stream().map(Order::getOrderId).toList();
+        Map<Long, Review> reviewByOrder = reviewRepository.findByOrderOrderIdIn(orderIds).stream()
+                .collect(Collectors.toMap(r -> r.getOrder().getOrderId(), r -> r, (a, b) -> a));
+
+        List<Long> shipperUserIds = orders.stream()
+                .map(o -> o.getShipper() != null ? o.getShipper().getUserId() : null)
+                .filter(Objects::nonNull).distinct().toList();
+        Map<Long, ShipperRegister> regByUser = shipperUserIds.isEmpty()
+                ? Map.of()
+                : shipperRegisterRepository.findByUserUserIdIn(shipperUserIds).stream()
+                    .collect(Collectors.toMap(reg -> reg.getUser().getUserId(), reg -> reg,
+                            (a, b) -> a.getRegisterId() >= b.getRegisterId() ? a : b));
+
+        for (int i = 0; i < orders.size(); i++) {
+            Order o = orders.get(i);
+            OrderResponse r = res.get(i);
+
+            if (o.getUserVoucher() != null && o.getUserVoucher().getVoucher() != null) {
+                r.setVoucherCode(o.getUserVoucher().getVoucher().getCode());
+            }
+
+            Review rv = reviewByOrder.get(o.getOrderId());
+            if (rv != null) {
+                r.setReviewed(true);
+                r.setRestaurantRating(rv.getRestaurantRating());
+                r.setShipperRating(rv.getShipperRating());
+            } else {
+                r.setReviewed(false);
+            }
+
+            if (r.getShipperId() != null) {
+                ShipperRegister reg = regByUser.get(r.getShipperId());
+                if (reg != null) {
+                    r.setShipperVehicleType(reg.getVehicleType() != null ? reg.getVehicleType().name() : null);
+                    r.setShipperLicensePlate(reg.getLicensePlate());
+                }
+            }
+        }
+        return res;
     }
 }
