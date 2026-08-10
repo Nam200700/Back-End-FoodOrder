@@ -14,6 +14,9 @@ public interface ShipperRegisterRepository extends BaseRepository<ShipperRegiste
     // Đếm hồ sơ shipper đang chờ duyệt cho badge/alert dashboard admin
     long countByStatus(RegisterStatus status);
     Optional<ShipperRegister> findByUserUserId(Long userId);
+
+    /** Lấy hồ sơ shipper của nhiều user cùng lúc (1 câu IN) — khử N+1 khi enrich danh sách đơn. */
+    java.util.List<ShipperRegister> findByUserUserIdIn(java.util.Collection<Long> userIds);
     Optional<ShipperRegister> findTopByUserUserIdOrderByRegisterIdDesc(Long userId);
     boolean existsByIdCard(String idCard);
     boolean existsByLicensePlate(String licensePlate);
