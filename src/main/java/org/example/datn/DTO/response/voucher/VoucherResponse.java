@@ -20,7 +20,6 @@ public class VoucherResponse {
     private DiscountType discountType;
     private BigDecimal discountValue;
     private BigDecimal minOrderAmount;
-    private BigDecimal maxDiscountAmount;
     private Integer usedQuantity;
     private LocalDateTime startDate;
     private LocalDateTime endDate;
