@@ -21,23 +21,32 @@ public class RestaurantMapper {
     private final ReviewRepository reviewRepository;
     private final OrderRepository orderRepository;
 
+    /** Map 1 quán — tự truy vấn rating/đơn (dùng cho chi tiết 1 quán). Với DANH SÁCH,
+     *  service nên gộp số liệu theo lô rồi gọi overload bên dưới để tránh N+1. */
     public RestaurantResponse toResponse(Restaurant r) {
         if (r == null) {
             return null;
         }
-        
+
         Double avgRating = reviewRepository.findAverageRatingByRestaurantId(r.getRestaurantId());
+        long count = reviewRepository.countByRestaurantRestaurantId(r.getRestaurantId());
+        long ordersCount = orderRepository.countByRestaurantRestaurantIdAndOrderStatus(
+                r.getRestaurantId(),
+                OrderStatus.COMPLETED
+        );
+        return toResponse(r, avgRating, count, ordersCount);
+    }
+
+    /** Map 1 quán với số liệu ĐÃ tính sẵn (không truy vấn thêm) — dùng khi map cả trang theo lô. */
+    public RestaurantResponse toResponse(Restaurant r, Double avgRating, long count, long ordersCount) {
+        if (r == null) {
+            return null;
+        }
+
         if (avgRating == null) {
             avgRating = 5.0;
         }
         avgRating = Math.round(avgRating * 10.0) / 10.0;
-        
-        long count = reviewRepository.countByRestaurantRestaurantId(r.getRestaurantId());
-        
-        long ordersCount = orderRepository.countByRestaurantRestaurantIdAndOrderStatus(
-                r.getRestaurantId(), 
-                OrderStatus.COMPLETED
-        );
 
         return RestaurantResponse.builder()
                 .id(r.getRestaurantId())

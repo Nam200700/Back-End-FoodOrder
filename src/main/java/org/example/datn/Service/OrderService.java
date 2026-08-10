@@ -20,6 +20,7 @@ import org.example.datn.mapper.OrderMapper;
 import org.example.datn.security.OwnershipGuard;
 import org.example.datn.util.ShippingFeeCalculator;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -34,7 +35,9 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.example.datn.domain.enums.OrderStatus.*;
 
@@ -377,14 +380,14 @@ public class OrderService {
     @Transactional(readOnly = true)
     public Page<OrderResponse> getCustomerOrders(Long customerId, OrderStatus status, String keyword, Pageable pageable) {
         Page<Order> orderPage = orderRepository.searchCustomerOrders(customerId, status, keyword, pageable);
-        return orderPage.map(orderMapper::toResponse).map(this::enrichOrderResponse);
+        return new PageImpl<>(enrichPage(orderPage.getContent()), orderPage.getPageable(), orderPage.getTotalElements());
     }
 
     @Transactional(readOnly = true)
     public OrderResponse getCustomerOrder(Long customerId, Long orderId) {
         Order order = loadWithItems(orderId);
         ownershipGuard.checkOrderOwner(order, customerId);
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     @Transactional
@@ -401,7 +404,7 @@ public class OrderService {
         notificationService.notifyUser(order.getRestaurant().getOwner().getUserId(),
                 NotificationType.ORDER_CANCELLED, order.getOrderId());
         webSocketService.broadcastOrderStatus(order);
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     @Transactional
@@ -475,7 +478,7 @@ public class OrderService {
         notificationService.notifyOrderCancelled(order, role);
         webSocketService.broadcastOrderStatus(order);
 
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     // ─── Merchant ────────────────────────────────────────────
@@ -484,13 +487,13 @@ public class OrderService {
         Restaurant restaurant = restaurantRepository.findByIdOrThrow(restaurantId, ErrorCode.RESTAURANT_NOT_FOUND);
         ownershipGuard.checkRestaurantOwner(restaurant, merchantId);
         Page<Order> orderPage = orderRepository.searchMerchantOrders(restaurantId, status, keyword, pageable);
-        return orderPage.map(orderMapper::toResponse).map(this::enrichOrderResponse);
+        return new PageImpl<>(enrichPage(orderPage.getContent()), orderPage.getPageable(), orderPage.getTotalElements());
     }
 
     @Transactional(readOnly = true)
     public OrderResponse getMerchantOrder(Long merchantId, Long orderId) {
         Order order = getOrderForMerchant(merchantId, orderId);
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     @Transactional
@@ -505,7 +508,7 @@ public class OrderService {
         notificationService.notifyUser(order.getCustomer().getUserId(),
                 NotificationType.ORDER_CONFIRMED, order.getOrderId());
         webSocketService.broadcastOrderStatus(order);
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     @Transactional
@@ -529,7 +532,7 @@ public class OrderService {
         notificationService.notifyUser(order.getCustomer().getUserId(),
                 NotificationType.ORDER_CANCELLED, order.getOrderId());
         webSocketService.broadcastOrderStatus(order);
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     @Transactional
@@ -544,7 +547,7 @@ public class OrderService {
         notificationService.notifyUser(order.getCustomer().getUserId(),
                 NotificationType.ORDER_PREPARING, order.getOrderId());
         webSocketService.broadcastOrderStatus(order);
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     @Transactional
@@ -559,19 +562,17 @@ public class OrderService {
         notificationService.broadcastToShippers(order.getOrderId(), NotificationType.ORDER_READY_PICKUP);
         webSocketService.broadcastOrderStatus(order);
         webSocketService.broadcastAvailableOrder(order);
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     // ─── Shipper ─────────────────────────────────────────────
     @Transactional(readOnly = true)
     public List<OrderResponse> getAvailableOrders() {
-        return orderRepository.findAvailableOrders().stream()
-                .map(orderMapper::toResponse)
-                .map(this::enrichOrderResponse)
-                // Bảo vệ PII: KHÔNG lộ SĐT khách khi đơn còn ở pool (chưa ai nhận).
-                // Sau khi shipper nhận đơn, các endpoint khác mới trả đủ số điện thoại để liên hệ giao hàng.
-                .map(r -> { r.setCustomerPhone(null); return r; })
-                .toList();
+        List<OrderResponse> res = enrichPage(orderRepository.findAvailableOrders());
+        // Bảo vệ PII: KHÔNG lộ SĐT khách khi đơn còn ở pool (chưa ai nhận).
+        // Sau khi shipper nhận đơn, các endpoint khác mới trả đủ số điện thoại để liên hệ giao hàng.
+        res.forEach(r -> r.setCustomerPhone(null));
+        return res;
     }
 
     @Transactional(isolation = Isolation.SERIALIZABLE)
@@ -606,7 +607,7 @@ public class OrderService {
         notificationService.notifyUser(order.getCustomer().getUserId(),
                 NotificationType.SHIPPER_ASSIGNED, order.getOrderId());
         webSocketService.broadcastOrderStatus(order);
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     @Transactional
@@ -618,7 +619,7 @@ public class OrderService {
         order.setPickedUpAt(LocalDateTime.now());
         orderRepository.save(order);
         webSocketService.broadcastOrderStatus(order);
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     @Transactional
@@ -629,7 +630,7 @@ public class OrderService {
         order.setOrderStatus(DELIVERING);
         orderRepository.save(order);
         webSocketService.broadcastOrderStatus(order);
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     @Transactional
@@ -672,7 +673,7 @@ public class OrderService {
             }
         });
 
-        return enrichOrderResponse(orderMapper.toResponse(order));
+        return enrichOne(order, orderMapper.toResponse(order));
     }
 
     // ─── Helpers ─────────────────────────────────────────────
@@ -702,44 +703,89 @@ public class OrderService {
     @Transactional(readOnly = true)
     public Page<OrderResponse> getShipperOrders(Long shipperId, OrderStatus status, Pageable pageable) {
         Page<Delivery> deliveryPage = deliveryRepository.findByShipperIdAndOrderStatus(shipperId, status, pageable);
-        return deliveryPage.map(delivery -> {
-            Order order = delivery.getOrder();
-            OrderResponse response = orderMapper.toResponse(order);
-            return enrichOrderResponse(response);
-        });
+        List<Order> orders = deliveryPage.getContent().stream().map(Delivery::getOrder).toList();
+        return new PageImpl<>(enrichPage(orders), deliveryPage.getPageable(), deliveryPage.getTotalElements());
     }
 
     @Transactional(readOnly = true)
     public Page<OrderResponse> getAllOrders(Pageable pageable) {
-        return orderRepository.findAll(pageable)
-                .map(orderMapper::toResponse)
-                .map(this::enrichOrderResponse);
+        Page<Order> orderPage = orderRepository.findAll(pageable);
+        return new PageImpl<>(enrichPage(orderPage.getContent()), orderPage.getPageable(), orderPage.getTotalElements());
     }
 
-    private OrderResponse enrichOrderResponse(OrderResponse response) {
-        if (response == null) return null;
-        orderRepository.findById(response.getOrderId()).ifPresent(order -> {
-            if (order.getUserVoucher() != null && order.getUserVoucher().getVoucher() != null) {
-                Voucher v = order.getUserVoucher().getVoucher();
-                response.setVoucherCode(v.getCode());
-            }
-        });
+    /**
+     * Enrich cho MỘT đơn (đã có entity trong tay → KHÔNG findById lại).
+     * Voucher đọc thẳng từ entity; review + hồ sơ shipper mỗi loại 1 query.
+     */
+    private OrderResponse enrichOne(Order order, OrderResponse res) {
+        if (res == null) return null;
 
-        boolean reviewed = reviewRepository.existsByOrderOrderId(response.getOrderId());
-        response.setReviewed(reviewed);
-        if (reviewed) {
-            reviewRepository.findByOrderOrderId(response.getOrderId())
-                    .ifPresent(r -> {
-                        response.setRestaurantRating(r.getRestaurantRating());
-                        response.setShipperRating(r.getShipperRating());
-                    });
+        if (order.getUserVoucher() != null && order.getUserVoucher().getVoucher() != null) {
+            res.setVoucherCode(order.getUserVoucher().getVoucher().getCode());
         }
-        if (response.getShipperId() != null) {
-            shipperRegisterRepository.findByUserUserId(response.getShipperId()).ifPresent(reg -> {
-                response.setShipperVehicleType(reg.getVehicleType() != null ? reg.getVehicleType().name() : null);
-                response.setShipperLicensePlate(reg.getLicensePlate());
+
+        reviewRepository.findByOrderOrderId(order.getOrderId()).ifPresentOrElse(r -> {
+            res.setReviewed(true);
+            res.setRestaurantRating(r.getRestaurantRating());
+            res.setShipperRating(r.getShipperRating());
+        }, () -> res.setReviewed(false));
+
+        if (res.getShipperId() != null) {
+            shipperRegisterRepository.findByUserUserId(res.getShipperId()).ifPresent(reg -> {
+                res.setShipperVehicleType(reg.getVehicleType() != null ? reg.getVehicleType().name() : null);
+                res.setShipperLicensePlate(reg.getLicensePlate());
             });
         }
-        return response;
+        return res;
+    }
+
+    /**
+     * Enrich cả TRANG theo lô: review + hồ sơ shipper của tất cả đơn được lấy bằng
+     * 2 câu IN(...) thay vì mỗi đơn vài query → khử N+1. Voucher/quan hệ khác đọc từ
+     * entity đã nạp (batch-fetch toàn cục lo phần lazy còn lại).
+     */
+    private List<OrderResponse> enrichPage(List<Order> orders) {
+        List<OrderResponse> res = orders.stream().map(orderMapper::toResponse).collect(Collectors.toList());
+        if (orders.isEmpty()) return res;
+
+        List<Long> orderIds = orders.stream().map(Order::getOrderId).toList();
+        Map<Long, Review> reviewByOrder = reviewRepository.findByOrderOrderIdIn(orderIds).stream()
+                .collect(Collectors.toMap(r -> r.getOrder().getOrderId(), r -> r, (a, b) -> a));
+
+        List<Long> shipperUserIds = orders.stream()
+                .map(o -> o.getShipper() != null ? o.getShipper().getUserId() : null)
+                .filter(Objects::nonNull).distinct().toList();
+        Map<Long, ShipperRegister> regByUser = shipperUserIds.isEmpty()
+                ? Map.of()
+                : shipperRegisterRepository.findByUserUserIdIn(shipperUserIds).stream()
+                    .collect(Collectors.toMap(reg -> reg.getUser().getUserId(), reg -> reg,
+                            (a, b) -> a.getRegisterId() >= b.getRegisterId() ? a : b));
+
+        for (int i = 0; i < orders.size(); i++) {
+            Order o = orders.get(i);
+            OrderResponse r = res.get(i);
+
+            if (o.getUserVoucher() != null && o.getUserVoucher().getVoucher() != null) {
+                r.setVoucherCode(o.getUserVoucher().getVoucher().getCode());
+            }
+
+            Review rv = reviewByOrder.get(o.getOrderId());
+            if (rv != null) {
+                r.setReviewed(true);
+                r.setRestaurantRating(rv.getRestaurantRating());
+                r.setShipperRating(rv.getShipperRating());
+            } else {
+                r.setReviewed(false);
+            }
+
+            if (r.getShipperId() != null) {
+                ShipperRegister reg = regByUser.get(r.getShipperId());
+                if (reg != null) {
+                    r.setShipperVehicleType(reg.getVehicleType() != null ? reg.getVehicleType().name() : null);
+                    r.setShipperLicensePlate(reg.getLicensePlate());
+                }
+            }
+        }
+        return res;
     }
 }
