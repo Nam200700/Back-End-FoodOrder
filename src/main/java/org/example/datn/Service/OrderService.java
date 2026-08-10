@@ -357,10 +357,6 @@ public class OrderService {
                 case PERCENT -> {
                     discountAmount = subtotal.multiply(voucher.getDiscountValue())
                             .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
-                    // Giới hạn giảm tối đa
-                    if (voucher.getMaxDiscountAmount() != null && discountAmount.compareTo(voucher.getMaxDiscountAmount()) > 0) {
-                        discountAmount = voucher.getMaxDiscountAmount();
-                    }
                 }
                 case FREESHIP -> discountAmount = shippingFeeBd;
             }
