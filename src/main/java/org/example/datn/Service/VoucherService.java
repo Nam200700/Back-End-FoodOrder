@@ -59,16 +59,6 @@ public class VoucherService {
             }
         }
 
-        // =========================================================================
-        // 1. VALIDATE BẮT BUỘC DỮ LIỆU
-        // =========================================================================
-        // A. Nếu loại giảm là Phần trăm (PERCENT) -> BẮT BUỘC có maxDiscountAmount > 0
-        if (request.getDiscountType() == DiscountType.PERCENT) {
-            if (request.getMaxDiscountAmount() == null || request.getMaxDiscountAmount().compareTo(BigDecimal.ZERO) <= 0) {
-                throw new AppException(ErrorCode.VALIDATION_FAILED, "Voucher giảm phần trăm (%) bắt buộc phải có mức giảm tối đa lớn hơn 0!");
-            }
-        }
-
         // B. Nếu giảm cố định (FIXED) loại Sự kiện (EVENT) -> minOrderAmount BẮT BUỘC phải >= discountValue
         if (request.getDiscountType() == DiscountType.FIXED && request.getIssueType() == VoucherIssueType.EVENT) {
             if (request.getMinOrderAmount() == null || request.getMinOrderAmount().compareTo(request.getDiscountValue()) < 0) {
@@ -78,7 +68,6 @@ public class VoucherService {
 
         Voucher voucher = voucherMapper.toEntity(request);
         voucher.setMinOrderAmount(request.getMinOrderAmount() != null ? request.getMinOrderAmount() : BigDecimal.ZERO);
-        voucher.setMaxDiscountAmount(request.getMaxDiscountAmount());
         voucher.setUsedQuantity(0);
 
         voucher = voucherRepository.save(voucher);
@@ -160,7 +149,6 @@ public class VoucherService {
                 .discountType(uv.getVoucher().getDiscountType())
                 .discountValue(uv.getVoucher().getDiscountValue())
                 .minOrderAmount(uv.getVoucher().getMinOrderAmount())
-                .maxDiscountAmount(uv.getVoucher().getMaxDiscountAmount())
                 .receivedAt(uv.getReceivedAt())
                 .expiredAt(uv.getExpiredAt())
                 .used(uv.getUsed())
