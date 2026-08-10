@@ -24,8 +24,8 @@ public interface VoucherRepository extends BaseRepository<Voucher, Long> {
     @Query("SELECT v FROM Voucher v WHERE " +
             "(:keyword IS NULL OR :keyword = '' OR LOWER(v.code) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(v.name) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
             "AND (:status IS NULL OR " +
-            "     (:status = 'EXPIRED' AND v.endDate < :now) OR " +
-            "     (:status != 'EXPIRED' AND v.status = :status)) " +
+            "     (:status = org.example.datn.domain.enums.VoucherStatus.EXPIRED AND v.endDate < :now) OR " +
+            "     (:status != org.example.datn.domain.enums.VoucherStatus.EXPIRED AND v.status = :status)) " +
             "ORDER BY v.createdAt DESC, v.voucherId DESC")
     Page<Voucher> searchAndFilter(@Param("keyword") String keyword,
                                   @Param("status") VoucherStatus status,
