@@ -370,7 +370,7 @@ public class OrderService {
     @Transactional(readOnly = true)
     public Page<OrderResponse> getCustomerOrders(Long customerId, OrderStatus status, String keyword, Pageable pageable) {
         Page<Order> orderPage = orderRepository.searchCustomerOrders(customerId, status, keyword, pageable);
-        return orderPage.map(orderMapper::toResponse).map(this::enrichOrderResponse);
+        return new PageImpl<>(enrichPage(orderPage.getContent()), orderPage.getPageable(), orderPage.getTotalElements());
     }
 
     @Transactional(readOnly = true)
