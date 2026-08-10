@@ -18,6 +18,9 @@ public interface ReviewRepository extends BaseRepository<Review, Long> {
 
     Optional<Review> findByOrderOrderId(Long orderId);
 
+    /** Lấy review của nhiều đơn cùng lúc (1 câu IN) — khử N+1 khi enrich danh sách đơn. */
+    List<Review> findByOrderOrderIdIn(java.util.Collection<Long> orderIds);
+
     Page<Review> findByRestaurantRestaurantIdOrderByCreatedAtDesc(Long restaurantId, Pageable pageable);
 
     Page<Review> findByShipperShipperIdOrderByCreatedAtDesc(Long shipperId, Pageable pageable);
