@@ -164,33 +164,11 @@ public class RestaurantService {
 
     @Transactional(readOnly = true)
     public Page<RestaurantResponse> getOrderAgain(Long customerId, Pageable pageable) {
-        Page<OrderRepository.RestaurantLastOrderProjection> orderedPage = orderRepository.findOrderAgainRestaurants(
-                        customerId, OrderStatus.COMPLETED, pageable);
-
-        List<Long> pageIds = orderedPage.getContent().stream()
-                .map(OrderRepository.RestaurantLastOrderProjection::getRestaurantId)
-                .toList();
-
-        if (pageIds.isEmpty()) {
-            return new PageImpl<>(List.of(), pageable, orderedPage.getTotalElements());
-        }
-
-        Map<Long, Restaurant> byId =
-                restaurantRepository.findAllById(pageIds).stream().collect(Collectors.toMap(
-                                Restaurant::getRestaurantId,r -> r));
-
-        List<Restaurant> inOrder = pageIds.stream()
-                .map(byId::get)
-                .filter(Objects::nonNull)
-                .toList();
-
-        Page<Restaurant> page = new PageImpl<>(
-                inOrder,
-                pageable,
-                orderedPage.getTotalElements()
+        Page<Restaurant> page = orderRepository.findOrderAgainRestaurants(
+                customerId,
+                OrderStatus.COMPLETED,
+                pageable
         );
-
         return enrichPage(page);
     }
-
 }
