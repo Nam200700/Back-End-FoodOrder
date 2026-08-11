@@ -575,4 +575,24 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
             @Param("keyword") String keyword,
             Pageable pageable
     );
+
+    interface RestaurantLastOrderProjection {
+        Long getRestaurantId();
+        LocalDateTime getLastOrderedAt();
+    }
+
+    @Query("""
+        SELECT o.restaurant.restaurantId AS restaurantId,
+               MAX(o.createdAt) AS lastOrderedAt
+        FROM Order o
+        WHERE o.customer.userId = :customerId
+          AND o.orderStatus = :status
+          AND o.restaurant.status = true
+        GROUP BY o.restaurant.restaurantId
+        ORDER BY MAX(o.createdAt) DESC
+        """)
+    Page<RestaurantLastOrderProjection> findOrderAgainRestaurants(
+            @Param("customerId") Long customerId,
+            @Param("status") OrderStatus status,
+            Pageable pageable);
 }
