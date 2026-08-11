@@ -2,6 +2,7 @@ package org.example.datn.Repository;
 
 import org.example.datn.Repository.base.BaseRepository;
 import org.example.datn.domain.Order;
+import org.example.datn.domain.Restaurant;
 import org.example.datn.domain.enums.OrderStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -576,22 +577,16 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
             Pageable pageable
     );
 
-    interface RestaurantLastOrderProjection {
-        Long getRestaurantId();
-        LocalDateTime getLastOrderedAt();
-    }
-
     @Query("""
-        SELECT o.restaurant.restaurantId AS restaurantId,
-               MAX(o.createdAt) AS lastOrderedAt
+        SELECT o.restaurant
         FROM Order o
         WHERE o.customer.userId = :customerId
           AND o.orderStatus = :status
           AND o.restaurant.status = true
-        GROUP BY o.restaurant.restaurantId
+        GROUP BY o.restaurant
         ORDER BY MAX(o.createdAt) DESC
         """)
-    Page<RestaurantLastOrderProjection> findOrderAgainRestaurants(
+    Page<Restaurant> findOrderAgainRestaurants(
             @Param("customerId") Long customerId,
             @Param("status") OrderStatus status,
             Pageable pageable);
