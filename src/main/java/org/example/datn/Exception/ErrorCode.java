@@ -77,6 +77,10 @@ public enum ErrorCode {
 
     RESTAURANT_CLOSED(400, "Quán ăn hiện không nằm trong khung giờ hoạt động"),
 
+    GROUP_ORDER_NOT_FOUND(404, "Không tìm thấy phiên đặt nhóm"),
+    GROUP_ORDER_MEMBER_NOT_FOUND(404, "Bạn chưa tham gia phiên đặt nhóm này"),
+    GROUP_ORDER_ITEM_NOT_FOUND(404, "Không tìm thấy món trong phiên"),
+
     // Generic
     VALIDATION_FAILED(400, "Dữ liệu không hợp lệ"),
     NOT_FOUND(404, "Không tìm thấy tài nguyên"),
