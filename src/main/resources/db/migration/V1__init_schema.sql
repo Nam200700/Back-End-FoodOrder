@@ -136,7 +136,7 @@ CREATE TABLE orders (
                         delivery_address    VARCHAR(255) NOT NULL,
                         note                VARCHAR(255),
                         order_status        ENUM('CANCELLED','COMPLETED','CONFIRMED','DELIVERING',
-                             'PENDING','PICKED_UP','PREPARING','READY_FOR_PICKUP') NOT NULL,
+                             'PENDING','PICKED_UP', 'SHIPPER_ACCEPTED','PREPARING','READY_FOR_PICKUP') NOT NULL,
                         payment_method      ENUM('COD') NOT NULL,
                         payment_status      ENUM('FAILED','PAID','PENDING','REFUNDED') NOT NULL,
                         PRIMARY KEY (order_id)
@@ -359,12 +359,13 @@ CREATE TABLE vouchers (
                           name VARCHAR(255) NOT NULL,
                           discount_type ENUM('FIXED','PERCENT','FREESHIP') NOT NULL,
                           discount_value DECIMAL(10,2) NOT NULL,
+                          min_order_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
 --                           quantity INT NOT NULL,
                           used_quantity INT NOT NULL DEFAULT 0,
                           start_date DATETIME NOT NULL,
                           end_date DATETIME NOT NULL,
                           status ENUM('ACTIVE','INACTIVE', 'EXPIRED') NOT NULL DEFAULT 'ACTIVE',
-                          issue_type ENUM('NEW_USER', 'BIRTHDAY', 'EVENT', 'ORDER_CANCELLED') NOT NULL,
+                          issue_type ENUM('EVENT', 'ORDER_CANCELLED') NOT NULL,
                           created_at DATETIME,
                           updated_at DATETIME
 );

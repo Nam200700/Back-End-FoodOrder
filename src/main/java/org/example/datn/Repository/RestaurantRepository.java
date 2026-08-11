@@ -16,9 +16,13 @@ public interface RestaurantRepository extends BaseRepository<Restaurant, Long> {
     Page<Restaurant> findByStatusTrue(Pageable pageable);
 
     @Query("""
-        SELECT r FROM Restaurant r
+        SELECT DISTINCT r FROM Restaurant r
+        LEFT JOIN Food f ON f.restaurant = r AND f.status = true AND f.isAvailable = true
         WHERE r.status = true
-        AND (LOWER(r.restaurantName) LIKE LOWER(CONCAT('%', :kw, '%')))
+        AND (
+            LOWER(r.restaurantName) LIKE LOWER(CONCAT('%', :kw, '%'))
+            OR LOWER(f.foodName) LIKE LOWER(CONCAT('%', :kw, '%'))
+        )
         """)
     Page<Restaurant> searchActive(@Param("kw") String keyword, Pageable pageable);
 

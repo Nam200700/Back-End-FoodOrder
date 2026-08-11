@@ -15,6 +15,7 @@ import org.example.datn.domain.Order;
 import org.example.datn.domain.User;
 import org.example.datn.domain.UserVoucher;
 import org.example.datn.domain.Voucher;
+import org.example.datn.domain.enums.DiscountType;
 import org.example.datn.domain.enums.VoucherIssueType;
 import org.example.datn.domain.enums.VoucherStatus;
 import org.example.datn.mapper.VoucherMapper;
@@ -23,6 +24,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -33,7 +35,6 @@ public class VoucherService {
 
     private final VoucherRepository voucherRepository;
     private final VoucherMapper voucherMapper;
-
     private final UserVoucherRepository userVoucherRepository;
     private final UserRepository userRepository;
 
@@ -41,7 +42,6 @@ public class VoucherService {
     public VoucherResponse getByIdVoucher(Long voucherId) {
         Voucher voucher = voucherRepository.findById(voucherId)
                 .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
-
         return voucherMapper.toResponse(voucher);
     }
 
@@ -49,20 +49,67 @@ public class VoucherService {
         if (voucherRepository.existsByCode(request.getCode())) {
             throw new AppException(ErrorCode.VOUCHER_CODE_EXISTS);
         }
+        if (request.getIssueType() == VoucherIssueType.ORDER_CANCELLED && request.getStatus() == VoucherStatus.ACTIVE) {
+            boolean hasActiveCompensation = voucherRepository.existsActiveVoucherByIssueType(
+                    VoucherIssueType.ORDER_CANCELLED, LocalDateTime.now()
+            );
+            if (hasActiveCompensation) {
+                throw new AppException(ErrorCode.VALIDATION_FAILED,
+                        "Đã có một Voucher đền bù hủy đơn đang hoạt động và chưa hết hạn. Vui lòng chờ voucher cũ hết hạn trước khi tạo mới!");
+            }
+        }
+
+        // B. Nếu giảm cố định (FIXED) loại Sự kiện (EVENT) -> minOrderAmount BẮT BUỘC phải >= discountValue
+        if (request.getDiscountType() == DiscountType.FIXED && request.getIssueType() == VoucherIssueType.EVENT) {
+            if (request.getMinOrderAmount() == null || request.getMinOrderAmount().compareTo(request.getDiscountValue()) < 0) {
+                throw new AppException(ErrorCode.VALIDATION_FAILED, "Voucher giảm cố định loại Sự kiện bắt buộc có đơn tối thiểu lớn hơn hoặc bằng giá trị giảm!");
+            }
+        }
+
         Voucher voucher = voucherMapper.toEntity(request);
+        voucher.setMinOrderAmount(request.getMinOrderAmount() != null ? request.getMinOrderAmount() : BigDecimal.ZERO);
         voucher.setUsedQuantity(0);
+
         voucher = voucherRepository.save(voucher);
         return voucherMapper.toResponse(voucher);
     }
 
+    // 2. CẬP NHẬT VOUCHER (KHÓA TOÀN BỘ CÁC TRƯỜNG THUỘC TRỊ GIÁ)
     public VoucherResponse updateVoucher(Long voucherId, VoucherRequest request) {
         Voucher voucher = voucherRepository.findById(voucherId)
                 .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
-        if (!voucher.getCode().equals(request.getCode())
-                && voucherRepository.existsByCode(request.getCode())) {
-            throw new AppException(ErrorCode.VOUCHER_CODE_EXISTS);
+
+        if (!voucher.getCode().equalsIgnoreCase(request.getCode())) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, "Không được phép thay đổi Mã Voucher!");
         }
-        voucherMapper.updateVoucher(voucher, request);
+        if (voucher.getDiscountType() != request.getDiscountType() ||
+                voucher.getDiscountValue().compareTo(request.getDiscountValue()) != 0) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, "Không được phép thay đổi Loại hoặc Giá trị giảm của Voucher!");
+        }
+        if (voucher.getIssueType() != request.getIssueType()) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, "Không được phép thay đổi Loại phát hành Voucher!");
+        }
+
+        BigDecimal oldMin = voucher.getMinOrderAmount() != null ? voucher.getMinOrderAmount() : BigDecimal.ZERO;
+        BigDecimal newMin = request.getMinOrderAmount() != null ? request.getMinOrderAmount() : BigDecimal.ZERO;
+        if (oldMin.compareTo(newMin) != 0) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, "Không được phép thay đổi Giá trị đơn hàng tối thiểu!");
+        }
+
+        if (request.getIssueType() == VoucherIssueType.ORDER_CANCELLED && request.getStatus() == VoucherStatus.ACTIVE) {
+            boolean hasActiveOther = voucherRepository.existsActiveVoucherByIssueTypeExcludingId(
+                    VoucherIssueType.ORDER_CANCELLED, LocalDateTime.now(), voucherId
+            );
+            if (hasActiveOther) {
+                throw new AppException(ErrorCode.VALIDATION_FAILED,
+                        "Đã có một Voucher đền bù hủy đơn khác đang hoạt động và chưa hết hạn. Không thể kích hoạt!");
+            }
+        }
+
+        voucher.setName(request.getName());
+        voucher.setStartDate(request.getStartDate());
+        voucher.setEndDate(request.getEndDate());
+        voucher.setStatus(request.getStatus());
         voucher = voucherRepository.save(voucher);
         return voucherMapper.toResponse(voucher);
     }
@@ -91,8 +138,6 @@ public class VoucherService {
         return PageResponse.from(page.map(voucherMapper::toResponse));
     }
 
-
-    //customer
     @Transactional(readOnly = true)
     public List<UserVoucherResponse> getMyVouchers(Long userId) {
         List<UserVoucher> list = userVoucherRepository.findValidUserVouchers(userId, false, LocalDateTime.now());
@@ -103,6 +148,7 @@ public class VoucherService {
                 .name(uv.getVoucher().getName())
                 .discountType(uv.getVoucher().getDiscountType())
                 .discountValue(uv.getVoucher().getDiscountValue())
+                .minOrderAmount(uv.getVoucher().getMinOrderAmount())
                 .receivedAt(uv.getReceivedAt())
                 .expiredAt(uv.getExpiredAt())
                 .used(uv.getUsed())
@@ -123,7 +169,6 @@ public class VoucherService {
         Voucher voucher = voucherRepository.findById(voucherId)
                 .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
 
-        // Kiểm tra xem có phải voucher public không và còn hạn không
         if (voucher.getIssueType() != VoucherIssueType.EVENT || voucher.getStatus() != VoucherStatus.ACTIVE) {
             throw new AppException(ErrorCode.VOUCHER_NOT_FOUND);
         }
@@ -132,7 +177,6 @@ public class VoucherService {
             throw new AppException(ErrorCode.VOUCHER_EXPIRED);
         }
 
-        // Kiểm tra xem user đã lưu mã này chưa
         boolean alreadyClaimed = userVoucherRepository.existsByUser_UserIdAndVoucher_VoucherId(userId, voucherId);
         if (alreadyClaimed) {
             throw new AppException(ErrorCode.VOUCHER_ALREADY_CLAIMED);
@@ -141,7 +185,6 @@ public class VoucherService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-        // Tạo bản ghi ví voucher cho user
         UserVoucher userVoucher = UserVoucher.builder()
                 .user(user)
                 .voucher(voucher)
@@ -153,20 +196,17 @@ public class VoucherService {
         userVoucherRepository.save(userVoucher);
     }
 
-    //hoàn lại voucher cho khách hàng khi đơn hàng bị hủy
     public void refundVoucher(Order order) {
         if (order.getUserVoucher() != null && order.getCustomer() != null) {
             UserVoucher userVoucher = order.getUserVoucher();
 
             userVoucherRepository.findById(userVoucher.getUserVoucherId())
                     .ifPresent(uv -> {
-                        // Kiểm tra trạng thái đã sử dụng của UserVoucher
                         if (Boolean.TRUE.equals(uv.getUsed())) {
                             uv.setUsed(false);
                             uv.setUsedAt(null);
                             userVoucherRepository.save(uv);
 
-                            // Giảm số lượng đã sử dụng (usedQuantity) của Voucher gốc
                             Voucher voucher = uv.getVoucher();
                             if (voucher != null && voucher.getUsedQuantity() != null && voucher.getUsedQuantity() > 0) {
                                 voucher.setUsedQuantity(voucher.getUsedQuantity() - 1);

@@ -80,17 +80,14 @@ public class OrderService {
     @Scheduled(fixedRate = 30000)
     public void autoCancelExpiredPendingOrders() {
         LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(5);
-
-        // 1. Tìm các đơn PENDING tạo trước (quá 5 phút)
         List<Order> expiredOrders = orderRepository.findByOrderStatusAndCreatedAtBefore(OrderStatus.PENDING, cutoffTime);
 
         if (expiredOrders.isEmpty()) {
             return;
         }
 
-        // 2. Tìm Voucher đền bù (ORDER_CANCELLED)
         Voucher compensationVoucher = voucherRepository.findActiveVoucherByIssueType(VoucherIssueType.ORDER_CANCELLED)
-                .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
+                .orElse(null);
 
         for (Order order : expiredOrders) {
             try {
@@ -341,19 +338,28 @@ public class OrderService {
         BigDecimal totalBeforeDiscount = subtotal.add(shippingFeeBd);
 
         Voucher voucher = (userVoucher != null) ? userVoucher.getVoucher() : null;
-        // Tính giá trị giảm giá từ Voucher
         BigDecimal discountAmount = BigDecimal.ZERO;
+
         if (voucher != null) {
+            // 1. KIỂM TRA ĐIỀU KIỆN ĐƠN HÀNG TỐI THIỂU (minOrderAmount)
+            if (voucher.getMinOrderAmount() != null && subtotal.compareTo(voucher.getMinOrderAmount()) < 0) {
+                throw new AppException(ErrorCode.VALIDATION_FAILED,
+                        String.format("Quán '%s': Tiền món (%,d VNĐ) chưa đạt giá trị tối thiểu %,d VNĐ để áp dụng mã '%s'!",
+                                restaurant.getRestaurantName(),
+                                subtotal.longValue(),
+                                voucher.getMinOrderAmount().longValue(),
+                                voucher.getCode()));
+            }
+
+            // 2. TÍNH TOÁN TIỀN GIẢM VÀ ÁP DỤNG TRẦN GIẢM TỐI ĐA (maxDiscountAmount)
             switch (voucher.getDiscountType()) {
                 case FIXED -> discountAmount = voucher.getDiscountValue();
-                case PERCENT -> discountAmount = subtotal.multiply(voucher.getDiscountValue())
-                        .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+                case PERCENT -> {
+                    discountAmount = subtotal.multiply(voucher.getDiscountValue())
+                            .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+                }
                 case FREESHIP -> discountAmount = shippingFeeBd;
             }
-        }
-
-        if (discountAmount.compareTo(totalBeforeDiscount) > 0) {
-            throw new AppException(ErrorCode.VOUCHER_DISCOUNT_EXCEEDED);
         }
 
         order.setDiscountAmount(discountAmount);

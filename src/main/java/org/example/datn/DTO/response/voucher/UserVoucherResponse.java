@@ -18,6 +18,7 @@ public class UserVoucherResponse {
     private String name;
     private DiscountType discountType;
     private BigDecimal discountValue;
+    private BigDecimal minOrderAmount;
     private LocalDateTime receivedAt;
     private LocalDateTime expiredAt;
     private Boolean used;
