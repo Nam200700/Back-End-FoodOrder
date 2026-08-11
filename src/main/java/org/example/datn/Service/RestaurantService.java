@@ -1,16 +1,14 @@
 package org.example.datn.Service;
 
 import lombok.RequiredArgsConstructor;
+import org.example.datn.Repository.*;
 import org.example.datn.domain.Restaurant;
 import org.example.datn.domain.User;
 import org.example.datn.DTO.request.restaurant.CreateRestaurantRequest;
 import org.example.datn.DTO.response.restaurant.RestaurantResponse;
 import org.example.datn.Exception.ErrorCode;
+import org.example.datn.domain.enums.OrderStatus;
 import org.example.datn.mapper.RestaurantMapper;
-import org.example.datn.Repository.RestaurantRepository;
-import org.example.datn.Repository.ReviewRepository;
-import org.example.datn.Repository.OrderRepository;
-import org.example.datn.Repository.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -20,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -161,4 +161,36 @@ public class RestaurantService {
         
         return restaurantMapper.toResponse(restaurantRepository.save(restaurant));
     }
+
+    @Transactional(readOnly = true)
+    public Page<RestaurantResponse> getOrderAgain(Long customerId, Pageable pageable) {
+        Page<OrderRepository.RestaurantLastOrderProjection> orderedPage = orderRepository.findOrderAgainRestaurants(
+                        customerId, OrderStatus.COMPLETED, pageable);
+
+        List<Long> pageIds = orderedPage.getContent().stream()
+                .map(OrderRepository.RestaurantLastOrderProjection::getRestaurantId)
+                .toList();
+
+        if (pageIds.isEmpty()) {
+            return new PageImpl<>(List.of(), pageable, orderedPage.getTotalElements());
+        }
+
+        Map<Long, Restaurant> byId =
+                restaurantRepository.findAllById(pageIds).stream().collect(Collectors.toMap(
+                                Restaurant::getRestaurantId,r -> r));
+
+        List<Restaurant> inOrder = pageIds.stream()
+                .map(byId::get)
+                .filter(Objects::nonNull)
+                .toList();
+
+        Page<Restaurant> page = new PageImpl<>(
+                inOrder,
+                pageable,
+                orderedPage.getTotalElements()
+        );
+
+        return enrichPage(page);
+    }
+
 }
