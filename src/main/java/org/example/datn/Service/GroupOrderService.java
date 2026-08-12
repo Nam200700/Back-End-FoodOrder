@@ -1,7 +1,6 @@
 package org.example.datn.Service;
 
 import lombok.RequiredArgsConstructor;
-import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.example.datn.DTO.request.grouporder.*;
 import org.example.datn.DTO.response.grouporder.GroupOrderResponse;
@@ -14,6 +13,7 @@ import org.example.datn.domain.enums.*;
 import org.example.datn.mapper.GroupOrderMapper;
 import org.example.datn.mapper.OrderMapper;
 import org.example.datn.util.ShippingFeeCalculator;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -25,7 +25,6 @@ import java.math.RoundingMode;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -52,6 +51,9 @@ public class GroupOrderService {
     private final WebSocketService webSocketService;
     private final GroupOrderMapper groupOrderMapper;
     private final OrderMapper orderMapper;
+
+    @Value("${app.frontend-base-url}")
+    private String frontendBaseUrl;
 
     // ─── Tạo phiên ─────────────────────────────────────────────
     @Transactional
@@ -107,7 +109,7 @@ public class GroupOrderService {
         groupOrder.getMembers().add(hostMember);
         GroupOrder saved = groupOrderRepository.save(groupOrder);
 
-        return groupOrderMapper.toResponse(saved);
+        return toResponseWithInvite(saved);
     }
 
     private String generateUniqueInviteCode() {
@@ -152,10 +154,7 @@ public class GroupOrderService {
                             .build();
                     memberRepository.save(member);
                 });
-
-        GroupOrder detail = groupOrderRepository.findDetailById(groupOrder.getGroupOrderId())
-                .orElseThrow(() -> new AppException(ErrorCode.GROUP_ORDER_NOT_FOUND));
-        return groupOrderMapper.toResponse(detail);
+        return toResponseWithInvite(getOrThrowDetail(groupOrder.getGroupOrderId()));
     }
 
     @Transactional
@@ -212,7 +211,7 @@ public class GroupOrderService {
             memberRepository.save(member);
         }
 
-        return groupOrderMapper.toResponse(getOrThrowDetail(groupOrderId));
+        return toResponseWithInvite(getOrThrowDetail(groupOrderId));
     }
 
     @Transactional
@@ -231,7 +230,7 @@ public class GroupOrderService {
         item.setNote(req.getNote());
         groupItemRepository.save(item);
 
-        return groupOrderMapper.toResponse(getOrThrowDetail(groupOrderId));
+        return toResponseWithInvite(getOrThrowDetail(groupOrderId));
     }
 
     @Transactional
@@ -247,10 +246,12 @@ public class GroupOrderService {
                 .orElseThrow(() -> new AppException(ErrorCode.GROUP_ORDER_ITEM_NOT_FOUND));
 
         groupItemRepository.delete(item);
-        return groupOrderMapper.toResponse(getOrThrowDetail(groupOrderId));
+        return toResponseWithInvite(getOrThrowDetail(groupOrderId));
     }
 
     // ─── Trạng thái thành viên / phiên ────────────────────────
+
+    // Đánh dấu đã chọn món xong
     @Transactional
     public GroupOrderResponse markReady(Long userId, Long groupOrderId) {
         GroupOrder groupOrder = getOrThrow(groupOrderId);
@@ -267,9 +268,10 @@ public class GroupOrderService {
 
         member.setStatus(GroupOrderMemberStatus.READY);
         memberRepository.save(member);
-        return groupOrderMapper.toResponse(getOrThrowDetail(groupOrderId));
+        return toResponseWithInvite(getOrThrowDetail(groupOrderId));
     }
 
+    // đánh dấu khóa phiên
     @Transactional
     public GroupOrderResponse lockGroupOrder(Long hostUserId, Long groupOrderId) {
         GroupOrder groupOrder = getOrThrowDetail(groupOrderId);
@@ -284,7 +286,7 @@ public class GroupOrderService {
         groupOrder.setLockedAt(LocalDateTime.now());
         groupOrderRepository.save(groupOrder);
 
-        return groupOrderMapper.toResponse(groupOrder);
+        return toResponseWithInvite(groupOrder);
     }
 
     @Transactional
@@ -305,7 +307,6 @@ public class GroupOrderService {
     }
 
     // ─── Chốt đơn: gộp group_order_items → 1 Order thật ───────
-    /*
     @Transactional(isolation = Isolation.SERIALIZABLE)
     public OrderResponse checkout(Long hostUserId, Long groupOrderId, CheckoutGroupOrderRequest req) {
         GroupOrder groupOrder = getOrThrowDetail(groupOrderId);
@@ -334,7 +335,6 @@ public class GroupOrderService {
 
         BigDecimal shippingFee = BigDecimal.valueOf(ShippingFeeCalculator.calculate(distance));
 
-        // Voucher (tùy chọn) — do host áp cho cả đơn gộp
         UserVoucher userVoucher = null;
         Voucher voucher = null;
         if (req.getUserVoucherId() != null) {
@@ -425,7 +425,7 @@ public class GroupOrderService {
         }
 
         return orderMapper.toResponse(saved);
-    }*/
+    }
 
     private String buildItemNote(GroupOrderItem gi) {
         String memberName = gi.getMember().getUser().getFullName();
@@ -433,7 +433,7 @@ public class GroupOrderService {
         return (gi.getNote() != null && !gi.getNote().isBlank()) ? base + " — " + gi.getNote() : base;
     }
 
-    // ─── Truy vấn ───────────────────────────────────────────────
+
     @Transactional(readOnly = true)
     public GroupOrderResponse getDetail(Long userId, Long groupOrderId) {
         GroupOrder groupOrder = getOrThrowDetail(groupOrderId);
@@ -442,22 +442,21 @@ public class GroupOrderService {
         if (!isMember) {
             throw new AppException(ErrorCode.FORBIDDEN, "Bạn không phải thành viên của phiên này");
         }
-        return groupOrderMapper.toResponse(groupOrder);
+        return toResponseWithInvite(groupOrder);
     }
 
     @Transactional(readOnly = true)
     public GroupOrderResponse getByInviteCode(String inviteCode) {
         GroupOrder groupOrder = groupOrderRepository.findByInviteCode(inviteCode)
                 .orElseThrow(() -> new AppException(ErrorCode.GROUP_ORDER_NOT_FOUND));
-        GroupOrder detail = groupOrderRepository.findDetailById(groupOrder.getGroupOrderId())
-                .orElseThrow(() -> new AppException(ErrorCode.GROUP_ORDER_NOT_FOUND));
-        return groupOrderMapper.toResponse(detail);
+        GroupOrder detail = getOrThrowDetail(groupOrder.getGroupOrderId());
+        return toResponseWithInvite(detail);
     }
 
     @Transactional(readOnly = true)
     public Page<GroupOrderResponse> getMyGroupOrders(Long userId, Pageable pageable) {
         return groupOrderRepository.findByMemberUserId(userId, pageable)
-                .map(groupOrderMapper::toResponse);
+                .map(this::toResponseWithInvite);
     }
 
     // ─── Helpers ─────────────────────────────────────────────
@@ -486,6 +485,19 @@ public class GroupOrderService {
         }
     }
 
+    /** Link mời dạng: {frontend}/restaurants/{restaurantId}?group={inviteCode}
+     *  Vào thẳng trang chi tiết quán, RestaurantDetail.jsx tự nhận diện param "group" và tự động join. */
+    private String buildInviteUrl(GroupOrder g) {
+        return String.format("%s/restaurants/%d?group=%s",
+                frontendBaseUrl, g.getRestaurant().getRestaurantId(), g.getInviteCode());
+    }
+
+    private GroupOrderResponse toResponseWithInvite(GroupOrder g) {
+        GroupOrderResponse res = groupOrderMapper.toResponse(g);
+        res.setInviteUrl(buildInviteUrl(g));
+        return res;
+    }
+
     // ─── Job tự động hết hạn ────────────────────────────────────
     @Transactional
     public void expireOverdueGroupOrders() {
@@ -498,20 +510,4 @@ public class GroupOrderService {
             groupOrderRepository.saveAll(overdue);
         }
     }
-
-//    @Value("${app.frontend-base-url}")
-//    private String frontendBaseUrl;
-//
-//    /** Link mời dạng: {frontend}/restaurants/{restaurantId}?group={inviteCode}
-//     *  Vào thẳng trang chi tiết quán, RestaurantDetail.jsx tự nhận diện param "group" và tự động join. */
-//    private String buildInviteUrl(GroupOrder g) {
-//        return String.format("%s/restaurants/%d?group=%s",
-//                frontendBaseUrl, g.getRestaurant().getRestaurantId(), g.getInviteCode());
-//    }
-//
-//    private GroupOrderResponse toResponseWithInvite(GroupOrder g) {
-//        GroupOrderResponse res = groupOrderMapper.toResponse(g);
-//        res.setInviteUrl(buildInviteUrl(g));
-//        return res;
-//    }
 }
