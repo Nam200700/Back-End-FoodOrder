@@ -44,6 +44,7 @@ server:
   port: 8080
 
 app:
+  frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
   oauth2:
     # Success handler redirects here with ?token=...&refreshToken=...
     redirect-uri: ${OAUTH2_REDIRECT_URI:http://localhost:5173/oauth2/callback}
