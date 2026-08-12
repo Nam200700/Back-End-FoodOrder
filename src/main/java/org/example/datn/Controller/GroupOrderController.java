@@ -102,12 +102,12 @@ public class GroupOrderController {
         groupOrderService.cancelGroupOrder(user.getUserId(), id, req.getReason());
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
-    /*
+
     @PostMapping("/{id}/checkout")
     public ResponseEntity<ApiResponse<OrderResponse>> checkout(
             @AuthenticationPrincipal CustomUserDetails user, @PathVariable Long id,
             @Valid @RequestBody CheckoutGroupOrderRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created(groupOrderService.checkout(user.getUserId(), id, req)));
-    }*/
+    }
 }
