@@ -246,6 +246,7 @@ public class GroupOrderService {
                 .orElseThrow(() -> new AppException(ErrorCode.GROUP_ORDER_ITEM_NOT_FOUND));
 
         groupItemRepository.delete(item);
+        groupItemRepository.flush();
         return toResponseWithInvite(getOrThrowDetail(groupOrderId));
     }
 
