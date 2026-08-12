@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.example.datn.domain.base.BaseEntity;
 import org.example.datn.domain.enums.GroupOrderStatus;
+import org.hibernate.annotations.Fetch;
+import org.hibernate.annotations.FetchMode;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -65,10 +67,12 @@ public class GroupOrder extends BaseEntity {
 
     @Builder.Default
     @OneToMany(mappedBy = "groupOrder", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Fetch(FetchMode.SUBSELECT)
     private List<GroupOrderMember> members = new ArrayList<>();
 
     @Builder.Default
     @OneToMany(mappedBy = "groupOrder", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Fetch(FetchMode.SUBSELECT)
     private List<GroupOrderItem> items = new ArrayList<>();
 
 }
