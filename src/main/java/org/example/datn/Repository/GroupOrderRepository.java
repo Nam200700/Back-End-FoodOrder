@@ -20,16 +20,31 @@ public interface GroupOrderRepository extends BaseRepository<GroupOrder, Long> {
 
     Optional<GroupOrder> findByInviteCode(String inviteCode);
 
-    /** Fetch-join members + items + food để hiển thị chi tiết phiên, tránh N+1. */
+    @Query("SELECT g FROM GroupOrder g WHERE g.groupOrderId = :groupOrderId")
+    Optional<GroupOrder> findDetailById(@Param("groupOrderId") Long groupOrderId);
+
+    /**
+     * FIX MultipleBagFetchException: KHÔNG fetch-join 2 List (members + items) trong cùng 1 câu.
+     * Query này chỉ fetch "members" — dùng kèm findWithItems() bên dưới trong cùng transaction,
+     * Hibernate Persistence Context sẽ tự gắn cả 2 kết quả vào CÙNG 1 Java object (theo id).
+     */
     @Query("""
             SELECT DISTINCT g FROM GroupOrder g
             LEFT JOIN FETCH g.members m
             LEFT JOIN FETCH m.user
-            LEFT JOIN FETCH g.items i
-            LEFT JOIN FETCH i.food
             WHERE g.groupOrderId = :id
             """)
-    Optional<GroupOrder> findDetailById(@Param("id") Long id);
+    Optional<GroupOrder> findWithMembers(@Param("id") Long id);
+
+    /** Fetch riêng "items" — xem ghi chú ở findWithMembers(). */
+    @Query("""
+            SELECT DISTINCT g FROM GroupOrder g
+            LEFT JOIN FETCH g.items i
+            LEFT JOIN FETCH i.food
+            LEFT JOIN FETCH i.member
+            WHERE g.groupOrderId = :id
+            """)
+    Optional<GroupOrder> findWithItems(@Param("id") Long id);
 
     Page<GroupOrder> findByHostUserIdOrderByCreatedAtDesc(Long hostId, Pageable pageable);
 
