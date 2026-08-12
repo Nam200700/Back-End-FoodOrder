@@ -19,12 +19,9 @@ public interface GroupOrderMemberMapper {
     @Mapping(target = "isHost", source = "member.isHost")
     @Mapping(target = "status", source = "member.status")
     @Mapping(target = "joinedAt", source = "member.joinedAt")
-    @Mapping(target = "items", source = "member.groupOrder.items")
+    @Mapping(target = "items", source = "items")
     @Mapping(target = "memberSubtotal", expression = "java(sumSubtotal(items))")
-    GroupOrderMemberResponse toResponse(
-            GroupOrderMember member,
-            List<GroupOrderItem> items
-    );
+    GroupOrderMemberResponse toResponse(GroupOrderMember member, List<GroupOrderItem> items);
 
     default BigDecimal sumSubtotal(List<GroupOrderItem> items) {
         if (items == null) {
