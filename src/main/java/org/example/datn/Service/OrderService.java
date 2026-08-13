@@ -691,6 +691,12 @@ public class OrderService {
         shipper.setTotalDelivery(shipper.getTotalDelivery() + 1);
         shipperRepository.save(shipper);
 
+        // Uy tín: hoàn tất đơn suôn sẻ → hồi điểm cho khách và shipper.
+        reputationService.reward(order.getCustomer(), ReputationService.REWARD_ON_COMPLETE);
+        reputationService.reward(shipper.getUser(), ReputationService.REWARD_ON_COMPLETE);
+        // Loyalty: khách tích điểm theo tiền món (1 điểm / 10.000đ subtotal).
+        accrueLoyalty(order.getCustomer(), order.getSubtotalAmount());
+
         paymentService.markCodPaidOnCompletion(order);
         deliveryService.completeDelivery(order);
         transactionService.recordOrderTransactions(order);
