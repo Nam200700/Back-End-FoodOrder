@@ -11,6 +11,7 @@ import org.example.datn.Exception.ErrorCode;
 import org.example.datn.Exception.OrderStatusException;
 import org.example.datn.Repository.*;
 import org.example.datn.domain.*;
+import org.example.datn.domain.enums.DeliveryStatus;
 import org.example.datn.domain.enums.NotificationType;
 import org.example.datn.domain.enums.OrderStatus;
 import org.example.datn.domain.enums.PaymentStatus;
@@ -67,6 +68,7 @@ public class OrderService {
     private final UserVoucherRepository userVoucherRepository;
     private final VoucherRepository voucherRepository;
     private final VoucherService voucherService;
+    private final ReputationService reputationService;
 
     private static final Map<OrderStatus, Set<OrderStatus>> VALID_TRANSITIONS = Map.of(
             PENDING, Set.of(CONFIRMED, CANCELLED),
@@ -153,6 +155,12 @@ public class OrderService {
     @EvictStatsCaches
     public List<OrderResponse> createOrder(Long customerId, CreateOrderRequest req) {
         User customer = userRepository.getReferenceById(customerId);
+
+        // Chống bom hàng: khách có điểm uy tín quá thấp thì tạm không cho đặt đơn.
+        if (customer.getReputationScore() != null
+                && customer.getReputationScore() < ReputationService.CUSTOMER_ORDER_BLOCK_BELOW) {
+            throw new AppException(ErrorCode.REPUTATION_TOO_LOW);
+        }
 
         List<Order> ordersToSave = new ArrayList<>();
         List<Cart> cartsToDelete = new ArrayList<>();
@@ -391,11 +399,17 @@ public class OrderService {
     public OrderResponse cancelOrderByCustomer(Long customerId, Long orderId, String reason) {
         Order order = loadWithItems(orderId);
         ownershipGuard.checkOrderOwner(order, customerId);
-        validateTransition(order.getOrderStatus(), CANCELLED);
+        OrderStatus prev = order.getOrderStatus();
+        validateTransition(prev, CANCELLED);
 
         order.setOrderStatus(CANCELLED);
         order.setCancelReason(reason);
         orderRepository.save(order);
+
+        // Khách hủy SAU khi quán đã xác nhận (CONFIRMED) → trừ uy tín; hủy lúc PENDING thì miễn phí.
+        if (prev == CONFIRMED) {
+            reputationService.penalize(order.getCustomer(), ReputationService.PENALTY_CUSTOMER_LATE_CANCEL);
+        }
 
         notificationService.notifyUser(order.getRestaurant().getOwner().getUserId(),
                 NotificationType.ORDER_CANCELLED, order.getOrderId());
@@ -436,7 +450,11 @@ public class OrderService {
                 if (!order.getRestaurant().getOwner().getUserId().equals(current.getUserId())) {
                     throw new AppException(ErrorCode.FORBIDDEN, "Đơn này không thuộc quán của bạn");
                 }
-                if (!earlyStage) {
+                // Quán được hủy đơn SAU khi đã xác nhận: cho tới hết giai đoạn PREPARING
+                // (hết nguyên liệu / quá tải) — trước khi đơn ra pool cho shipper.
+                boolean ownerCancelable = (st == OrderStatus.PENDING || st == OrderStatus.CONFIRMED
+                        || st == OrderStatus.PREPARING);
+                if (!ownerCancelable) {
                     throw new AppException(ErrorCode.ORDER_CANCEL_STAGE_INVALID, "Đơn đã qua giai đoạn cho phép hủy");
                 }
             }
@@ -471,6 +489,18 @@ public class OrderService {
         }
 
         orderRepository.save(order);
+
+        // Điểm uy tín + đền bù theo vai trò gây hủy
+        if (role == Role.CUSTOMER) {
+            if (st == OrderStatus.CONFIRMED) {
+                reputationService.penalize(order.getCustomer(), ReputationService.PENALTY_CUSTOMER_LATE_CANCEL);
+            }
+        } else if (role == Role.OWNER) {
+            reputationService.penalize(order.getRestaurant().getOwner(), ReputationService.PENALTY_OWNER_CANCEL);
+            bumpRestaurantCancelCount(order.getRestaurant());
+            issueCompensationVoucher(order.getCustomer());   // không phải lỗi khách → đền voucher
+        }
+
         notificationService.notifyOrderCancelled(order, role);
         webSocketService.broadcastOrderStatus(order);
 
@@ -525,6 +555,12 @@ public class OrderService {
             payment.setStatus(PaymentStatus.FAILED);
             paymentRepository.save(payment);
         }
+
+        // Quán từ chối đơn mới → trừ uy tín quán (nhẹ) + tăng cancel_count + đền voucher khách.
+        reputationService.penalize(order.getRestaurant().getOwner(), ReputationService.PENALTY_OWNER_REJECT);
+        bumpRestaurantCancelCount(order.getRestaurant());
+        issueCompensationVoucher(order.getCustomer());
+
         notificationService.notifyUser(order.getCustomer().getUserId(),
                 NotificationType.ORDER_CANCELLED, order.getOrderId());
         webSocketService.broadcastOrderStatus(order);
@@ -592,6 +628,13 @@ public class OrderService {
             throw new AppException(ErrorCode.SHIPPER_BUSY);
         }
 
+        // Uy tín thấp → tạm không cho nhận đơn mới.
+        User shipperUser = shipper.getUser();
+        if (shipperUser.getReputationScore() != null
+                && shipperUser.getReputationScore() < ReputationService.SHIPPER_ACCEPT_BLOCK_BELOW) {
+            throw new AppException(ErrorCode.SHIPPER_REPUTATION_LOW);
+        }
+
         order.setShipper(userRepository.getReferenceById(shipperId));
         orderRepository.save(order);
 
@@ -649,6 +692,12 @@ public class OrderService {
         shipper.setTotalDelivery(shipper.getTotalDelivery() + 1);
         shipperRepository.save(shipper);
 
+        // Uy tín: hoàn tất đơn suôn sẻ → hồi điểm cho khách và shipper.
+        reputationService.reward(order.getCustomer(), ReputationService.REWARD_ON_COMPLETE);
+        reputationService.reward(shipper.getUser(), ReputationService.REWARD_ON_COMPLETE);
+        // Loyalty: khách tích điểm theo tiền món (1 điểm / 10.000đ subtotal).
+        accrueLoyalty(order.getCustomer(), order.getSubtotalAmount());
+
         paymentService.markCodPaidOnCompletion(order);
         deliveryService.completeDelivery(order);
         transactionService.recordOrderTransactions(order);
@@ -672,10 +721,91 @@ public class OrderService {
         return enrichOne(order, orderMapper.toResponse(order));
     }
 
+    /**
+     * Shipper BỎ ĐƠN đã nhận (đảo ngược acceptOrder): trả đơn về pool cho shipper khác,
+     * trừ uy tín shipper + tăng cancel_count, đền voucher cho khách (không phải lỗi khách).
+     */
+    @Transactional
+    @EvictStatsCaches
+    public OrderResponse abandonOrder(Long shipperId, Long orderId, String reason) {
+        Order order = getOrderForShipper(shipperId, orderId);   // đảm bảo đơn đang thuộc shipper này
+        OrderStatus st = order.getOrderStatus();
+        if (st == COMPLETED || st == CANCELLED) {
+            throw new AppException(ErrorCode.ORDER_CANCEL_STAGE_INVALID, "Đơn đã kết thúc, không thể bỏ.");
+        }
+
+        User shipperUser = order.getShipper();
+
+        // Trả đơn về pool: bỏ gán shipper, đưa trạng thái về READY_FOR_PICKUP.
+        order.setShipper(null);
+        order.setOrderStatus(READY_FOR_PICKUP);
+        if (reason != null && !reason.isBlank()) {
+            order.setCancelReason("Shipper bỏ đơn: " + reason.trim());
+        }
+        orderRepository.save(order);
+
+        // Xoá bản ghi Delivery để shipper khác nhận lại được (uk_deliveries_order là unique theo order).
+        deliveryService.cancelDelivery(order);
+
+        // Shipper: -active_delivery, +cancel_count, trừ uy tín.
+        Shipper shipper = shipperRepository.findByUserUserId(shipperId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        shipper.setActiveDelivery(Math.max(0, shipper.getActiveDelivery() - 1));
+        shipper.setCancelCount(shipper.getCancelCount() + 1);
+        shipperRepository.save(shipper);
+        reputationService.penalize(shipperUser, ReputationService.PENALTY_SHIPPER_ABANDON);
+
+        // Đền voucher cho khách.
+        issueCompensationVoucher(order.getCustomer());
+
+        // Thông báo + đẩy lại pool cho các shipper khác.
+        notificationService.notifyUser(order.getCustomer().getUserId(),
+                NotificationType.ORDER_CANCELLED, order.getOrderId());
+        notificationService.broadcastToShippers(order.getOrderId(), NotificationType.ORDER_READY_PICKUP);
+        webSocketService.broadcastOrderStatus(order);
+        webSocketService.broadcastAvailableOrder(order);
+        return enrichOne(order, orderMapper.toResponse(order));
+    }
+
     // ─── Helpers ─────────────────────────────────────────────
     private Order loadWithItems(Long orderId) {
         return orderRepository.findByIdWithItems(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+    }
+
+    /** Cấp voucher đền bù (loại ORDER_CANCELLED đang active) cho khách khi hủy KHÔNG do lỗi khách. */
+    private void issueCompensationVoucher(User customer) {
+        if (customer == null) return;
+        voucherRepository.findActiveVoucherByIssueType(VoucherIssueType.ORDER_CANCELLED).ifPresent(v -> {
+            // uk_user_voucher UNIQUE(user_id, voucher_id) → chỉ cấp nếu khách chưa có voucher này.
+            if (!userVoucherRepository.existsByUser_UserIdAndVoucher_VoucherId(customer.getUserId(), v.getVoucherId())) {
+                userVoucherRepository.save(UserVoucher.builder()
+                        .user(customer)
+                        .voucher(v)
+                        .used(false)
+                        .receivedAt(LocalDateTime.now())
+                        .expiredAt(LocalDateTime.now().plusDays(30))
+                        .build());
+            }
+        });
+    }
+
+    /** Tăng số đơn quán tự hủy/từ chối (để tính tỷ lệ hủy). */
+    private void bumpRestaurantCancelCount(Restaurant restaurant) {
+        if (restaurant == null) return;
+        int cur = restaurant.getCancelCount() != null ? restaurant.getCancelCount() : 0;
+        restaurant.setCancelCount(cur + 1);
+        restaurantRepository.save(restaurant);
+    }
+
+    /** Cộng điểm loyalty cho khách: 1 điểm / 10.000đ tiền món (subtotal). */
+    private void accrueLoyalty(User customer, BigDecimal subtotal) {
+        if (customer == null || subtotal == null) return;
+        int earned = subtotal.divide(BigDecimal.valueOf(10000), 0, java.math.RoundingMode.DOWN).intValue();
+        if (earned <= 0) return;
+        int cur = customer.getLoyaltyPoints() != null ? customer.getLoyaltyPoints() : 0;
+        customer.setLoyaltyPoints(cur + earned);
+        userRepository.save(customer);
     }
 
     private Order getOrderForMerchant(Long merchantId, Long orderId) {
@@ -699,8 +829,23 @@ public class OrderService {
     @Transactional(readOnly = true)
     public Page<OrderResponse> getShipperOrders(Long shipperId, OrderStatus status, Pageable pageable) {
         Page<Delivery> deliveryPage = deliveryRepository.findByShipperIdAndOrderStatus(shipperId, status, pageable);
-        List<Order> orders = deliveryPage.getContent().stream().map(Delivery::getOrder).toList();
-        return new PageImpl<>(enrichPage(orders), deliveryPage.getPageable(), deliveryPage.getTotalElements());
+        List<Delivery> deliveries = deliveryPage.getContent();
+        List<Order> orders = deliveries.stream().map(Delivery::getOrder).toList();
+        List<OrderResponse> responses = enrichPage(orders);
+
+        // Lịch sử shipper phản ánh trạng thái GIAO của shipper (không phải trạng thái đơn hiện tại):
+        //  - delivery CANCELLED → shipper đã BỎ đơn → hiển thị "Đã hủy"
+        //  - delivery COMPLETED → "Thành công"
+        //  - ASSIGNED           → giữ trạng thái đơn (đang giao...)
+        for (int i = 0; i < responses.size(); i++) {
+            DeliveryStatus ds = deliveries.get(i).getStatus();
+            if (ds == DeliveryStatus.CANCELLED) {
+                responses.get(i).setOrderStatus(OrderStatus.CANCELLED);
+            } else if (ds == DeliveryStatus.COMPLETED) {
+                responses.get(i).setOrderStatus(OrderStatus.COMPLETED);
+            }
+        }
+        return new PageImpl<>(responses, deliveryPage.getPageable(), deliveryPage.getTotalElements());
     }
 
     @Transactional(readOnly = true)

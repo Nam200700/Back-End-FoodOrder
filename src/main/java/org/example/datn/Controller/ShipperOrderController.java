@@ -1,5 +1,6 @@
 package org.example.datn.Controller;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.datn.common.ApiResponse;
 import org.example.datn.DTO.response.order.OrderResponse;
@@ -32,6 +33,15 @@ public class ShipperOrderController {
     public ResponseEntity<ApiResponse<OrderResponse>> accept(
             @AuthenticationPrincipal CustomUserDetails user, @PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(orderService.acceptOrder(user.getUserId(), id)));
+    }
+
+    @PatchMapping("/{id}/abandon")
+    public ResponseEntity<ApiResponse<OrderResponse>> abandon(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @PathVariable Long id,
+            @Valid @RequestBody org.example.datn.DTO.request.order.CancelOrderRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                orderService.abandonOrder(user.getUserId(), id, req.getReason())));
     }
 
     @PatchMapping("/{id}/picked-up")

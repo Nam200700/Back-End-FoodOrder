@@ -367,6 +367,12 @@ public class GroupOrderService {
 
         User customer = userRepository.getReferenceById(hostUserId);
 
+        // Chống bom hàng: host uy tín quá thấp thì không cho chốt đơn nhóm (đồng bộ createOrder).
+        if (customer.getReputationScore() != null
+                && customer.getReputationScore() < ReputationService.CUSTOMER_ORDER_BLOCK_BELOW) {
+            throw new AppException(ErrorCode.REPUTATION_TOO_LOW);
+        }
+
         Order order = Order.builder()
                 .customer(customer)
                 .restaurant(restaurant)

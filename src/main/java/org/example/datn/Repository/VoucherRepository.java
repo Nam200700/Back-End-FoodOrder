@@ -32,8 +32,16 @@ public interface VoucherRepository extends BaseRepository<Voucher, Long> {
                                   @Param("now") LocalDateTime now,
                                   Pageable pageable);
 
-    @Query("SELECT v FROM Voucher v WHERE v.issueType = :issueType AND v.status = 'ACTIVE' AND (v.endDate IS NULL OR v.endDate > CURRENT_TIMESTAMP)")
-    Optional<Voucher> findActiveVoucherByIssueType(@Param("issueType") VoucherIssueType issueType);
+    // Có thể có NHIỀU voucher cùng issueType đang active (vd nhiều mã ORDER_CANCELLED) →
+    // trả về danh sách đã sắp xếp tất định, tránh NonUniqueResultException.
+    @Query("SELECT v FROM Voucher v WHERE v.issueType = :issueType AND v.status = 'ACTIVE' AND (v.endDate IS NULL OR v.endDate > CURRENT_TIMESTAMP) ORDER BY v.voucherId ASC")
+    List<Voucher> findActiveVouchersByIssueType(@Param("issueType") VoucherIssueType issueType);
+
+    // Lấy 1 voucher active theo issueType (mã đầu tiên theo voucherId) — an toàn khi có nhiều mã.
+    default Optional<Voucher> findActiveVoucherByIssueType(VoucherIssueType issueType) {
+        List<Voucher> list = findActiveVouchersByIssueType(issueType);
+        return list.isEmpty() ? Optional.empty() : Optional.of(list.get(0));
+    }
 
     // Kiểm tra xem đã có voucher loại issueType đang ACTIVE và chưa hết hạn chưa
     @Query("SELECT COUNT(v) > 0 FROM Voucher v WHERE v.issueType = :issueType AND v.status = 'ACTIVE' AND v.endDate > :now")

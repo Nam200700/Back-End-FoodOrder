@@ -55,4 +55,9 @@ public class Shipper extends BaseEntity {
     @Builder.Default
     @Column(name = "active_delivery", nullable = false)
     private Integer activeDelivery = 0;
+
+    /** Số đơn shipper đã BỎ (để tính tỷ lệ hủy trên hồ sơ). */
+    @Builder.Default
+    @Column(name = "cancel_count", nullable = false)
+    private Integer cancelCount = 0;
 }
