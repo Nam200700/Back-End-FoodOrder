@@ -37,7 +37,7 @@ public class GroupOrder extends BaseEntity {
     @JoinColumn(name = "restaurant_id", nullable = false)
     private Restaurant restaurant;
 
-    @Column(nullable = false, unique = true, length = 20)
+    @Column(nullable = false, unique = true, length = 36)
     private String inviteCode;
 
     @Builder.Default
