@@ -243,7 +243,8 @@ public class AdminService {
             register.setRejectedReason(req.getRejectedReason());
         }
 
-        return toShipperRegisterResponse(shipperRegisterRepository.save(register));
+        // Vừa duyệt xong: Shipper mới tạo có active/total = 0 → map rỗng là đúng.
+        return toShipperRegisterResponse(shipperRegisterRepository.save(register), Map.of());
     }
 
     private RestaurantRegisterResponse toRestaurantRegisterResponse(RestaurantRegister r) {
