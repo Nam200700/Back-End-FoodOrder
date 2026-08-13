@@ -3,6 +3,7 @@ package org.example.datn.Service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.datn.DTO.request.grouporder.*;
+import org.example.datn.DTO.response.grouporder.GroupOrderMemberResponse;
 import org.example.datn.DTO.response.grouporder.GroupOrderResponse;
 import org.example.datn.DTO.response.order.OrderResponse;
 import org.example.datn.Exception.AppException;
@@ -11,6 +12,7 @@ import org.example.datn.Repository.*;
 import org.example.datn.domain.*;
 import org.example.datn.domain.enums.*;
 import org.example.datn.mapper.GroupOrderMapper;
+import org.example.datn.mapper.GroupOrderMemberMapper;
 import org.example.datn.mapper.OrderMapper;
 import org.example.datn.util.ShippingFeeCalculator;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,7 +26,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -46,6 +50,7 @@ public class GroupOrderService {
     private final NotificationService notificationService;
     private final WebSocketService webSocketService;
     private final GroupOrderMapper groupOrderMapper;
+    private final GroupOrderMemberMapper groupOrderMemberMapper;
     private final OrderMapper orderMapper;
 
     @Value("${app.frontend-base-url}")
@@ -519,8 +524,23 @@ public class GroupOrderService {
                 frontendBaseUrl, g.getRestaurant().getRestaurantId(), g.getInviteCode());
     }
 
+    private GroupOrderResponse toResponse(GroupOrder g) {
+        GroupOrderResponse response = groupOrderMapper.toResponse(g);
+        Map<Long, List<GroupOrderItem>> itemsByMember =
+                g.getItems().stream().collect(Collectors.groupingBy(item -> item.getMember().getMemberId()));
+        List<GroupOrderMemberResponse> members =
+                g.getMembers().stream()
+                        .sorted(Comparator.comparing(GroupOrderMember::getJoinedAt))
+                        .map(member -> {
+                            List<GroupOrderItem> items = itemsByMember.getOrDefault(member.getMemberId(), List.of());
+                            return groupOrderMemberMapper.toResponse(member, items);
+                        }).toList();
+        response.setMembers(members);
+        return response;
+    }
+
     private GroupOrderResponse toResponseWithInvite(GroupOrder g) {
-        GroupOrderResponse res = groupOrderMapper.toResponse(g);
+        GroupOrderResponse res = toResponse(g);
         res.setInviteUrl(buildInviteUrl(g));
         return res;
     }
