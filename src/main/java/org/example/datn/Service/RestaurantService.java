@@ -9,6 +9,7 @@ import org.example.datn.DTO.response.restaurant.RestaurantResponse;
 import org.example.datn.Exception.ErrorCode;
 import org.example.datn.domain.enums.OrderStatus;
 import org.example.datn.mapper.RestaurantMapper;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -37,7 +38,14 @@ public class RestaurantService {
         return enrichPage(restaurantRepository.findByStatusTrue(pageable));
     }
 
-    /** Danh sách quán đang mở có LỌC theo từ khoá (tên/địa chỉ) — dùng cho feed + tìm kiếm trang Khám phá. */
+    /**
+     * Danh sách quán đang mở có LỌC theo từ khoá (tên/địa chỉ) — dùng cho feed + tìm kiếm trang Khám phá.
+     * CHỈ cache feed KHÔNG từ khoá (trang chủ/Khám phá cuộn) vì nó CHUNG cho mọi khách và đổi chậm
+     * (khoảng cách được xếp ở client). Tìm kiếm theo từ khoá không cache (muôn hình vạn trạng).
+     */
+    @Cacheable(value = "restaurantFeed",
+            key = "#pageable.pageNumber + '-' + #pageable.pageSize",
+            condition = "#keyword == null || #keyword.isBlank()")
     @Transactional(readOnly = true)
     public Page<RestaurantResponse> listActive(String keyword, Pageable pageable) {
         Page<Restaurant> page = (keyword == null || keyword.isBlank())
