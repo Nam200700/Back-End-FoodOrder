@@ -486,6 +486,49 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
                                                @Param("year") Integer year,
                                                Pageable pageable);
 
+    // ─── Shipper earnings (gộp server-side thay cho nạp toàn bộ đơn hoàn tất) ───
+
+    /** Tổng thu nhập shipper (đơn hoàn tất, phí giao): {SUM(shippingFee), COUNT, MAX(shippingFee)}. */
+    @Query("""
+            SELECT COALESCE(SUM(o.shippingFee),0), COUNT(o), COALESCE(MAX(o.shippingFee),0)
+            FROM Order o
+            WHERE o.shipper.userId = :id
+              AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+            """)
+    List<Object[]> shipperEarningTotals(@Param("id") Long shipperUserId);
+
+    /** Thu nhập shipper theo NGÀY kể từ :since → {yyyy-MM-dd, amount, count}. Native cho DATE(). */
+    @Query(value = """
+            SELECT DATE(created_at) AS d, COALESCE(SUM(shipping_fee),0) AS amt, COUNT(*) AS cnt
+            FROM orders
+            WHERE shipper_id = :id AND order_status = 'COMPLETED'
+              AND created_at >= :since
+            GROUP BY DATE(created_at)
+            ORDER BY DATE(created_at)
+            """, nativeQuery = true)
+    List<Object[]> findShipperDailyEarningsSince(@Param("id") Long shipperUserId,
+                                                 @Param("since") java.time.LocalDateTime since);
+
+    /** Thu nhập shipper gom theo THỨ trong tuần (cả sự nghiệp): {DAYOFWEEK(1=CN..7=T7), amount}. */
+    @Query("""
+            SELECT FUNCTION('DAYOFWEEK', o.createdAt), COALESCE(SUM(o.shippingFee),0)
+            FROM Order o
+            WHERE o.shipper.userId = :id
+              AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+            GROUP BY FUNCTION('DAYOFWEEK', o.createdAt)
+            """)
+    List<Object[]> findShipperEarningsByWeekday(@Param("id") Long shipperUserId);
+
+    /** Thu nhập shipper gom theo GIỜ trong ngày (cả sự nghiệp): {hour, amount}. */
+    @Query("""
+            SELECT FUNCTION('HOUR', o.createdAt), COALESCE(SUM(o.shippingFee),0)
+            FROM Order o
+            WHERE o.shipper.userId = :id
+              AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+            GROUP BY FUNCTION('HOUR', o.createdAt)
+            """)
+    List<Object[]> findShipperEarningsByHour(@Param("id") Long shipperUserId);
+
     // Tìm danh sách đơn hàng theo trạng thái và thời gian tạo trước một mốc thời gian cutoffTime
     @EntityGraph(attributePaths = {
             "customer",
