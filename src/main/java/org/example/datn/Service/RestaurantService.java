@@ -119,6 +119,8 @@ public class RestaurantService {
         if (!restaurant.getOwner().getUserId().equals(ownerId)) {
             throw new org.example.datn.Exception.AppException(ErrorCode.FORBIDDEN);
         }
+        // Bắt ảnh CŨ TRƯỚC khi ghi đè — nếu không, oldImageUrl == newImageUrl và ảnh cũ không bao giờ bị xoá (rò rỉ Cloudinary).
+        String oldImageUrl = restaurant.getImageUrl();
         restaurant.setRestaurantName(req.getRestaurantName());
         restaurant.setAddress(req.getAddress());
         restaurant.setLatitude(req.getLatitude());
@@ -129,14 +131,11 @@ public class RestaurantService {
         restaurant.setClosesAt(req.getClosesAt());
         restaurant.setOpensAt(req.getOpensAt());
         if (req.getImageUrl() != null && !req.getImageUrl().isBlank()) {
-            String oldImageUrl = restaurant.getImageUrl();
             String newImageUrl = req.getImageUrl().trim();
-            if (!newImageUrl.equals(oldImageUrl)) {
-                if (oldImageUrl != null && !oldImageUrl.trim().isEmpty()) {
-                    imageUploadService.deleteImage(oldImageUrl);
-                }
-                restaurant.setImageUrl(newImageUrl);
+            if (!newImageUrl.equals(oldImageUrl) && oldImageUrl != null && !oldImageUrl.trim().isEmpty()) {
+                imageUploadService.deleteImage(oldImageUrl);
             }
+            restaurant.setImageUrl(newImageUrl);
         }
         return restaurantMapper.toResponse(restaurantRepository.save(restaurant));
     }
