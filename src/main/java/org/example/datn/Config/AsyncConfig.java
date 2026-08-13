@@ -41,4 +41,20 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    /**
+     * Pool RIÊNG cho việc xoá ảnh cũ trên Cloudinary (gọi HTTP tới bên thứ ba, best-effort).
+     * Nhờ vậy request cập nhật avatar/món/quán trả về NGAY, không chờ round-trip destroy
+     * và không giữ transaction DB mở trong lúc gọi mạng.
+     */
+    @Bean(name = "imageExecutor")
+    public Executor imageExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(3);
+        executor.setQueueCapacity(50);
+        executor.setThreadNamePrefix("image-");
+        executor.initialize();
+        return executor;
+    }
 }
