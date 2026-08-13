@@ -48,4 +48,18 @@ public class UserController {
             @jakarta.validation.Valid @RequestBody org.example.datn.DTO.request.auth.ShipperReRegisterRequest req) {
         return ResponseEntity.ok(ApiResponse.ok(userService.shipperReRegister(user.getUserId(), req)));
     }
+
+    // ─── Loyalty: đổi điểm thưởng lấy voucher ───
+    @GetMapping("/loyalty/catalog")
+    public ResponseEntity<ApiResponse<List<VoucherResponse>>> loyaltyCatalog() {
+        return ResponseEntity.ok(ApiResponse.ok(voucherService.getLoyaltyCatalog()));
+    }
+
+    @PostMapping("/loyalty/redeem")
+    public ResponseEntity<ApiResponse<UserResponse>> redeemLoyalty(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @RequestBody Map<String, Long> body) {
+        voucherService.redeemLoyalty(user.getUserId(), body.get("voucherId"));
+        return ResponseEntity.ok(ApiResponse.ok(userService.getProfile(user.getUserId())));
+    }
 }
