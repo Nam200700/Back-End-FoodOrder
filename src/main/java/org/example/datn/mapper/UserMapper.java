@@ -75,6 +75,7 @@ public class UserMapper {
                 idCard = shipper.getIdCard() != null ? shipper.getIdCard() : idCard;
                 activeDelivery = shipper.getActiveDelivery();
                 totalDelivery = shipper.getTotalDelivery();
+                cancelCount = shipper.getCancelCount();
                 avgRating = shipper.getAvgRating();
             }
         }
