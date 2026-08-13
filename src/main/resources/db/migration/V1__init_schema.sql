@@ -399,7 +399,7 @@ CREATE TABLE group_orders (
                               group_order_id   BIGINT NOT NULL AUTO_INCREMENT,
                               host_id          BIGINT NOT NULL,                             -- user tạo phiên (customer)
                               restaurant_id    BIGINT NOT NULL,
-                              invite_code      VARCHAR(20) NOT NULL,                          -- mã mời/link tham gia
+                              invite_code      VARCHAR(36) NOT NULL,                          -- mã mời/link tham gia
                               status           ENUM('OPEN','LOCKED','ORDERED','CANCELLED','EXPIRED') NOT NULL DEFAULT 'OPEN',
     -- OPEN: đang mời thành viên chọn món
     -- LOCKED: host khóa, chờ xác nhận cuối trước khi tạo order
@@ -440,7 +440,7 @@ CREATE TABLE group_order_items (
                                    member_id            BIGINT NOT NULL,                     -- ai chọn món này (FK group_order_members)
                                    food_id              BIGINT NOT NULL,
                                    quantity             INTEGER NOT NULL,
-                                   price_at_add         DECIMAL(12,2) NOT NULL,               -- giá lúc chọn, giống cart_items.price_at_add
+                                   price_at_add         DECIMAL(12,2) NOT NULL,
                                    note                 VARCHAR(255),
                                    created_at           DATETIME(6),
                                    updated_at           DATETIME(6),
