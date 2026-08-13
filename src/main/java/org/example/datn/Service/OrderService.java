@@ -449,7 +449,11 @@ public class OrderService {
                 if (!order.getRestaurant().getOwner().getUserId().equals(current.getUserId())) {
                     throw new AppException(ErrorCode.FORBIDDEN, "Đơn này không thuộc quán của bạn");
                 }
-                if (!earlyStage) {
+                // Quán được hủy đơn SAU khi đã xác nhận: cho tới hết giai đoạn PREPARING
+                // (hết nguyên liệu / quá tải) — trước khi đơn ra pool cho shipper.
+                boolean ownerCancelable = (st == OrderStatus.PENDING || st == OrderStatus.CONFIRMED
+                        || st == OrderStatus.PREPARING);
+                if (!ownerCancelable) {
                     throw new AppException(ErrorCode.ORDER_CANCEL_STAGE_INVALID, "Đơn đã qua giai đoạn cho phép hủy");
                 }
             }
@@ -484,6 +488,18 @@ public class OrderService {
         }
 
         orderRepository.save(order);
+
+        // Điểm uy tín + đền bù theo vai trò gây hủy
+        if (role == Role.CUSTOMER) {
+            if (st == OrderStatus.CONFIRMED) {
+                reputationService.penalize(order.getCustomer(), ReputationService.PENALTY_CUSTOMER_LATE_CANCEL);
+            }
+        } else if (role == Role.OWNER) {
+            reputationService.penalize(order.getRestaurant().getOwner(), ReputationService.PENALTY_OWNER_CANCEL);
+            bumpRestaurantCancelCount(order.getRestaurant());
+            issueCompensationVoucher(order.getCustomer());   // không phải lỗi khách → đền voucher
+        }
+
         notificationService.notifyOrderCancelled(order, role);
         webSocketService.broadcastOrderStatus(order);
 
