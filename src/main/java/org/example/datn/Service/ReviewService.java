@@ -20,6 +20,9 @@ import org.example.datn.Repository.ReviewRepository;
 import org.example.datn.Repository.UserRepository;
 import org.example.datn.Repository.ShipperRepository;
 import org.example.datn.Repository.RestaurantRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -158,6 +161,7 @@ public class ReviewService {
     }
 
     /** Công khai: tóm tắt đánh giá của một quán (theo restaurantId) — cho trang chi tiết quán phía khách. */
+    @Cacheable(value = "reviewSummaryRestaurant", key = "#restaurantId")
     @Transactional(readOnly = true)
     public ShipperReviewSummaryResponse restaurantReviewSummary(Long restaurantId) {
         return buildRestaurantSummary(restaurantId);
@@ -188,6 +192,7 @@ public class ReviewService {
      * TÓM TẮT đánh giá tài xế — gộp toàn bộ ở server (điểm TB, phân bố sao, % hài lòng,
      * 30 ngày gần đây, lời khen/điểm cần cải thiện). Trả payload nhỏ; danh sách review phân trang riêng.
      */
+    @Cacheable(value = "reviewSummaryShipper", key = "#shipperUserId")
     @Transactional(readOnly = true)
     public ShipperReviewSummaryResponse shipperReviewSummary(Long shipperUserId) {
         Shipper shipper = shipperRepository.findByUserUserId(shipperUserId)
