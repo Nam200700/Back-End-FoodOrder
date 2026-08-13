@@ -39,6 +39,14 @@ public class GroupOrderController {
                 PageResponse.from(groupOrderService.getMyGroupOrders(user.getUserId(), pageable))));
     }
 
+    /** Khôi phục phiên đang hoạt động (OPEN/LOCKED) của user tại 1 quán. */
+    @GetMapping("/active/restaurant/{restaurantId}")
+    public ResponseEntity<ApiResponse<GroupOrderResponse>> getActiveForRestaurant(
+            @AuthenticationPrincipal CustomUserDetails user, @PathVariable Long restaurantId) {
+        GroupOrderResponse res = groupOrderService.getActiveGroupOrderForRestaurant(user.getUserId(), restaurantId);
+        return ResponseEntity.ok(ApiResponse.ok(res));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<GroupOrderResponse>> getDetail(
             @AuthenticationPrincipal CustomUserDetails user, @PathVariable Long id) {
