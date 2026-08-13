@@ -20,4 +20,7 @@ public class CheckoutGroupOrderRequest {
     private Long userVoucherId;
 
     private String note;
+
+    @Builder.Default
+    private boolean force = false;
 }
