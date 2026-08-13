@@ -61,6 +61,16 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private Boolean status = true;
 
+    /** Điểm uy tín 0..100 (khởi tạo 100). Trừ khi gây hủy đơn có lỗi, cộng khi hoàn tất đơn. */
+    @Builder.Default
+    @Column(name = "reputation_score", nullable = false)
+    private Integer reputationScore = 100;
+
+    /** Điểm thưởng tích luỹ (loyalty) để đổi voucher. */
+    @Builder.Default
+    @Column(name = "loyalty_points", nullable = false)
+    private Integer loyaltyPoints = 0;
+
     /** Dành cho xác thực mã otp check khi tk ko xác thực hoặc bị fail */
     @Builder.Default
     @Column(name = "email_verified", nullable = false)
