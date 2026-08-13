@@ -602,10 +602,9 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
     );
 
     @Query("""
-            SELECT DISTINCT o FROM Order o 
+            SELECT o FROM Order o
             JOIN FETCH o.customer c
             JOIN FETCH o.restaurant r
-            LEFT JOIN o.items oi
             WHERE r.restaurantId = :restaurantId
             AND (:status IS NULL OR o.orderStatus = :status)
             AND (:keyword IS NULL OR :keyword = '' OR
