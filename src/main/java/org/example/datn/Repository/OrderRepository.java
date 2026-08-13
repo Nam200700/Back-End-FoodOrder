@@ -620,6 +620,19 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
             Pageable pageable
     );
 
+    /** Số đơn theo trạng thái của 1 quán — gộp 1 câu GROUP BY (thay việc nạp cả nghìn đơn để đếm ở FE). */
+    @Query("SELECT o.orderStatus, COUNT(o) FROM Order o WHERE o.restaurant.restaurantId = :restaurantId GROUP BY o.orderStatus")
+    List<Object[]> countMerchantOrdersByStatus(@Param("restaurantId") Long restaurantId);
+
+    /** Đơn CHỜ XÁC NHẬN rút gọn của 1 quán (id, tên khách, tổng tiền) — đủ để FE dò & báo đơn mới. */
+    @Query("""
+            SELECT o.orderId, o.customer.fullName, o.totalAmount FROM Order o
+            WHERE o.restaurant.restaurantId = :restaurantId
+              AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.PENDING
+            ORDER BY o.createdAt DESC
+            """)
+    List<Object[]> findPendingBriefByRestaurant(@Param("restaurantId") Long restaurantId);
+
     @Query("""
         SELECT o.restaurant
         FROM Order o
