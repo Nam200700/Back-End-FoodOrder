@@ -43,7 +43,6 @@ public class GroupOrderService {
     private final FoodRepository foodRepository;
     private final UserRepository userRepository;
     private final OrderRepository orderRepository;
-    private final ReputationService reputationService;
     private final UserVoucherRepository userVoucherRepository;
     private final CustomerAddressRepository customerAddressRepository;
     private final ShippingService shippingService;
