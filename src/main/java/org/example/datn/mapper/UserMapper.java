@@ -106,6 +106,9 @@ public class UserMapper {
                 .activeDelivery(activeDelivery)
                 .totalDelivery(totalDelivery)
                 .avgRating(avgRating)
+                .reputationScore(user.getReputationScore())
+                .loyaltyPoints(user.getLoyaltyPoints())
+                .cancelCount(cancelCount)
                 .build();
     }
 }
