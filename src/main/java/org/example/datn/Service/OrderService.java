@@ -720,10 +720,91 @@ public class OrderService {
         return enrichOne(order, orderMapper.toResponse(order));
     }
 
+    /**
+     * Shipper BỎ ĐƠN đã nhận (đảo ngược acceptOrder): trả đơn về pool cho shipper khác,
+     * trừ uy tín shipper + tăng cancel_count, đền voucher cho khách (không phải lỗi khách).
+     */
+    @Transactional
+    @EvictStatsCaches
+    public OrderResponse abandonOrder(Long shipperId, Long orderId, String reason) {
+        Order order = getOrderForShipper(shipperId, orderId);   // đảm bảo đơn đang thuộc shipper này
+        OrderStatus st = order.getOrderStatus();
+        if (st == COMPLETED || st == CANCELLED) {
+            throw new AppException(ErrorCode.ORDER_CANCEL_STAGE_INVALID, "Đơn đã kết thúc, không thể bỏ.");
+        }
+
+        User shipperUser = order.getShipper();
+
+        // Trả đơn về pool: bỏ gán shipper, đưa trạng thái về READY_FOR_PICKUP.
+        order.setShipper(null);
+        order.setOrderStatus(READY_FOR_PICKUP);
+        if (reason != null && !reason.isBlank()) {
+            order.setCancelReason("Shipper bỏ đơn: " + reason.trim());
+        }
+        orderRepository.save(order);
+
+        // Xoá bản ghi Delivery để shipper khác nhận lại được (uk_deliveries_order là unique theo order).
+        deliveryService.cancelDelivery(order);
+
+        // Shipper: -active_delivery, +cancel_count, trừ uy tín.
+        Shipper shipper = shipperRepository.findByUserUserId(shipperId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        shipper.setActiveDelivery(Math.max(0, shipper.getActiveDelivery() - 1));
+        shipper.setCancelCount(shipper.getCancelCount() + 1);
+        shipperRepository.save(shipper);
+        reputationService.penalize(shipperUser, ReputationService.PENALTY_SHIPPER_ABANDON);
+
+        // Đền voucher cho khách.
+        issueCompensationVoucher(order.getCustomer());
+
+        // Thông báo + đẩy lại pool cho các shipper khác.
+        notificationService.notifyUser(order.getCustomer().getUserId(),
+                NotificationType.ORDER_CANCELLED, order.getOrderId());
+        notificationService.broadcastToShippers(order.getOrderId(), NotificationType.ORDER_READY_PICKUP);
+        webSocketService.broadcastOrderStatus(order);
+        webSocketService.broadcastAvailableOrder(order);
+        return enrichOne(order, orderMapper.toResponse(order));
+    }
+
     // ─── Helpers ─────────────────────────────────────────────
     private Order loadWithItems(Long orderId) {
         return orderRepository.findByIdWithItems(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+    }
+
+    /** Cấp voucher đền bù (loại ORDER_CANCELLED đang active) cho khách khi hủy KHÔNG do lỗi khách. */
+    private void issueCompensationVoucher(User customer) {
+        if (customer == null) return;
+        voucherRepository.findActiveVoucherByIssueType(VoucherIssueType.ORDER_CANCELLED).ifPresent(v -> {
+            // uk_user_voucher UNIQUE(user_id, voucher_id) → chỉ cấp nếu khách chưa có voucher này.
+            if (!userVoucherRepository.existsByUser_UserIdAndVoucher_VoucherId(customer.getUserId(), v.getVoucherId())) {
+                userVoucherRepository.save(UserVoucher.builder()
+                        .user(customer)
+                        .voucher(v)
+                        .used(false)
+                        .receivedAt(LocalDateTime.now())
+                        .expiredAt(LocalDateTime.now().plusDays(30))
+                        .build());
+            }
+        });
+    }
+
+    /** Tăng số đơn quán tự hủy/từ chối (để tính tỷ lệ hủy). */
+    private void bumpRestaurantCancelCount(Restaurant restaurant) {
+        if (restaurant == null) return;
+        int cur = restaurant.getCancelCount() != null ? restaurant.getCancelCount() : 0;
+        restaurant.setCancelCount(cur + 1);
+        restaurantRepository.save(restaurant);
+    }
+
+    /** Cộng điểm loyalty cho khách: 1 điểm / 10.000đ tiền món (subtotal). */
+    private void accrueLoyalty(User customer, BigDecimal subtotal) {
+        if (customer == null || subtotal == null) return;
+        int earned = subtotal.divide(BigDecimal.valueOf(10000), 0, java.math.RoundingMode.DOWN).intValue();
+        if (earned <= 0) return;
+        int cur = customer.getLoyaltyPoints() != null ? customer.getLoyaltyPoints() : 0;
+        customer.setLoyaltyPoints(cur + earned);
+        userRepository.save(customer);
     }
 
     private Order getOrderForMerchant(Long merchantId, Long orderId) {
