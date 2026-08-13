@@ -42,6 +42,7 @@ public class UserMapper {
         String idCard = null;
         Integer activeDelivery = null;
         Integer totalDelivery = null;
+        Integer cancelCount = null;
         java.math.BigDecimal avgRating = null;
 
         if (user.getRole() == Role.OWNER) {
