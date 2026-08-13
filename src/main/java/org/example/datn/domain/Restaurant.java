@@ -61,4 +61,9 @@ public class Restaurant extends BaseEntity {
     @Builder.Default
     @Column(nullable = false)
     private Boolean status = true;
+
+    /** Số đơn quán tự hủy/từ chối (để tính tỷ lệ hủy của quán). */
+    @Builder.Default
+    @Column(name = "cancel_count", nullable = false)
+    private Integer cancelCount = 0;
 }
