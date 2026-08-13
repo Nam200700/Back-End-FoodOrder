@@ -25,17 +25,13 @@ import java.math.RoundingMode;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class GroupOrderService {
-
-    private static final String CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // bỏ ký tự dễ nhầm (0,O,1,I)
-    private static final int CODE_LENGTH = 6;
-    private static final SecureRandom RANDOM = new SecureRandom();
-
     private final GroupOrderRepository groupOrderRepository;
     private final GroupOrderMemberRepository memberRepository;
     private final GroupOrderItemRepository groupItemRepository;
@@ -113,12 +109,8 @@ public class GroupOrderService {
     }
 
     private String generateUniqueInviteCode() {
-        for (int attempt = 0; attempt < 10; attempt++) {
-            StringBuilder sb = new StringBuilder(CODE_LENGTH);
-            for (int i = 0; i < CODE_LENGTH; i++) {
-                sb.append(CODE_ALPHABET.charAt(RANDOM.nextInt(CODE_ALPHABET.length())));
-            }
-            String code = sb.toString();
+        for (int attempt = 0; attempt < 5; attempt++) {
+            String code = UUID.randomUUID().toString();
             if (!groupOrderRepository.existsByInviteCode(code)) {
                 return code;
             }
@@ -136,24 +128,29 @@ public class GroupOrderService {
 
         User user = userRepository.findByIdOrThrow(userId, ErrorCode.USER_NOT_FOUND);
 
-        memberRepository.findByGroupOrderGroupOrderIdAndUserUserId(groupOrder.getGroupOrderId(), userId)
-                .ifPresentOrElse(existing -> {
-                    if (existing.getStatus() == GroupOrderMemberStatus.LEFT) {
-                        existing.setStatus(GroupOrderMemberStatus.JOINED);
-                        existing.setLeftAt(null);
-                        memberRepository.save(existing);
-                    }
-                    // Nếu đã JOINED/READY thì coi như join lại thành công, không lỗi.
-                }, () -> {
-                    GroupOrderMember member = GroupOrderMember.builder()
-                            .groupOrder(groupOrder)
-                            .user(user)
-                            .isHost(false)
-                            .status(GroupOrderMemberStatus.JOINED)
-                            .joinedAt(LocalDateTime.now())
-                            .build();
-                    memberRepository.save(member);
-                });
+        try {
+            memberRepository.findByGroupOrderGroupOrderIdAndUserUserId(groupOrder.getGroupOrderId(), userId)
+                    .ifPresentOrElse(existing -> {
+                        if (existing.getStatus() == GroupOrderMemberStatus.LEFT) {
+                            existing.setStatus(GroupOrderMemberStatus.JOINED);
+                            existing.setLeftAt(null);
+                            memberRepository.save(existing);
+                        }
+                    }, () -> {
+                        GroupOrderMember member = GroupOrderMember.builder()
+                                .groupOrder(groupOrder)
+                                .user(user)
+                                .isHost(false)
+                                .status(GroupOrderMemberStatus.JOINED)
+                                .joinedAt(LocalDateTime.now())
+                                .build();
+                        memberRepository.saveAndFlush(member);
+                    });
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            log.warn("Join race detected: groupOrderId={}, userId={} — coi như đã join thành công.",
+                    groupOrder.getGroupOrderId(), userId);
+        }
+
         return toResponseWithInvite(getOrThrowDetail(groupOrder.getGroupOrderId()));
     }
 
@@ -205,7 +202,6 @@ public class GroupOrderService {
                 .build();
         groupItemRepository.save(item);
 
-        // Chọn món lại sau khi đã READY → coi như chưa xong, cần bấm "Sẵn sàng" lại.
         if (member.getStatus() == GroupOrderMemberStatus.READY) {
             member.setStatus(GroupOrderMemberStatus.JOINED);
             memberRepository.save(member);
@@ -251,8 +247,6 @@ public class GroupOrderService {
     }
 
     // ─── Trạng thái thành viên / phiên ────────────────────────
-
-    // Đánh dấu đã chọn món xong
     @Transactional
     public GroupOrderResponse markReady(Long userId, Long groupOrderId) {
         GroupOrder groupOrder = getOrThrow(groupOrderId);
@@ -272,7 +266,6 @@ public class GroupOrderService {
         return toResponseWithInvite(getOrThrowDetail(groupOrderId));
     }
 
-    // đánh dấu khóa phiên
     @Transactional
     public GroupOrderResponse lockGroupOrder(Long hostUserId, Long groupOrderId) {
         GroupOrder groupOrder = getOrThrowDetail(groupOrderId);
@@ -285,6 +278,18 @@ public class GroupOrderService {
 
         groupOrder.setStatus(GroupOrderStatus.LOCKED);
         groupOrder.setLockedAt(LocalDateTime.now());
+
+        // [MỚI] Khóa phiên = không ai còn thêm/sửa món được nữa (nút "Hoàn tất chọn món"
+        // chỉ hiện khi status = OPEN) → tự động chuyển các thành viên còn "JOINED" sang
+        // "READY", tránh kẹt vĩnh viễn ở trạng thái "Đang chọn" dù không còn cách thao tác.
+        List<GroupOrderMember> toMarkReady = groupOrder.getMembers().stream()
+                .filter(m -> m.getStatus() == GroupOrderMemberStatus.JOINED)
+                .collect(Collectors.toList());
+        toMarkReady.forEach(m -> m.setStatus(GroupOrderMemberStatus.READY));
+        if (!toMarkReady.isEmpty()) {
+            memberRepository.saveAll(toMarkReady);
+        }
+
         groupOrderRepository.save(groupOrder);
 
         return toResponseWithInvite(groupOrder);
@@ -307,7 +312,7 @@ public class GroupOrderService {
         groupOrderRepository.save(groupOrder);
     }
 
-    // ─── Chốt đơn: gộp group_order_items → 1 Order thật ───────
+    // ─── Chốt đơn:  ───────
     @Transactional(isolation = Isolation.SERIALIZABLE)
     public OrderResponse checkout(Long hostUserId, Long groupOrderId, CheckoutGroupOrderRequest req) {
         GroupOrder groupOrder = getOrThrowDetail(groupOrderId);
@@ -319,6 +324,11 @@ public class GroupOrderService {
         if (groupOrder.getItems().isEmpty()) {
             throw new AppException(ErrorCode.VALIDATION_FAILED, "Chưa có món nào để đặt");
         }
+
+        // [MỚI] Chặn chốt đơn nếu còn thành viên (trừ host) chưa "Hoàn tất chọn món",
+        // trừ khi host xác nhận bỏ qua (force=true) — tránh chốt hụt món của người
+        // đang chọn dở, đồng thời không khóa cứng nếu có người "mất tích" không phản hồi.
+        ensureMembersReadyOrForce(groupOrder, req.isForce());
 
         Restaurant restaurant = groupOrder.getRestaurant();
         if (restaurant.getLatitude() == null || restaurant.getLongitude() == null) {
@@ -374,7 +384,7 @@ public class GroupOrderService {
                 .foodName(gi.getFood().getFoodName())
                 .quantity(gi.getQuantity())
                 .priceAtOrder(gi.getPriceAtAdd())
-                .note(buildItemNote(gi))
+                .note(gi.getNote())
                 .groupOrderMember(gi.getMember())
                 .build()).collect(Collectors.toList());
 
@@ -428,13 +438,23 @@ public class GroupOrderService {
         return orderMapper.toResponse(saved);
     }
 
-    private String buildItemNote(GroupOrderItem gi) {
-        String memberName = gi.getMember().getUser().getFullName();
-        String base = "Của: " + memberName;
-        return (gi.getNote() != null && !gi.getNote().isBlank()) ? base + " — " + gi.getNote() : base;
+    /** Kiểm tra còn thành viên (trừ host) chưa READY không, trừ khi force=true. */
+    private void ensureMembersReadyOrForce(GroupOrder groupOrder, boolean force) {
+        if (force) return;
+
+        long notReadyCount = groupOrder.getMembers().stream()
+                .filter(m -> !Boolean.TRUE.equals(m.getIsHost()))
+                .filter(m -> m.getStatus() != GroupOrderMemberStatus.LEFT)
+                .filter(m -> m.getStatus() != GroupOrderMemberStatus.READY)
+                .count();
+
+        if (notReadyCount > 0) {
+            throw new AppException(ErrorCode.GROUP_ORDER_MEMBERS_NOT_READY,
+                    notReadyCount + " thành viên chưa hoàn tất chọn món. Xác nhận nếu vẫn muốn chốt đơn.");
+        }
     }
 
-
+    // ─── Truy vấn ───────────────────────────────────────────────
     @Transactional(readOnly = true)
     public GroupOrderResponse getDetail(Long userId, Long groupOrderId) {
         GroupOrder groupOrder = getOrThrowDetail(groupOrderId);
@@ -458,6 +478,14 @@ public class GroupOrderService {
     public Page<GroupOrderResponse> getMyGroupOrders(Long userId, Pageable pageable) {
         return groupOrderRepository.findByMemberUserId(userId, pageable)
                 .map(this::toResponseWithInvite);
+    }
+
+    @Transactional(readOnly = true)
+    public GroupOrderResponse getActiveGroupOrderForRestaurant(Long userId, Long restaurantId) {
+        List<GroupOrder> actives = groupOrderRepository.findActiveByUserAndRestaurant(userId, restaurantId);
+        if (actives.isEmpty()) return null;
+        GroupOrder detail = getOrThrowDetail(actives.get(0).getGroupOrderId());
+        return toResponseWithInvite(detail);
     }
 
     // ─── Helpers ─────────────────────────────────────────────
@@ -486,8 +514,6 @@ public class GroupOrderService {
         }
     }
 
-    /** Link mời dạng: {frontend}/restaurants/{restaurantId}?group={inviteCode}
-     *  Vào thẳng trang chi tiết quán, RestaurantDetail.jsx tự nhận diện param "group" và tự động join. */
     private String buildInviteUrl(GroupOrder g) {
         return String.format("%s/restaurants/%d?group=%s",
                 frontendBaseUrl, g.getRestaurant().getRestaurantId(), g.getInviteCode());
