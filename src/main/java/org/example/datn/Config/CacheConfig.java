@@ -25,7 +25,7 @@ public class CacheConfig {
     @Bean
     public CacheManager cacheManager() {
         CaffeineCacheManager manager = new CaffeineCacheManager(
-                "adminInsights", "adminReport", "merchantStats", "merchantInsights", "merchantReport", "voucherAnalytics",
+                "adminOverview", "adminInsights", "adminReport", "merchantStats", "merchantInsights", "merchantReport", "voucherAnalytics",
                 "shipperInsights");
         manager.setCaffeine(Caffeine.newBuilder()
                 .expireAfterWrite(60, TimeUnit.SECONDS)
