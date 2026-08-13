@@ -67,9 +67,16 @@ public class ReviewService {
     private final ShipperRepository shipperRepository;
     private final RestaurantRepository restaurantRepository;
 
+    // Review mới làm đổi mọi bản tóm tắt (phân bố sao, TB, lời khen…) và rating quán ở feed.
+    @Caching(evict = {
+            @CacheEvict(value = "reviewSummaryShipper", allEntries = true),
+            @CacheEvict(value = "reviewSummaryMerchant", allEntries = true),
+            @CacheEvict(value = "reviewSummaryRestaurant", allEntries = true),
+            @CacheEvict(value = "restaurantFeed", allEntries = true),
+    })
     @Transactional
     public ReviewResponse createReview(Long customerId, CreateReviewRequest req) {
-        
+
         Order order = orderRepository.findByIdOrThrow(req.getOrderId(), ErrorCode.ORDER_NOT_FOUND);
 
         if (!order.getCustomer().getUserId().equals(customerId)) {
@@ -260,6 +267,7 @@ public class ReviewService {
      * TÓM TẮT đánh giá QUÁN — gộp toàn bộ ở server (điểm TB, phân bố sao, % hài lòng,
      * 30 ngày gần đây, lời khen/điểm cần cải thiện). Trả payload nhỏ; danh sách phân trang riêng.
      */
+    @Cacheable(value = "reviewSummaryMerchant", key = "#ownerUserId")
     @Transactional(readOnly = true)
     public ShipperReviewSummaryResponse merchantReviewSummary(Long ownerUserId) {
         return buildRestaurantSummary(resolveOwnerRestaurantId(ownerUserId));
