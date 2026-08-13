@@ -398,11 +398,17 @@ public class OrderService {
     public OrderResponse cancelOrderByCustomer(Long customerId, Long orderId, String reason) {
         Order order = loadWithItems(orderId);
         ownershipGuard.checkOrderOwner(order, customerId);
-        validateTransition(order.getOrderStatus(), CANCELLED);
+        OrderStatus prev = order.getOrderStatus();
+        validateTransition(prev, CANCELLED);
 
         order.setOrderStatus(CANCELLED);
         order.setCancelReason(reason);
         orderRepository.save(order);
+
+        // Khách hủy SAU khi quán đã xác nhận (CONFIRMED) → trừ uy tín; hủy lúc PENDING thì miễn phí.
+        if (prev == CONFIRMED) {
+            reputationService.penalize(order.getCustomer(), ReputationService.PENALTY_CUSTOMER_LATE_CANCEL);
+        }
 
         notificationService.notifyUser(order.getRestaurant().getOwner().getUserId(),
                 NotificationType.ORDER_CANCELLED, order.getOrderId());
