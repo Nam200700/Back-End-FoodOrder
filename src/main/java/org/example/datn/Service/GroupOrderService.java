@@ -301,6 +301,41 @@ public class GroupOrderService {
     }
 
     @Transactional
+    public GroupOrderResponse updateAddress(Long hostUserId, Long groupOrderId, UpdateGroupOrderAddressRequest req) {
+        GroupOrder groupOrder = getOrThrowDetail(groupOrderId);
+        ensureHost(groupOrder, hostUserId);
+        ensureJoinable(groupOrder); // chỉ sửa được khi status = OPEN
+
+        CustomerAddress address = null;
+        String deliveryAddress = req.getDeliveryAddress();
+        BigDecimal lat = req.getDeliveryLat();
+        BigDecimal lng = req.getDeliveryLng();
+
+        if (req.getAddressId() != null) {
+            address = customerAddressRepository.findById(req.getAddressId())
+                    .orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_FOUND));
+            if (!address.getCustomer().getUserId().equals(hostUserId)) {
+                throw new AppException(ErrorCode.FORBIDDEN, "Địa chỉ không thuộc về bạn");
+            }
+            deliveryAddress = address.getAddress();
+            lat = address.getLatitude();
+            lng = address.getLongitude();
+        }
+
+        if (deliveryAddress == null || lat == null || lng == null) {
+            throw new AppException(ErrorCode.ADDRESS_NOT_FOUND, "Vui lòng chọn địa chỉ giao hàng hợp lệ.");
+        }
+
+        groupOrder.setAddress(address);
+        groupOrder.setDeliveryAddress(deliveryAddress);
+        groupOrder.setDeliveryLat(lat);
+        groupOrder.setDeliveryLng(lng);
+        groupOrderRepository.save(groupOrder);
+
+        return toResponseWithInvite(groupOrder);
+    }
+
+    @Transactional
     public void cancelGroupOrder(Long hostUserId, Long groupOrderId, String reason) {
         GroupOrder groupOrder = getOrThrow(groupOrderId);
         ensureHost(groupOrder, hostUserId);
