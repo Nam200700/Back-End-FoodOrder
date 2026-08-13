@@ -554,6 +554,12 @@ public class OrderService {
             payment.setStatus(PaymentStatus.FAILED);
             paymentRepository.save(payment);
         }
+
+        // Quán từ chối đơn mới → trừ uy tín quán (nhẹ) + tăng cancel_count + đền voucher khách.
+        reputationService.penalize(order.getRestaurant().getOwner(), ReputationService.PENALTY_OWNER_REJECT);
+        bumpRestaurantCancelCount(order.getRestaurant());
+        issueCompensationVoucher(order.getCustomer());
+
         notificationService.notifyUser(order.getCustomer().getUserId(),
                 NotificationType.ORDER_CANCELLED, order.getOrderId());
         webSocketService.broadcastOrderStatus(order);
