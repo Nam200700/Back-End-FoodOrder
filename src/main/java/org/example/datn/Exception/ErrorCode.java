@@ -80,6 +80,7 @@ public enum ErrorCode {
     GROUP_ORDER_NOT_FOUND(404, "Không tìm thấy phiên đặt nhóm"),
     GROUP_ORDER_MEMBER_NOT_FOUND(404, "Bạn chưa tham gia phiên đặt nhóm này"),
     GROUP_ORDER_ITEM_NOT_FOUND(404, "Không tìm thấy món trong phiên"),
+    GROUP_ORDER_MEMBERS_NOT_READY(409, "Còn thành viên chưa sẵn sàng"),
 
     // Generic
     VALIDATION_FAILED(400, "Dữ liệu không hợp lệ"),
