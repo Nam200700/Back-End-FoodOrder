@@ -15,6 +15,7 @@ import org.example.datn.Repository.FoodRepository;
 import org.example.datn.Repository.RestaurantRepository;
 import org.example.datn.Repository.OrderRepository;
 import org.example.datn.security.OwnershipGuard;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,7 +45,12 @@ public class FoodService {
         return foodMapper.toResponseList(foods);
     }
 
-    /** Công khai: TOP món bán chạy thật (số lượt đặt thật) — cho mục "Món ăn xu hướng". Một truy vấn gộp + 1 lần nạp món. */
+    /**
+     * Công khai: TOP món bán chạy thật (số lượt đặt thật) — cho mục "Món ăn xu hướng".
+     * Một truy vấn gộp + 1 lần nạp món. Danh sách CHUNG cho mọi khách, đổi chậm (chỉ khi có
+     * đơn hoàn tất mới) nên cache-aside: đọc kế tiếp lấy từ cache, tự tươi lại sau 60s (TTL).
+     */
+    @Cacheable(value = "popularFoods", key = "#limit")
     @Transactional(readOnly = true)
     public List<FoodResponse> popularFoods(int limit) {
         List<Object[]> rows = foodRepository.findPopularFoodIds(PageRequest.of(0, Math.max(1, Math.min(limit, 20))));
