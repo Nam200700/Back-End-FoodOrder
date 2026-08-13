@@ -11,6 +11,7 @@ import org.example.datn.Exception.ErrorCode;
 import org.example.datn.Exception.OrderStatusException;
 import org.example.datn.Repository.*;
 import org.example.datn.domain.*;
+import org.example.datn.domain.enums.DeliveryStatus;
 import org.example.datn.domain.enums.NotificationType;
 import org.example.datn.domain.enums.OrderStatus;
 import org.example.datn.domain.enums.PaymentStatus;
@@ -828,8 +829,23 @@ public class OrderService {
     @Transactional(readOnly = true)
     public Page<OrderResponse> getShipperOrders(Long shipperId, OrderStatus status, Pageable pageable) {
         Page<Delivery> deliveryPage = deliveryRepository.findByShipperIdAndOrderStatus(shipperId, status, pageable);
-        List<Order> orders = deliveryPage.getContent().stream().map(Delivery::getOrder).toList();
-        return new PageImpl<>(enrichPage(orders), deliveryPage.getPageable(), deliveryPage.getTotalElements());
+        List<Delivery> deliveries = deliveryPage.getContent();
+        List<Order> orders = deliveries.stream().map(Delivery::getOrder).toList();
+        List<OrderResponse> responses = enrichPage(orders);
+
+        // Lịch sử shipper phản ánh trạng thái GIAO của shipper (không phải trạng thái đơn hiện tại):
+        //  - delivery CANCELLED → shipper đã BỎ đơn → hiển thị "Đã hủy"
+        //  - delivery COMPLETED → "Thành công"
+        //  - ASSIGNED           → giữ trạng thái đơn (đang giao...)
+        for (int i = 0; i < responses.size(); i++) {
+            DeliveryStatus ds = deliveries.get(i).getStatus();
+            if (ds == DeliveryStatus.CANCELLED) {
+                responses.get(i).setOrderStatus(OrderStatus.CANCELLED);
+            } else if (ds == DeliveryStatus.COMPLETED) {
+                responses.get(i).setOrderStatus(OrderStatus.COMPLETED);
+            }
+        }
+        return new PageImpl<>(responses, deliveryPage.getPageable(), deliveryPage.getTotalElements());
     }
 
     @Transactional(readOnly = true)

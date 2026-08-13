@@ -165,6 +165,7 @@ CREATE TABLE deliveries (
                             delivery_id     BIGINT NOT NULL AUTO_INCREMENT,
                             order_id        BIGINT NOT NULL,
                             shipper_id      BIGINT NOT NULL,
+                            status          ENUM('ASSIGNED','COMPLETED','CANCELLED') NOT NULL DEFAULT 'ASSIGNED', -- trạng thái từng lần gán giao
                             updated_at      DATETIME(6),
                             PRIMARY KEY (delivery_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -450,7 +451,9 @@ CREATE TABLE group_order_items (
 --      → 1 customer có thể có nhiều cart, nhưng mỗi restaurant chỉ 1 cart
 ALTER TABLE carts                ADD CONSTRAINT uk_carts_customer_restaurant  UNIQUE (customer_id, restaurant_id);
 ALTER TABLE conversations        ADD CONSTRAINT uk_conversation_pair          UNIQUE (user1_id, user2_id);
-ALTER TABLE deliveries           ADD CONSTRAINT uk_deliveries_order           UNIQUE (order_id);
+-- [reputation] Bỏ UNIQUE(order_id): 1 đơn có thể có nhiều delivery theo thời gian
+-- (shipper bỏ đơn → shipper khác nhận lại). Dùng index thường để tra cứu nhanh.
+CREATE INDEX idx_deliveries_order ON deliveries (order_id);
 ALTER TABLE favorite_restaurants ADD CONSTRAINT uk_favorite                   UNIQUE (customer_id, restaurant_id);
 ALTER TABLE payments             ADD CONSTRAINT uk_payments_order             UNIQUE (order_id);
 ALTER TABLE reviews              ADD CONSTRAINT uk_reviews_order              UNIQUE (order_id);
