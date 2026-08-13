@@ -627,6 +627,13 @@ public class OrderService {
             throw new AppException(ErrorCode.SHIPPER_BUSY);
         }
 
+        // Uy tín thấp → tạm không cho nhận đơn mới.
+        User shipperUser = shipper.getUser();
+        if (shipperUser.getReputationScore() != null
+                && shipperUser.getReputationScore() < ReputationService.SHIPPER_ACCEPT_BLOCK_BELOW) {
+            throw new AppException(ErrorCode.SHIPPER_REPUTATION_LOW);
+        }
+
         order.setShipper(userRepository.getReferenceById(shipperId));
         orderRepository.save(order);
 
