@@ -196,6 +196,65 @@ public class VoucherService {
         userVoucherRepository.save(userVoucher);
     }
 
+    // ─── LOYALTY: đổi điểm thưởng lấy voucher ───────────────────────────────
+
+    /** Danh sách voucher LOYALTY đang mở để đổi bằng điểm (kèm pointsCost). */
+    @Transactional(readOnly = true)
+    public List<VoucherResponse> getLoyaltyCatalog() {
+        return voucherRepository.findByIssueTypeAndStatusAndEndDateAfter(
+                        VoucherIssueType.LOYALTY, VoucherStatus.ACTIVE, LocalDateTime.now())
+                .stream()
+                .map(v -> VoucherResponse.builder()
+                        .voucherId(v.getVoucherId())
+                        .code(v.getCode())
+                        .name(v.getName())
+                        .discountType(v.getDiscountType())
+                        .discountValue(v.getDiscountValue())
+                        .minOrderAmount(v.getMinOrderAmount())
+                        .pointsCost(v.getPointsCost())
+                        .startDate(v.getStartDate())
+                        .endDate(v.getEndDate())
+                        .status(v.getStatus())
+                        .issueType(v.getIssueType())
+                        .build())
+                .toList();
+    }
+
+    /** Đổi điểm loyalty lấy 1 voucher LOYALTY: trừ điểm + cấp UserVoucher. */
+    public void redeemLoyalty(Long userId, Long voucherId) {
+        Voucher voucher = voucherRepository.findById(voucherId)
+                .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
+
+        if (voucher.getIssueType() != VoucherIssueType.LOYALTY || voucher.getStatus() != VoucherStatus.ACTIVE) {
+            throw new AppException(ErrorCode.VOUCHER_NOT_FOUND);
+        }
+        if (voucher.getEndDate() != null && LocalDateTime.now().isAfter(voucher.getEndDate())) {
+            throw new AppException(ErrorCode.VOUCHER_EXPIRED);
+        }
+        if (userVoucherRepository.existsByUser_UserIdAndVoucher_VoucherId(userId, voucherId)) {
+            throw new AppException(ErrorCode.VOUCHER_ALREADY_CLAIMED);
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        int cost = voucher.getPointsCost() != null ? voucher.getPointsCost() : 0;
+        int have = user.getLoyaltyPoints() != null ? user.getLoyaltyPoints() : 0;
+        if (have < cost) {
+            throw new AppException(ErrorCode.INSUFFICIENT_LOYALTY_POINTS);
+        }
+
+        user.setLoyaltyPoints(have - cost);
+        userRepository.save(user);
+
+        userVoucherRepository.save(UserVoucher.builder()
+                .user(user)
+                .voucher(voucher)
+                .used(false)
+                .receivedAt(LocalDateTime.now())
+                .expiredAt(voucher.getEndDate())
+                .build());
+    }
+
     public void refundVoucher(Order order) {
         if (order.getUserVoucher() != null && order.getCustomer() != null) {
             UserVoucher userVoucher = order.getUserVoucher();
