@@ -72,6 +72,10 @@ public class StatisticsService {
     @Value("${platform.commission-rate:0.10}")
     private double commissionRate;
 
+    // Endpoint nóng nhất của admin: gọi ở CẢ Dashboard lẫn Stats, chạy ~20 câu COUNT/SUM.
+    // Cache-aside như các thống kê khác — số do đơn chi phối được @EvictStatsCaches làm mới ngay,
+    // vài số ngoài đơn (online shipper, hồ sơ chờ duyệt) tươi lại trong 60s (lưới an toàn TTL).
+    @Cacheable("adminOverview")
     @Transactional(readOnly = true)
     public StatsOverviewResponse adminOverview() {
         long totalUsers = userRepository.count();
