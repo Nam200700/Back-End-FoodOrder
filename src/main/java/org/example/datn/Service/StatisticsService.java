@@ -72,6 +72,10 @@ public class StatisticsService {
     @Value("${platform.commission-rate:0.10}")
     private double commissionRate;
 
+    // Endpoint nóng nhất của admin: gọi ở CẢ Dashboard lẫn Stats, chạy ~20 câu COUNT/SUM.
+    // Cache-aside như các thống kê khác — số do đơn chi phối được @EvictStatsCaches làm mới ngay,
+    // vài số ngoài đơn (online shipper, hồ sơ chờ duyệt) tươi lại trong 60s (lưới an toàn TTL).
+    @Cacheable("adminOverview")
     @Transactional(readOnly = true)
     public StatsOverviewResponse adminOverview() {
         long totalUsers = userRepository.count();
@@ -311,13 +315,13 @@ public class StatisticsService {
         long menuAvailable = foodRepository.countByRestaurantRestaurantIdAndStatusTrueAndIsAvailableTrue(restaurantId);
         long menuOutOfStock = foodRepository.countByRestaurantRestaurantIdAndStatusTrueAndIsAvailableFalse(restaurantId);
         long menuHidden = foodRepository.countByRestaurantRestaurantIdAndStatusFalse(restaurantId);
-        // Món đang bán (status=true) nhưng chưa có lượt bán nào (đếm lại per-food, thực đơn nhỏ nên chấp nhận)
-        long menuNoSales = foodRepository.findByRestaurantIdForMerchant(restaurantId).stream()
-                .filter(f -> {
-                    Integer sold = orderRepository.countCompletedQuantityByFoodId(f.getFoodId());
-                    return sold == null || sold == 0;
-                })
-                .count();
+        // Món đang bán nhưng chưa có lượt bán nào — 1 câu batch GROUP BY (khử N+1 per-food).
+        List<Long> menuFoodIds = foodRepository.findByRestaurantIdForMerchant(restaurantId).stream()
+                .map(f -> f.getFoodId()).toList();
+        long soldFoodCount = menuFoodIds.isEmpty() ? 0
+                : orderRepository.sumCompletedQuantityByFoodIds(menuFoodIds).stream()
+                    .filter(r -> ((Number) r[1]).longValue() > 0).count();
+        long menuNoSales = menuFoodIds.size() - soldFoodCount;
 
         return MerchantInsightsResponse.builder()
                 .revenue7d(revenue7d)
@@ -559,23 +563,23 @@ public class StatisticsService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "shipperInsights", key = "#shipperUserId")
     public ShipperInsightsResponse shipperInsights(Long shipperUserId) {
         Shipper shipper = shipperRepository.findByUserUserId(shipperUserId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
-        List<Order> completed = orderRepository.findByShipperUserIdAndOrderStatus(shipperUserId, OrderStatus.COMPLETED);
 
         LocalDate today = LocalDate.now();
-        LocalDateTime startToday = today.atStartOfDay();
-        LocalDateTime start7d = today.minusDays(6).atStartOfDay();
-        LocalDateTime weekStart = today.minusDays((today.getDayOfWeek().getValue() + 6) % 7).atStartOfDay(); // Thứ 2 00:00
-        LocalDateTime weekEnd = weekStart.plusDays(7);
-        LocalDateTime monthStart = today.withDayOfMonth(1).atStartOfDay();
-        LocalDateTime lastMonthStart = monthStart.minusMonths(1);
+        LocalDate start7dDate = today.minusDays(6);
+        LocalDate weekStartDate = today.minusDays((today.getDayOfWeek().getValue() + 6) % 7); // Thứ 2
+        LocalDate weekEndDate = weekStartDate.plusDays(7); // exclusive
+        LocalDate monthStartDate = today.withDayOfMonth(1);
+        LocalDate lastMonthStartDate = monthStartDate.minusMonths(1);
+        LocalDate since6mo = today.minusMonths(5).withDayOfMonth(1); // đầu tháng 6 tháng trước
 
         String[] order = {"T2", "T3", "T4", "T5", "T6", "T7", "CN"};
+        // MySQL DAYOFWEEK: 1=CN..7=T7 → key
+        String[] dowKey = {"", "CN", "T2", "T3", "T4", "T5", "T6", "T7"};
         Map<String, Long> dayMap = new HashMap<>();
-        Map<String, Long> weekdayAll = new HashMap<>();
-        long[] hourTotals = new long[24];
 
         // 6 tháng gần đây (kể cả tháng hiện tại)
         List<ShipperInsightsResponse.MonthAmount> monthly = new ArrayList<>();
@@ -587,42 +591,58 @@ public class StatisticsService {
                     .label(String.format("%02d/%d", d.getMonthValue(), d.getYear())).amount(0).build());
         }
 
-        long totalEarnings = 0, todayEarnings = 0, week7dEarnings = 0, thisWeekEarnings = 0;
-        long thisMonthEarnings = 0, lastMonthEarnings = 0, maxFee = 0;
-        int todayCount = 0, week7dCount = 0, thisMonthCount = 0;
-        Set<LocalDate> activeDays = new HashSet<>();
+        // Tổng thu nhập cả sự nghiệp: {SUM(fee), COUNT, MAX(fee)}
+        long totalEarnings = 0, maxFee = 0; int completedCount = 0;
+        List<Object[]> totalsRows = orderRepository.shipperEarningTotals(shipperUserId);
+        if (!totalsRows.isEmpty()) {
+            Object[] t = totalsRows.get(0);
+            totalEarnings = ((Number) t[0]).longValue();
+            completedCount = ((Number) t[1]).intValue();
+            maxFee = ((Number) t[2]).longValue();
+        }
 
-        for (Order o : completed) {
-            long fee = o.getShippingFee() == null ? 0 : o.getShippingFee().longValue();
-            LocalDateTime c = o.getCreatedAt();
-            if (c == null) continue;
-            totalEarnings += fee;
-            if (fee > maxFee) maxFee = fee;
-            String wk = weekdayKey(c.getDayOfWeek());
-            weekdayAll.merge(wk, fee, Long::sum);
-            hourTotals[c.getHour()] += fee;
-            if (!c.isBefore(weekStart) && c.isBefore(weekEnd)) { dayMap.merge(wk, fee, Long::sum); thisWeekEarnings += fee; }
-            if (!c.isBefore(startToday)) { todayEarnings += fee; todayCount++; }
-            if (!c.isBefore(start7d)) { week7dEarnings += fee; week7dCount++; }
-            if (!c.isBefore(monthStart)) { thisMonthEarnings += fee; thisMonthCount++; activeDays.add(c.toLocalDate()); }
-            else if (!c.isBefore(lastMonthStart)) { lastMonthEarnings += fee; }
-            Integer mi = monthIndex.get(c.getYear() + "-" + c.getMonthValue());
-            if (mi != null) { ShipperInsightsResponse.MonthAmount ma = monthly.get(mi); ma.setAmount(ma.getAmount() + fee); }
+        // Chuỗi thu nhập theo NGÀY (6 tháng gần đây) → suy ra mọi cửa sổ thời gian
+        long todayEarnings = 0, week7dEarnings = 0, thisWeekEarnings = 0;
+        long thisMonthEarnings = 0, lastMonthEarnings = 0;
+        int todayCount = 0, week7dCount = 0, thisMonthCount = 0, activeDayCount = 0;
+        for (Object[] row : orderRepository.findShipperDailyEarningsSince(shipperUserId, since6mo.atStartOfDay())) {
+            LocalDate d = LocalDate.parse(row[0].toString());
+            long amt = ((Number) row[1]).longValue();
+            int cnt = ((Number) row[2]).intValue();
+            Integer mi = monthIndex.get(d.getYear() + "-" + d.getMonthValue());
+            if (mi != null) { ShipperInsightsResponse.MonthAmount ma = monthly.get(mi); ma.setAmount(ma.getAmount() + amt); }
+            if (d.equals(today)) { todayEarnings += amt; todayCount += cnt; }
+            if (!d.isBefore(start7dDate)) { week7dEarnings += amt; week7dCount += cnt; }
+            if (!d.isBefore(weekStartDate) && d.isBefore(weekEndDate)) {
+                thisWeekEarnings += amt;
+                dayMap.merge(weekdayKey(d.getDayOfWeek()), amt, Long::sum);
+            }
+            if (!d.isBefore(monthStartDate)) { thisMonthEarnings += amt; thisMonthCount += cnt; activeDayCount++; }
+            else if (!d.isBefore(lastMonthStartDate)) { lastMonthEarnings += amt; }
         }
 
         List<ShipperInsightsResponse.DayAmount> daily = new ArrayList<>();
         for (String k : order) daily.add(ShipperInsightsResponse.DayAmount.builder().day(k).amount(dayMap.getOrDefault(k, 0L)).build());
 
+        // Thứ có thu nhập cao nhất (cả sự nghiệp)
         String bestWeekday = null; long bestAmt = 0;
-        for (String k : order) { long v = weekdayAll.getOrDefault(k, 0L); if (v > bestAmt) { bestAmt = v; bestWeekday = k; } }
+        for (Object[] row : orderRepository.findShipperEarningsByWeekday(shipperUserId)) {
+            int dow = ((Number) row[0]).intValue();     // 1=CN..7=T7
+            long v = ((Number) row[1]).longValue();
+            if (v > bestAmt && dow >= 1 && dow <= 7) { bestAmt = v; bestWeekday = dowKey[dow]; }
+        }
 
+        // Giờ vàng (cả sự nghiệp)
         int peakHourIdx = 0; long peakAmt = 0;
-        for (int h = 0; h < 24; h++) { if (hourTotals[h] > peakAmt) { peakAmt = hourTotals[h]; peakHourIdx = h; } }
+        for (Object[] row : orderRepository.findShipperEarningsByHour(shipperUserId)) {
+            int h = ((Number) row[0]).intValue();
+            long v = ((Number) row[1]).longValue();
+            if (v > peakAmt) { peakAmt = v; peakHourIdx = h; }
+        }
 
         int monthDelta = lastMonthEarnings > 0
                 ? (int) Math.round((thisMonthEarnings - lastMonthEarnings) * 100.0 / lastMonthEarnings)
                 : (thisMonthEarnings > 0 ? 100 : 0);
-        int activeDayCount = activeDays.size();
         long avgPerActiveDay = activeDayCount > 0 ? thisMonthEarnings / activeDayCount : 0;
 
         Double liveAvg = reviewRepository.findAverageRatingByShipperId(shipper.getShipperId());
@@ -631,7 +651,7 @@ public class StatisticsService {
         int ratedCount = (int) reviewRepository.countByShipperShipperIdAndShipperRatingIsNotNull(shipper.getShipperId());
 
         return ShipperInsightsResponse.builder()
-                .totalEarnings(totalEarnings).completedCount(completed.size())
+                .totalEarnings(totalEarnings).completedCount(completedCount)
                 .todayEarnings(todayEarnings).todayCount(todayCount)
                 .week7dEarnings(week7dEarnings).week7dCount(week7dCount)
                 .thisWeekEarnings(thisWeekEarnings)

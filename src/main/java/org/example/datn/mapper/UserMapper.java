@@ -42,6 +42,7 @@ public class UserMapper {
         String idCard = null;
         Integer activeDelivery = null;
         Integer totalDelivery = null;
+        Integer cancelCount = null;
         java.math.BigDecimal avgRating = null;
 
         if (user.getRole() == Role.OWNER) {
@@ -74,6 +75,7 @@ public class UserMapper {
                 idCard = shipper.getIdCard() != null ? shipper.getIdCard() : idCard;
                 activeDelivery = shipper.getActiveDelivery();
                 totalDelivery = shipper.getTotalDelivery();
+                cancelCount = shipper.getCancelCount();
                 avgRating = shipper.getAvgRating();
             }
         }
@@ -104,6 +106,9 @@ public class UserMapper {
                 .activeDelivery(activeDelivery)
                 .totalDelivery(totalDelivery)
                 .avgRating(avgRating)
+                .reputationScore(user.getReputationScore())
+                .loyaltyPoints(user.getLoyaltyPoints())
+                .cancelCount(cancelCount)
                 .build();
     }
 }

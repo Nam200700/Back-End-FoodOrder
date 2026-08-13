@@ -23,6 +23,8 @@ CREATE TABLE users (
                        avatar          VARCHAR(255),
                        password        VARCHAR(255),
                        role            ENUM('ADMIN','CUSTOMER','OWNER','SHIPPER') NOT NULL,
+                       reputation_score INT NOT NULL DEFAULT 100,       -- điểm uy tín 0..100 (khởi tạo 100)
+                       loyalty_points   INT NOT NULL DEFAULT 0,         -- điểm thưởng tích luỹ để đổi voucher
                        PRIMARY KEY (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -60,6 +62,7 @@ CREATE TABLE restaurants (
                              description     VARCHAR(500),
                              address         VARCHAR(255),
                              image_url       VARCHAR(255),
+                             cancel_count    INT NOT NULL DEFAULT 0,   -- số đơn quán tự hủy/từ chối (tính tỷ lệ hủy)
                              PRIMARY KEY (restaurant_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -162,6 +165,7 @@ CREATE TABLE deliveries (
                             delivery_id     BIGINT NOT NULL AUTO_INCREMENT,
                             order_id        BIGINT NOT NULL,
                             shipper_id      BIGINT NOT NULL,
+                            status          ENUM('ASSIGNED','COMPLETED','CANCELLED') NOT NULL DEFAULT 'ASSIGNED', -- trạng thái từng lần gán giao
                             updated_at      DATETIME(6),
                             PRIMARY KEY (delivery_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -350,6 +354,7 @@ CREATE TABLE shippers (
                           avg_rating        DECIMAL(3,2) NOT NULL DEFAULT 0,
                           total_delivery    INT NOT NULL DEFAULT 0,
                           active_delivery   INT NOT NULL DEFAULT 0,                   -- [V2] đang giao bao nhiêu đơn
+                          cancel_count      INT NOT NULL DEFAULT 0,                   -- số đơn shipper đã bỏ (tính tỷ lệ hủy)
                           created_at        DATETIME(6),
                           updated_at        DATETIME(6),
                           PRIMARY KEY (shipper_id)
@@ -364,10 +369,11 @@ CREATE TABLE vouchers (
                           min_order_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
 --                           quantity INT NOT NULL,
                           used_quantity INT NOT NULL DEFAULT 0,
+                          points_cost INT NULL,                         -- số điểm loyalty cần để đổi (chỉ dùng cho issue_type='LOYALTY')
                           start_date DATETIME NOT NULL,
                           end_date DATETIME NOT NULL,
                           status ENUM('ACTIVE','INACTIVE', 'EXPIRED') NOT NULL DEFAULT 'ACTIVE',
-                          issue_type ENUM('EVENT', 'ORDER_CANCELLED') NOT NULL,
+                          issue_type ENUM('EVENT', 'ORDER_CANCELLED', 'LOYALTY') NOT NULL,
                           created_at DATETIME,
                           updated_at DATETIME
 );
@@ -445,7 +451,9 @@ CREATE TABLE group_order_items (
 --      → 1 customer có thể có nhiều cart, nhưng mỗi restaurant chỉ 1 cart
 ALTER TABLE carts                ADD CONSTRAINT uk_carts_customer_restaurant  UNIQUE (customer_id, restaurant_id);
 ALTER TABLE conversations        ADD CONSTRAINT uk_conversation_pair          UNIQUE (user1_id, user2_id);
-ALTER TABLE deliveries           ADD CONSTRAINT uk_deliveries_order           UNIQUE (order_id);
+-- [reputation] Bỏ UNIQUE(order_id): 1 đơn có thể có nhiều delivery theo thời gian
+-- (shipper bỏ đơn → shipper khác nhận lại). Dùng index thường để tra cứu nhanh.
+CREATE INDEX idx_deliveries_order ON deliveries (order_id);
 ALTER TABLE favorite_restaurants ADD CONSTRAINT uk_favorite                   UNIQUE (customer_id, restaurant_id);
 ALTER TABLE payments             ADD CONSTRAINT uk_payments_order             UNIQUE (order_id);
 ALTER TABLE reviews              ADD CONSTRAINT uk_reviews_order              UNIQUE (order_id);
@@ -561,3 +569,11 @@ ALTER TABLE order_items  ADD CONSTRAINT fk_order_items_group_member    FOREIGN K
 --  ON DELETE CASCADE trên fk_messages_conversation.
 --  Trước dùng MySQL EVENT (cần quyền EVENT + event_scheduler=ON → dễ fail khi deploy
 --  trên host chia sẻ), nay chuyển sang Spring @Scheduled: ConversationCleanupScheduler.
+
+
+-- ─── Catalog voucher LOYALTY (đổi bằng điểm thưởng) ──────────────────────────
+--  points_cost = số điểm loyalty cần để đổi. Khách đổi 1 lần/mã (uk_user_voucher).
+INSERT INTO vouchers (code, name, discount_type, discount_value, min_order_amount, used_quantity, points_cost, start_date, end_date, status, issue_type, created_at, updated_at) VALUES
+  ('LOYALTYFREESHIP', 'Đổi 60 điểm · Miễn phí giao hàng',  'FREESHIP', 0,      0,      0, 60,  '2024-01-01 00:00:00', '2030-12-31 23:59:59', 'ACTIVE', 'LOYALTY', NOW(), NOW()),
+  ('LOYALTY20K',      'Đổi 100 điểm · Giảm 20.000đ',        'FIXED',    20000,  0,      0, 100, '2024-01-01 00:00:00', '2030-12-31 23:59:59', 'ACTIVE', 'LOYALTY', NOW(), NOW()),
+  ('LOYALTY50K',      'Đổi 220 điểm · Giảm 50.000đ',        'FIXED',    50000,  50000,  0, 220, '2024-01-01 00:00:00', '2030-12-31 23:59:59', 'ACTIVE', 'LOYALTY', NOW(), NOW());

@@ -45,4 +45,8 @@ public class VoucherRequest {
 
     @NotNull(message = "Loại phát voucher không được để trống")
     private VoucherIssueType issueType;
+
+    // Số điểm thưởng cần để đổi — CHỈ dùng cho issueType = LOYALTY (đổi điểm).
+    @Positive(message = "Số điểm đổi phải lớn hơn 0")
+    private Integer pointsCost;
 }
