@@ -139,6 +139,7 @@ CREATE TABLE orders (
                              'PENDING','PICKED_UP', 'SHIPPER_ACCEPTED','PREPARING','READY_FOR_PICKUP') NOT NULL,
                         payment_method      ENUM('COD') NOT NULL,
                         payment_status      ENUM('FAILED','PAID','PENDING','REFUNDED') NOT NULL,
+                        group_order_id      BIGINT                  NULL,
                         PRIMARY KEY (order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -150,6 +151,7 @@ CREATE TABLE order_items (
                              order_item_id   BIGINT NOT NULL AUTO_INCREMENT,
                              food_name       VARCHAR(150) NOT NULL,
                              note            VARCHAR(255),
+                             group_order_member_id BIGINT          NULL,
                              PRIMARY KEY (order_item_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -391,6 +393,51 @@ CREATE TABLE user_vouchers (
                                    UNIQUE(user_id, voucher_id)
 );
 
+-- ─── [V3] Group Order: phiên đặt đơn nhóm ─────────────────────
+
+CREATE TABLE group_orders (
+                              group_order_id   BIGINT NOT NULL AUTO_INCREMENT,
+                              host_id          BIGINT NOT NULL,
+                              restaurant_id    BIGINT NOT NULL,
+                              invite_code      VARCHAR(36) NOT NULL,
+                              status           ENUM('OPEN','LOCKED','ORDERED','CANCELLED','EXPIRED') NOT NULL DEFAULT 'OPEN',
+                              address_id       BIGINT              NULL,
+                              delivery_address VARCHAR(255)        NULL,
+                              delivery_lat        DECIMAL(10,7),
+                              delivery_lng        DECIMAL(10,7),
+                              join_deadline    DATETIME(6)         NULL,
+                              locked_at        DATETIME(6)         NULL,
+                              note             VARCHAR(255),
+                              created_at       DATETIME(6),
+                              updated_at       DATETIME(6),
+                              PRIMARY KEY (group_order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE group_order_members (
+                                     member_id        BIGINT NOT NULL AUTO_INCREMENT,
+                                     group_order_id   BIGINT NOT NULL,
+                                     user_id          BIGINT NOT NULL,
+                                     is_host          BIT NOT NULL DEFAULT 0,
+                                     status           ENUM('JOINED','READY','LEFT') NOT NULL DEFAULT 'JOINED',
+                                     joined_at        DATETIME(6),
+                                     left_at          DATETIME(6)     NULL,
+                                     created_at       DATETIME(6),
+                                     updated_at       DATETIME(6),
+                                     PRIMARY KEY (member_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE group_order_items (
+                                   group_order_item_id  BIGINT NOT NULL AUTO_INCREMENT,
+                                   group_order_id       BIGINT NOT NULL,
+                                   member_id            BIGINT NOT NULL,                     -- ai chọn món này (FK group_order_members)
+                                   food_id              BIGINT NOT NULL,
+                                   quantity             INTEGER NOT NULL,
+                                   price_at_add         DECIMAL(12,2) NOT NULL,
+                                   note                 VARCHAR(255),
+                                   created_at           DATETIME(6),
+                                   updated_at           DATETIME(6),
+                                   PRIMARY KEY (group_order_item_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ─── Unique constraints ───────────────────────────────────────
 
@@ -406,6 +453,9 @@ ALTER TABLE users                ADD CONSTRAINT uk_users_phone                UN
 ALTER TABLE users                ADD CONSTRAINT uk_users_email                UNIQUE (email);
 ALTER TABLE users                ADD CONSTRAINT uk_users_google_id            UNIQUE (google_id);
 ALTER TABLE shippers             ADD CONSTRAINT uk_shippers_user              UNIQUE (user_id);
+
+ALTER TABLE group_orders         ADD CONSTRAINT uk_group_orders_invite_code UNIQUE (invite_code);
+ALTER TABLE group_order_members  ADD CONSTRAINT uk_group_order_member       UNIQUE (group_order_id, user_id);
 
 
 
@@ -431,6 +481,18 @@ CREATE INDEX idx_carts_customer                 ON carts            (customer_id
 CREATE INDEX idx_customer_addresses_customer    ON customer_addresses (customer_id);                     -- [V2]
 CREATE INDEX idx_review_images_review           ON review_images    (review_id);                         -- [V2]
 CREATE INDEX idx_orders_user_voucher ON orders (user_voucher_id);
+
+CREATE INDEX idx_group_orders_host                 ON group_orders          (host_id);
+CREATE INDEX idx_group_orders_restaurant           ON group_orders          (restaurant_id);
+CREATE INDEX idx_group_orders_status               ON group_orders          (status);
+CREATE INDEX idx_group_order_members_group         ON group_order_members   (group_order_id);
+CREATE INDEX idx_group_order_members_user          ON group_order_members   (user_id);
+CREATE INDEX idx_group_order_items_group           ON group_order_items     (group_order_id);
+CREATE INDEX idx_group_order_items_member          ON group_order_items     (member_id);
+CREATE INDEX idx_group_order_items_food            ON group_order_items     (food_id);
+
+CREATE INDEX idx_orders_group_order        ON orders       (group_order_id);
+CREATE INDEX idx_order_items_group_member  ON order_items  (group_order_member_id);
 
 
 -- ─── Foreign keys ─────────────────────────────────────────────
@@ -477,6 +539,18 @@ ALTER TABLE shippers                ADD CONSTRAINT fk_shippers_user             
 ALTER TABLE transactions            ADD CONSTRAINT fk_transactions_order            FOREIGN KEY (order_id)          REFERENCES orders           (order_id);
 ALTER TABLE transactions            ADD CONSTRAINT fk_transactions_user             FOREIGN KEY (user_id)           REFERENCES users            (user_id);
 ALTER TABLE users                   ADD CONSTRAINT fk_users_deleted_by              FOREIGN KEY (deleted_by)        REFERENCES users            (user_id);  -- [V2]
+
+ALTER TABLE group_orders        ADD CONSTRAINT fk_group_orders_host          FOREIGN KEY (host_id)        REFERENCES users              (user_id);
+ALTER TABLE group_orders        ADD CONSTRAINT fk_group_orders_restaurant    FOREIGN KEY (restaurant_id)  REFERENCES restaurants        (restaurant_id);
+ALTER TABLE group_orders        ADD CONSTRAINT fk_group_orders_address      FOREIGN KEY (address_id)     REFERENCES customer_addresses (address_id);
+ALTER TABLE group_order_members ADD CONSTRAINT fk_gom_group_order            FOREIGN KEY (group_order_id) REFERENCES group_orders       (group_order_id) ON DELETE CASCADE;
+ALTER TABLE group_order_members ADD CONSTRAINT fk_gom_user                   FOREIGN KEY (user_id)        REFERENCES users              (user_id);
+ALTER TABLE group_order_items   ADD CONSTRAINT fk_goi_group_order            FOREIGN KEY (group_order_id) REFERENCES group_orders       (group_order_id) ON DELETE CASCADE;
+ALTER TABLE group_order_items   ADD CONSTRAINT fk_goi_member                 FOREIGN KEY (member_id)      REFERENCES group_order_members(member_id) ON DELETE CASCADE;
+ALTER TABLE group_order_items   ADD CONSTRAINT fk_goi_food                   FOREIGN KEY (food_id)        REFERENCES foods              (food_id);
+
+ALTER TABLE orders       ADD CONSTRAINT fk_orders_group_order          FOREIGN KEY (group_order_id)          REFERENCES group_orders        (group_order_id);
+ALTER TABLE order_items  ADD CONSTRAINT fk_order_items_group_member    FOREIGN KEY (group_order_member_id)   REFERENCES group_order_members (member_id);
 
 
 

@@ -110,4 +110,9 @@ public class Order extends BaseEntity {
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_voucher_id")
     private UserVoucher userVoucher;
+
+    /** đặt đơn nhóm — NULL nếu là đơn cá nhân. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "group_order_id")
+    private GroupOrder groupOrder;
 }
