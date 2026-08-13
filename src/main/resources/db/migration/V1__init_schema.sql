@@ -397,20 +397,15 @@ CREATE TABLE user_vouchers (
 
 CREATE TABLE group_orders (
                               group_order_id   BIGINT NOT NULL AUTO_INCREMENT,
-                              host_id          BIGINT NOT NULL,                             -- user tạo phiên (customer)
+                              host_id          BIGINT NOT NULL,
                               restaurant_id    BIGINT NOT NULL,
-                              invite_code      VARCHAR(36) NOT NULL,                          -- mã mời/link tham gia
+                              invite_code      VARCHAR(36) NOT NULL,
                               status           ENUM('OPEN','LOCKED','ORDERED','CANCELLED','EXPIRED') NOT NULL DEFAULT 'OPEN',
-    -- OPEN: đang mời thành viên chọn món
-    -- LOCKED: host khóa, chờ xác nhận cuối trước khi tạo order
-    -- ORDERED: đã chốt, sinh ra 1 order (orders.group_order_id trỏ về đây)
-    -- CANCELLED: host hủy phiên
-    -- EXPIRED: quá join_deadline mà chưa chốt
-                              address_id       BIGINT              NULL,                     -- địa chỉ giao, lấy từ customer_addresses của host
-                              delivery_address VARCHAR(255)        NULL,                     -- hoặc nhập tay nếu không dùng address_id
+                              address_id       BIGINT              NULL,
+                              delivery_address VARCHAR(255)        NULL,
                               delivery_lat        DECIMAL(10,7),
                               delivery_lng        DECIMAL(10,7),
-                              join_deadline    DATETIME(6)         NULL,                     -- hạn chót thành viên phải chọn xong món
+                              join_deadline    DATETIME(6)         NULL,
                               locked_at        DATETIME(6)         NULL,
                               note             VARCHAR(255),
                               created_at       DATETIME(6),
@@ -424,9 +419,6 @@ CREATE TABLE group_order_members (
                                      user_id          BIGINT NOT NULL,
                                      is_host          BIT NOT NULL DEFAULT 0,
                                      status           ENUM('JOINED','READY','LEFT') NOT NULL DEFAULT 'JOINED',
-    -- JOINED: đã vào phiên, chưa chắc chọn xong món
-    -- READY: đã chọn xong, sẵn sàng để host chốt đơn
-    -- LEFT: rời phiên trước khi chốt
                                      joined_at        DATETIME(6),
                                      left_at          DATETIME(6)     NULL,
                                      created_at       DATETIME(6),
