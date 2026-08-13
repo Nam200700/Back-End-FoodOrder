@@ -64,6 +64,7 @@ public class RestaurantMapper {
                 .rating(avgRating)
                 .reviewsCount((int) count)
                 .orderCount((int) ordersCount)
+                .cancelCount(r.getCancelCount() != null ? r.getCancelCount() : 0)
                 .opensAt(r.getOpensAt())
                 .closesAt(r.getClosesAt())
                 .isOpen(isRestaurantOpen(r))
