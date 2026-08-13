@@ -34,4 +34,11 @@ public class DeliveryService {
             deliveryRepository.save(d);
         });
     }
+
+    /** Xoá bản ghi giao hàng khi shipper bỏ đơn — để đơn về pool và shipper khác nhận lại được. */
+    @Transactional
+    public void cancelDelivery(Order order) {
+        deliveryRepository.findByOrderOrderId(order.getOrderId())
+                .ifPresent(deliveryRepository::delete);
+    }
 }
