@@ -311,13 +311,13 @@ public class StatisticsService {
         long menuAvailable = foodRepository.countByRestaurantRestaurantIdAndStatusTrueAndIsAvailableTrue(restaurantId);
         long menuOutOfStock = foodRepository.countByRestaurantRestaurantIdAndStatusTrueAndIsAvailableFalse(restaurantId);
         long menuHidden = foodRepository.countByRestaurantRestaurantIdAndStatusFalse(restaurantId);
-        // Món đang bán (status=true) nhưng chưa có lượt bán nào (đếm lại per-food, thực đơn nhỏ nên chấp nhận)
-        long menuNoSales = foodRepository.findByRestaurantIdForMerchant(restaurantId).stream()
-                .filter(f -> {
-                    Integer sold = orderRepository.countCompletedQuantityByFoodId(f.getFoodId());
-                    return sold == null || sold == 0;
-                })
-                .count();
+        // Món đang bán nhưng chưa có lượt bán nào — 1 câu batch GROUP BY (khử N+1 per-food).
+        List<Long> menuFoodIds = foodRepository.findByRestaurantIdForMerchant(restaurantId).stream()
+                .map(f -> f.getFoodId()).toList();
+        long soldFoodCount = menuFoodIds.isEmpty() ? 0
+                : orderRepository.sumCompletedQuantityByFoodIds(menuFoodIds).stream()
+                    .filter(r -> ((Number) r[1]).longValue() > 0).count();
+        long menuNoSales = menuFoodIds.size() - soldFoodCount;
 
         return MerchantInsightsResponse.builder()
                 .revenue7d(revenue7d)
