@@ -155,6 +155,12 @@ public class OrderService {
     public List<OrderResponse> createOrder(Long customerId, CreateOrderRequest req) {
         User customer = userRepository.getReferenceById(customerId);
 
+        // Chống bom hàng: khách có điểm uy tín quá thấp thì tạm không cho đặt đơn.
+        if (customer.getReputationScore() != null
+                && customer.getReputationScore() < ReputationService.CUSTOMER_ORDER_BLOCK_BELOW) {
+            throw new AppException(ErrorCode.REPUTATION_TOO_LOW);
+        }
+
         List<Order> ordersToSave = new ArrayList<>();
         List<Cart> cartsToDelete = new ArrayList<>();
         List<UserVoucher> vouchersToUpdate = new ArrayList<>();
