@@ -66,8 +66,16 @@ public class VoucherService {
             }
         }
 
+        // C. Voucher LOYALTY (đổi điểm) BẮT BUỘC có số điểm đổi; các loại khác không dùng pointsCost.
+        if (request.getIssueType() == VoucherIssueType.LOYALTY) {
+            if (request.getPointsCost() == null || request.getPointsCost() <= 0) {
+                throw new AppException(ErrorCode.VALIDATION_FAILED, "Voucher đổi điểm bắt buộc nhập số điểm cần để đổi (> 0)!");
+            }
+        }
+
         Voucher voucher = voucherMapper.toEntity(request);
         voucher.setMinOrderAmount(request.getMinOrderAmount() != null ? request.getMinOrderAmount() : BigDecimal.ZERO);
+        voucher.setPointsCost(request.getIssueType() == VoucherIssueType.LOYALTY ? request.getPointsCost() : null);
         voucher.setUsedQuantity(0);
 
         voucher = voucherRepository.save(voucher);
@@ -104,6 +112,14 @@ public class VoucherService {
                 throw new AppException(ErrorCode.VALIDATION_FAILED,
                         "Đã có một Voucher đền bù hủy đơn khác đang hoạt động và chưa hết hạn. Không thể kích hoạt!");
             }
+        }
+
+        // Voucher đổi điểm: cho phép cập nhật số điểm cần đổi (không đổi loại/giá trị).
+        if (voucher.getIssueType() == VoucherIssueType.LOYALTY) {
+            if (request.getPointsCost() == null || request.getPointsCost() <= 0) {
+                throw new AppException(ErrorCode.VALIDATION_FAILED, "Voucher đổi điểm bắt buộc nhập số điểm cần để đổi (> 0)!");
+            }
+            voucher.setPointsCost(request.getPointsCost());
         }
 
         voucher.setName(request.getName());
