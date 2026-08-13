@@ -57,4 +57,17 @@ public interface GroupOrderRepository extends BaseRepository<GroupOrder, Long> {
     Page<GroupOrder> findByMemberUserId(@Param("userId") Long userId, Pageable pageable);
 
     List<GroupOrder> findByStatusAndJoinDeadlineBefore(GroupOrderStatus status, LocalDateTime cutoff);
+
+    @Query("""
+            SELECT DISTINCT g FROM GroupOrder g
+            JOIN g.members m
+            WHERE m.user.userId = :userId
+              AND g.restaurant.restaurantId = :restaurantId
+              AND m.status <> org.example.datn.domain.enums.GroupOrderMemberStatus.LEFT
+              AND g.status IN (org.example.datn.domain.enums.GroupOrderStatus.OPEN,
+                                org.example.datn.domain.enums.GroupOrderStatus.LOCKED)
+            ORDER BY g.createdAt DESC
+            """)
+    List<GroupOrder> findActiveByUserAndRestaurant(@Param("userId") Long userId,
+                                                   @Param("restaurantId") Long restaurantId);
 }
