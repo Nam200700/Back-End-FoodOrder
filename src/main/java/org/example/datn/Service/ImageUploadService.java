@@ -1,23 +1,35 @@
 package org.example.datn.Service;
 
 import com.cloudinary.Cloudinary;
+import com.cloudinary.Transformation;
 import com.cloudinary.utils.ObjectUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ImageUploadService {
 
     private final Cloudinary cloudinary;
 
+    /**
+     * Upload ảnh có NÉN ngay lúc nhận: giới hạn cạnh dài tối đa 1600px (crop "limit" → chỉ thu nhỏ,
+     * không phóng to/cắt) + chất lượng "auto:good". Ảnh chụp điện thoại thường 3–5MB/4000px, sau khi
+     * nén còn vài trăm KB → trang khách tải nhanh hơn, tiết kiệm băng thông & dung lượng lưu trữ.
+     */
     public String uploadImage(MultipartFile file) throws IOException {
         Map<?, ?> uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.asMap(
-                "folder", "fresh_delivery"
+                "folder", "fresh_delivery",
+                "transformation", new Transformation()
+                        .width(1600).height(1600).crop("limit")
+                        .quality("auto:good")
         ));
         return uploadResult.get("secure_url").toString();
     }
@@ -62,16 +74,19 @@ public class ImageUploadService {
     }
 
     /**
-     * Thực hiện xóa ảnh cũ trên Cloudinary (Best-effort, không ném exception làm rollback transaction chính).
+     * Xoá ảnh cũ trên Cloudinary — chạy BẤT ĐỒNG BỘ (fire-and-forget) trên pool "imageExecutor".
+     * Best-effort: nuốt mọi lỗi, không ném ra để khỏi rollback transaction chính. Nhờ async, request
+     * cập nhật (avatar/món/quán) trả về ngay, không chờ round-trip destroy tới Cloudinary.
      */
+    @Async("imageExecutor")
     public void deleteImage(String imageUrl) {
         String publicId = extractPublicId(imageUrl);
         if (publicId != null) {
             try {
                 Map<?, ?> result = cloudinary.uploader().destroy(publicId, ObjectUtils.emptyMap());
-                System.out.println("[CLOUDINARY] Destroy result for " + publicId + ": " + result);
+                log.debug("[CLOUDINARY] Destroy result for {}: {}", publicId, result);
             } catch (Exception e) {
-                System.err.println("[CLOUDINARY] Failed to destroy image: " + publicId + ", error: " + e.getMessage());
+                log.warn("[CLOUDINARY] Failed to destroy image {}: {}", publicId, e.getMessage());
             }
         }
     }

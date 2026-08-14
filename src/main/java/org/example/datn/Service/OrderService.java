@@ -6,6 +6,7 @@ import org.example.datn.annotation.EvictStatsCaches;
 import org.example.datn.DTO.request.order.CancelOrderRequest;
 import org.example.datn.DTO.request.order.CreateOrderRequest;
 import org.example.datn.DTO.response.order.OrderResponse;
+import org.example.datn.DTO.response.order.MerchantOrderMonitorResponse;
 import org.example.datn.Exception.AppException;
 import org.example.datn.Exception.ErrorCode;
 import org.example.datn.Exception.OrderStatusException;
@@ -34,6 +35,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -514,6 +516,36 @@ public class OrderService {
         ownershipGuard.checkRestaurantOwner(restaurant, merchantId);
         Page<Order> orderPage = orderRepository.searchMerchantOrders(restaurantId, status, keyword, pageable);
         return new PageImpl<>(enrichPage(orderPage.getContent()), orderPage.getPageable(), orderPage.getTotalElements());
+    }
+
+    /**
+     * Theo dõi đơn (đếm tab + đơn chờ mới) bằng 2 câu nhẹ thay cho việc FE nạp cả nghìn đơn/30s.
+     * counts: GROUP BY trạng thái; pending: projection rút gọn đơn PENDING (id/tên khách/tổng tiền).
+     */
+    @Transactional(readOnly = true)
+    public MerchantOrderMonitorResponse getMerchantOrderMonitor(Long merchantId, Long restaurantId) {
+        Restaurant restaurant = restaurantRepository.findByIdOrThrow(restaurantId, ErrorCode.RESTAURANT_NOT_FOUND);
+        ownershipGuard.checkRestaurantOwner(restaurant, merchantId);
+
+        Map<String, Long> counts = new HashMap<>();
+        long total = 0;
+        for (Object[] row : orderRepository.countMerchantOrdersByStatus(restaurantId)) {
+            long c = ((Number) row[1]).longValue();
+            counts.put(((OrderStatus) row[0]).name(), c);
+            total += c;
+        }
+        counts.put("ALL", total);
+
+        List<MerchantOrderMonitorResponse.PendingBrief> pending = orderRepository.findPendingBriefByRestaurant(restaurantId)
+                .stream()
+                .map(r -> MerchantOrderMonitorResponse.PendingBrief.builder()
+                        .orderId(((Number) r[0]).longValue())
+                        .customerName((String) r[1])
+                        .totalAmount((BigDecimal) r[2])
+                        .build())
+                .toList();
+
+        return MerchantOrderMonitorResponse.builder().counts(counts).pending(pending).build();
     }
 
     @Transactional(readOnly = true)

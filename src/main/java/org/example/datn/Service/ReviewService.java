@@ -20,6 +20,9 @@ import org.example.datn.Repository.ReviewRepository;
 import org.example.datn.Repository.UserRepository;
 import org.example.datn.Repository.ShipperRepository;
 import org.example.datn.Repository.RestaurantRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,9 +67,16 @@ public class ReviewService {
     private final ShipperRepository shipperRepository;
     private final RestaurantRepository restaurantRepository;
 
+    // Review mới làm đổi mọi bản tóm tắt (phân bố sao, TB, lời khen…) và rating quán ở feed.
+    @Caching(evict = {
+            @CacheEvict(value = "reviewSummaryShipper", allEntries = true),
+            @CacheEvict(value = "reviewSummaryMerchant", allEntries = true),
+            @CacheEvict(value = "reviewSummaryRestaurant", allEntries = true),
+            @CacheEvict(value = "restaurantFeed", allEntries = true),
+    })
     @Transactional
     public ReviewResponse createReview(Long customerId, CreateReviewRequest req) {
-        
+
         Order order = orderRepository.findByIdOrThrow(req.getOrderId(), ErrorCode.ORDER_NOT_FOUND);
 
         if (!order.getCustomer().getUserId().equals(customerId)) {
@@ -158,6 +168,7 @@ public class ReviewService {
     }
 
     /** Công khai: tóm tắt đánh giá của một quán (theo restaurantId) — cho trang chi tiết quán phía khách. */
+    @Cacheable(value = "reviewSummaryRestaurant", key = "#restaurantId")
     @Transactional(readOnly = true)
     public ShipperReviewSummaryResponse restaurantReviewSummary(Long restaurantId) {
         return buildRestaurantSummary(restaurantId);
@@ -188,6 +199,7 @@ public class ReviewService {
      * TÓM TẮT đánh giá tài xế — gộp toàn bộ ở server (điểm TB, phân bố sao, % hài lòng,
      * 30 ngày gần đây, lời khen/điểm cần cải thiện). Trả payload nhỏ; danh sách review phân trang riêng.
      */
+    @Cacheable(value = "reviewSummaryShipper", key = "#shipperUserId")
     @Transactional(readOnly = true)
     public ShipperReviewSummaryResponse shipperReviewSummary(Long shipperUserId) {
         Shipper shipper = shipperRepository.findByUserUserId(shipperUserId)
@@ -255,6 +267,7 @@ public class ReviewService {
      * TÓM TẮT đánh giá QUÁN — gộp toàn bộ ở server (điểm TB, phân bố sao, % hài lòng,
      * 30 ngày gần đây, lời khen/điểm cần cải thiện). Trả payload nhỏ; danh sách phân trang riêng.
      */
+    @Cacheable(value = "reviewSummaryMerchant", key = "#ownerUserId")
     @Transactional(readOnly = true)
     public ShipperReviewSummaryResponse merchantReviewSummary(Long ownerUserId) {
         return buildRestaurantSummary(resolveOwnerRestaurantId(ownerUserId));

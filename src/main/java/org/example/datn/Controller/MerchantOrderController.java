@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.datn.DTO.request.order.CancelOrderRequest;
 import org.example.datn.DTO.request.order.RejectOrderRequest;
 import org.example.datn.DTO.response.order.OrderResponse;
+import org.example.datn.DTO.response.order.MerchantOrderMonitorResponse;
 import org.example.datn.Service.OrderService;
 import org.example.datn.common.ApiResponse;
 import org.example.datn.common.PageResponse;
@@ -33,6 +34,15 @@ public class MerchantOrderController {
             Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(
                 orderService.getMerchantOrders(user.getUserId(), restaurantId, status, keyword, pageable))));
+    }
+
+    /** Theo dõi nhẹ: đếm đơn theo trạng thái + danh sách đơn chờ rút gọn (thay việc tải cả nghìn đơn để đếm). */
+    @GetMapping("/monitor")
+    public ResponseEntity<ApiResponse<MerchantOrderMonitorResponse>> monitor(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @RequestParam Long restaurantId) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                orderService.getMerchantOrderMonitor(user.getUserId(), restaurantId)));
     }
 
     @GetMapping("/{id}")

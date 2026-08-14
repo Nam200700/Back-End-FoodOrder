@@ -602,10 +602,9 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
     );
 
     @Query("""
-            SELECT DISTINCT o FROM Order o 
+            SELECT o FROM Order o
             JOIN FETCH o.customer c
             JOIN FETCH o.restaurant r
-            LEFT JOIN o.items oi
             WHERE r.restaurantId = :restaurantId
             AND (:status IS NULL OR o.orderStatus = :status)
             AND (:keyword IS NULL OR :keyword = '' OR
@@ -619,6 +618,19 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
             @Param("keyword") String keyword,
             Pageable pageable
     );
+
+    /** Số đơn theo trạng thái của 1 quán — gộp 1 câu GROUP BY (thay việc nạp cả nghìn đơn để đếm ở FE). */
+    @Query("SELECT o.orderStatus, COUNT(o) FROM Order o WHERE o.restaurant.restaurantId = :restaurantId GROUP BY o.orderStatus")
+    List<Object[]> countMerchantOrdersByStatus(@Param("restaurantId") Long restaurantId);
+
+    /** Đơn CHỜ XÁC NHẬN rút gọn của 1 quán (id, tên khách, tổng tiền) — đủ để FE dò & báo đơn mới. */
+    @Query("""
+            SELECT o.orderId, o.customer.fullName, o.totalAmount FROM Order o
+            WHERE o.restaurant.restaurantId = :restaurantId
+              AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.PENDING
+            ORDER BY o.createdAt DESC
+            """)
+    List<Object[]> findPendingBriefByRestaurant(@Param("restaurantId") Long restaurantId);
 
     @Query("""
         SELECT o.restaurant

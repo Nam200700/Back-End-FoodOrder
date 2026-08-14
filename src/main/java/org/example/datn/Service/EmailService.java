@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -13,6 +14,12 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
+    /**
+     * Gửi OTP qua SMTP — chạy ASYNC trên pool "mailExecutor" (fire-and-forget).
+     * Nhờ đó register/quên mật khẩu KHÔNG phải chờ SMTP và không giữ transaction DB mở
+     * suốt lúc gửi. Lỗi gửi được nuốt + log fallback ngay trong hàm nên caller không cần chờ.
+     */
+    @Async("mailExecutor")
     public void sendOtp(String email, String code) {
         log.info("Sending real OTP email to {}...", email);
         try {
