@@ -118,4 +118,11 @@ public class GroupOrderController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created(groupOrderService.checkout(user.getUserId(), id, req)));
     }
+
+    @PatchMapping("/{id}/address")
+    public ResponseEntity<ApiResponse<GroupOrderResponse>> updateAddress(
+            @AuthenticationPrincipal CustomUserDetails user, @PathVariable Long id,
+            @Valid @RequestBody UpdateGroupOrderAddressRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(groupOrderService.updateAddress(user.getUserId(), id, req)));
+    }
 }
