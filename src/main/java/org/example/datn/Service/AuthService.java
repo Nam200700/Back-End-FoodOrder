@@ -50,6 +50,7 @@ public class AuthService {
     private final SmsService smsService;
     private final EmailService emailService;
     private final ShipperIdentityGuard shipperIdentityGuard;
+    private final RestaurantPhoneGuard restaurantPhoneGuard;
 
     @Value("${app.otp.max-fail-attempts}")
     private int maxFailAttempts;
@@ -73,12 +74,10 @@ public class AuthService {
         if ("SHIPPER".equalsIgnoreCase(req.getRole())) {
             shipperIdentityGuard.ensureUnique(req.getIdCard(), req.getLicensePlate(), null);
         }
-        // Check trùng SĐT quán (chỉ khi đăng ký OWNER và có nhập SĐT quán) — cả hồ sơ chờ duyệt lẫn quán đã duyệt
-        if ("OWNER".equalsIgnoreCase(req.getRole())
-                && req.getRestaurantPhone() != null && !req.getRestaurantPhone().isBlank()
-                && (restaurantRegisterRepository.existsByPhone(req.getRestaurantPhone())
-                    || restaurantRepository.existsByPhone(req.getRestaurantPhone()))) {
-            throw new AppException(ErrorCode.RESTAURANT_PHONE_EXISTS);
+        // Check trùng SĐT quán (chỉ khi đăng ký OWNER) — dùng chung guard với các đường ghi khác
+        // để luật ở mọi nơi giống hệt nhau, không còn chỗ chặt chỗ lỏng.
+        if ("OWNER".equalsIgnoreCase(req.getRole())) {
+            restaurantPhoneGuard.ensureUnique(req.getRestaurantPhone(), null, null);
         }
 
 
