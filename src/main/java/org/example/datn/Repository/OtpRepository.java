@@ -20,4 +20,7 @@ public interface OtpRepository extends BaseRepository<Otp, Long> {
     @Modifying
     @Query("UPDATE Otp o SET o.isUsed = true WHERE o.recipient = :recipient AND o.purpose = :purpose AND o.isUsed = false")
     void invalidateOldOtps(@Param("recipient") String recipient, @Param("purpose") OtpPurpose purpose);
+
+    /** Đếm số mã đã cấp cho một người nhận kể từ mốc thời gian — dùng để chặn spam theo ngày. */
+    long countByRecipientAndCreatedAtAfter(String recipient, java.time.LocalDateTime since);
 }
