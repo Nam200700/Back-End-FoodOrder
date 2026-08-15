@@ -34,6 +34,7 @@ public class UserService {
     private final RestaurantRegisterRepository restaurantRegisterRepository;
     private final ShipperRepository shipperRepository;
     private final ImageUploadService imageUploadService;
+    private final ShipperIdentityGuard shipperIdentityGuard;
 
     @Transactional(readOnly = true)
     public UserResponse getProfile(Long userId) {
@@ -113,11 +114,9 @@ public class UserService {
                 if (req.getLicensePlate() != null && !req.getLicensePlate().trim().isEmpty()) {
                     String newLicensePlate = req.getLicensePlate().trim();
                     if (!newLicensePlate.equals(shipper.getLicensePlate())) {
-                        boolean plateExists = shipperRepository.existsByLicensePlate(newLicensePlate);
-                        if (plateExists) {
-                            throw new AppException(ErrorCode.LICENSE_PLATE_EXISTS);
-                        }
-                        shipper.setLicensePlate(req.getLicensePlate().trim());
+                        // Soi cả hồ sơ đăng ký lẫn tài xế đang hoạt động, bỏ qua chính mình.
+                        shipperIdentityGuard.ensureUnique(null, newLicensePlate, userId);
+                        shipper.setLicensePlate(newLicensePlate);
                     }
                 }
                 if (req.getVehicleType() != null && !req.getVehicleType().trim().isEmpty()) {
@@ -190,9 +189,13 @@ public class UserService {
             // ignore, default MOTORBIKE
         }
 
-        reg.setIdCard(req.getIdCard().trim());
+        // Đường nộp lại hồ sơ TRƯỚC ĐÂY không kiểm tra trùng -> tài xế bị từ chối có thể
+        // khai CCCD/biển số của người khác. Chặn tại đây, bỏ qua bản ghi của chính mình.
+        shipperIdentityGuard.ensureUnique(req.getIdCard(), req.getLicensePlate(), userId);
+
+        reg.setIdCard(req.getIdCard());
         reg.setVehicleType(vehicleType);
-        reg.setLicensePlate(req.getLicensePlate().trim());
+        reg.setLicensePlate(req.getLicensePlate());
         reg.setStatus(RegisterStatus.PENDING);
         reg.setRejectedReason(null);
         reg.setReviewedAt(null);
