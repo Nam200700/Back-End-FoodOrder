@@ -35,6 +35,7 @@ public class UserService {
     private final ShipperRepository shipperRepository;
     private final ImageUploadService imageUploadService;
     private final ShipperIdentityGuard shipperIdentityGuard;
+    private final RestaurantPhoneGuard restaurantPhoneGuard;
 
     @Transactional(readOnly = true)
     public UserResponse getProfile(Long userId) {
@@ -169,6 +170,9 @@ public class UserService {
         User user = userRepository.findByIdOrThrow(userId, ErrorCode.USER_NOT_FOUND);
         RestaurantRegister reg = restaurantRegisterRepository.findTopByOwnerUserIdOrderByRegisterIdDesc(userId)
                 .orElseGet(() -> RestaurantRegister.builder().owner(user).build());
+
+        // Soi cả quán đã duyệt lẫn hồ sơ đang chờ, bỏ qua hồ sơ cũ của chính mình.
+        restaurantPhoneGuard.ensureUnique(req.getRestaurantPhone(), null, userId);
 
         reg.setRestaurantName(req.getRestaurantName().trim());
         reg.setAddress(req.getRestaurantAddress().trim());
