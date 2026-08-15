@@ -151,7 +151,14 @@ public class AuthService {
                 .build();
     }
 
-    @Transactional
+    /*
+     * noRollbackFor = AppException: khi nhập sai mã, ta TĂNG fail_count rồi mới ném lỗi.
+     * AppException kế thừa RuntimeException nên mặc định Spring sẽ rollback -> lệnh tăng
+     * fail_count bị cuộn ngược, bộ đếm mãi bằng 0 và KHÔNG BAO GIỜ khóa được tài khoản.
+     * Ở method này mọi thao tác ghi khác đều nằm ở nhánh thành công (sau khi mã đã đúng),
+     * nên cho commit khi ném AppException là an toàn: chỉ đúng fail_count được lưu lại.
+     */
+    @Transactional(noRollbackFor = AppException.class)
     public AuthResponse verifyRegisterOtp(String email, String code) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy tài khoản với email này!"));
@@ -349,7 +356,8 @@ public class AuthService {
         }
     }
 
-    @Transactional
+    // noRollbackFor: giữ lại fail_count khi nhập sai OTP — xem giải thích ở verifyRegisterOtp.
+    @Transactional(noRollbackFor = AppException.class)
     public void forgotPasswordReset(ForgotPasswordResetRequest req) {
         String phoneOrEmail = req.getPhoneOrEmail();
         String otpCode = req.getOtpCode();

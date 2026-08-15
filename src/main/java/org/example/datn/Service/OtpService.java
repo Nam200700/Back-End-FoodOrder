@@ -57,7 +57,12 @@ public class OtpService {
         smsService.sendOtp(phone, code);
     }
 
-    @Transactional
+    /*
+     * noRollbackFor = AppException: nhập sai mã thì tăng fail_count rồi ném lỗi. AppException
+     * là RuntimeException nên mặc định Spring rollback, khiến fail_count không bao giờ được
+     * lưu và cơ chế khóa sau 3 lần sai trở nên vô hiệu.
+     */
+    @Transactional(noRollbackFor = AppException.class)
     public boolean verifyOtp(String phone, String code, OtpPurpose purpose) {
         Otp otp = otpRepository.findFirstByRecipientAndPurposeAndIsUsedFalseOrderByCreatedAtDesc(phone, purpose)
                 .orElseThrow(() -> new AppException(ErrorCode.OTP_INVALID));
