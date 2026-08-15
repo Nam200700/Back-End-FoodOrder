@@ -17,6 +17,16 @@ public final class DateTimeUtils {
     }
 
     /**
+     * Số giây còn lại từ bây giờ tới {@code until}, tối thiểu 0 (không trả số âm).
+     * Dùng cho header {@code Retry-After} và cho FE đếm ngược.
+     */
+    public static int secondsUntil(LocalDateTime until) {
+        if (until == null) return 0;
+        long seconds = Duration.between(LocalDateTime.now(), until).getSeconds();
+        return seconds <= 0 ? 0 : (int) Math.min(seconds, Integer.MAX_VALUE);
+    }
+
+    /**
      * Khoảng thời gian còn lại từ bây giờ tới {@code until}, viết theo lối tự nhiên:
      * "45 giây", "8 phút", "1 giờ 5 phút". Phút luôn được làm tròn LÊN để không bao giờ
      * hiện "0 phút" khi thực tế vẫn còn phải chờ.
