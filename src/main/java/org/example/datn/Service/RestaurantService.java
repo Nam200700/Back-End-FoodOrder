@@ -32,6 +32,7 @@ public class RestaurantService {
     private final UserRepository userRepository;
     private final RestaurantMapper restaurantMapper;
     private final ImageUploadService imageUploadService;
+    private final RestaurantPhoneGuard restaurantPhoneGuard;
 
     @Transactional(readOnly = true)
     public Page<RestaurantResponse> listActive(Pageable pageable) {
@@ -99,6 +100,8 @@ public class RestaurantService {
     @Transactional
     public RestaurantResponse create(Long ownerId, CreateRestaurantRequest req) {
         User owner = userRepository.findByIdOrThrow(ownerId, ErrorCode.USER_NOT_FOUND);
+        // Bỏ qua hồ sơ đăng ký của chính chủ quán — số trong hồ sơ đó chính là số họ đang dùng.
+        restaurantPhoneGuard.ensureUnique(req.getPhone(), null, ownerId);
         Restaurant restaurant = Restaurant.builder()
                 .owner(owner)
                 .restaurantName(req.getRestaurantName())
@@ -119,6 +122,9 @@ public class RestaurantService {
         if (!restaurant.getOwner().getUserId().equals(ownerId)) {
             throw new org.example.datn.Exception.AppException(ErrorCode.FORBIDDEN);
         }
+        // Chặn trùng TRƯỚC khi ghi đè bất cứ thứ gì (kể cả xoá ảnh cũ trên Cloudinary),
+        // để lần lưu hỏng không để lại hậu quả nào.
+        restaurantPhoneGuard.ensureUnique(req.getPhone(), restaurantId, ownerId);
         // Bắt ảnh CŨ TRƯỚC khi ghi đè — nếu không, oldImageUrl == newImageUrl và ảnh cũ không bao giờ bị xoá (rò rỉ Cloudinary).
         String oldImageUrl = restaurant.getImageUrl();
         restaurant.setRestaurantName(req.getRestaurantName());
