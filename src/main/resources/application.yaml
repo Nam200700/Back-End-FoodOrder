@@ -77,8 +77,9 @@ app:
     # đổi IP là lách được, mà mỗi tin SMS nay tốn tiền thật -> phải chặn thêm theo người nhận.
     max-per-recipient-per-day: 5
   speedsms:
-    # Gửi SMS OTP qua SpeedSMS, dùng brandname chung "Notify" (sms_type = 4) nên KHÔNG
-    # cần đăng ký brandname riêng. Bỏ trống -> luồng gửi SMS báo lỗi, email vẫn chạy bình thường.
+    # Gửi SMS OTP qua SpeedSMS. Bỏ trống -> luồng gửi SMS báo lỗi rõ ràng, email vẫn chạy
+    # bình thường. Lưu ý: tài khoản phải được SpeedSMS cấp quyền gửi qua API, nếu không
+    # MỌI sms_type đều trả về "sender not found".
     access-token: ${SPEEDSMS_ACCESS_TOKEN:}
     # Để TRỐNG khi dùng sms-type 2 (SpeedSMS tự chọn số gửi ngẫu nhiên).
     # Chỉ điền khi đã có brandname riêng (type 3/4) hoặc deviceId app Android (type 5).
