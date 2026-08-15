@@ -18,6 +18,8 @@ public interface ShipperRegisterRepository extends BaseRepository<ShipperRegiste
     /** Lấy hồ sơ shipper của nhiều user cùng lúc (1 câu IN) — khử N+1 khi enrich danh sách đơn. */
     java.util.List<ShipperRegister> findByUserUserIdIn(java.util.Collection<Long> userIds);
     Optional<ShipperRegister> findTopByUserUserIdOrderByRegisterIdDesc(Long userId);
-    boolean existsByIdCard(String idCard);
-    boolean existsByLicensePlate(String licensePlate);
+    // Kiểm tra trùng định danh tài xế, LOẠI TRỪ chính user đang thao tác (nộp lại hồ sơ
+    // của chính mình thì giữ nguyên CCCD/biển số cũ không được coi là trùng).
+    boolean existsByIdCardAndUser_UserIdNot(String idCard, Long userId);
+    boolean existsByLicensePlateNormAndUser_UserIdNot(String licensePlateNorm, Long userId);
 }
