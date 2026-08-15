@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.datn.DTO.request.cart.AddCartItemRequest;
 import org.example.datn.DTO.request.cart.UpdateCartItemNoteRequest;
+import org.example.datn.DTO.request.cart.UpdateCartItemQuantityRequest;
 import org.example.datn.DTO.response.cart.CartResponse;
 import org.example.datn.Service.CartService;
 import org.example.datn.common.ApiResponse;
@@ -62,5 +63,13 @@ public class CartController {
             @AuthenticationPrincipal CustomUserDetails user,
             @Valid @RequestBody UpdateCartItemNoteRequest req) {
         return ResponseEntity.ok(ApiResponse.ok(cartService.updateItemNote(user.getUserId(), req)));
+    }
+
+    @PutMapping("/items/{cartItemId}/quantity")
+    public ResponseEntity<ApiResponse<CartResponse>> updateItemQuantity(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @PathVariable Long cartItemId,
+            @Valid @RequestBody UpdateCartItemQuantityRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(cartService.updateItemQuantity(user.getUserId(), cartItemId, req)));
     }
 }
