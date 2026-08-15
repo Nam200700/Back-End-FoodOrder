@@ -30,6 +30,7 @@ import java.time.LocalDateTime;
 import org.example.datn.Service.SmsService;
 import org.example.datn.Service.EmailService;
 import org.example.datn.security.JwtTokenProvider;
+import org.example.datn.util.DateTimeUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -169,7 +170,7 @@ public class AuthService {
         if (otp.getFailCount() >= maxFailAttempts) {
             java.time.LocalDateTime lockUntil = otp.getCreatedAt().plusMinutes(lockoutMinutes);
             if (java.time.LocalDateTime.now().isBefore(lockUntil)) {
-                throw new AppException(ErrorCode.OTP_LOCKED, "Tài khoản tạm khóa đến " + lockUntil);
+                throw new AppException(ErrorCode.OTP_LOCKED, "Tài khoản tạm khóa đến " + DateTimeUtils.formatVi(lockUntil));
             }
         }
 
@@ -182,7 +183,7 @@ public class AuthService {
             otpRepository.save(otp);
             if (otp.getFailCount() >= maxFailAttempts) {
                 java.time.LocalDateTime lockUntil = otp.getCreatedAt().plusMinutes(lockoutMinutes);
-                throw new AppException(ErrorCode.OTP_LOCKED, "Tài khoản tạm khóa đến " + lockUntil);
+                throw new AppException(ErrorCode.OTP_LOCKED, "Tài khoản tạm khóa đến " + DateTimeUtils.formatVi(lockUntil));
             }
             throw new AppException(ErrorCode.OTP_WRONG_CODE, "Mã OTP không chính xác!");
         }
@@ -215,7 +216,7 @@ public class AuthService {
             if (latest.getFailCount() >= maxFailAttempts && latest.getCreatedAt() != null) {
                 java.time.LocalDateTime lockUntil = latest.getCreatedAt().plusMinutes(lockoutMinutes);
                 if (java.time.LocalDateTime.now().isBefore(lockUntil)) {
-                    throw new AppException(ErrorCode.OTP_LOCKED, "Tài khoản tạm khóa đến " + lockUntil);
+                    throw new AppException(ErrorCode.OTP_LOCKED, "Tài khoản tạm khóa đến " + DateTimeUtils.formatVi(lockUntil));
                 }
             }
             // Chống spam OTP (gửi lại cách nhau tối thiểu 60s)
@@ -336,7 +337,7 @@ public class AuthService {
             if (latest.getFailCount() >= maxFailAttempts && latest.getCreatedAt() != null) {
                 java.time.LocalDateTime lockUntil = latest.getCreatedAt().plusMinutes(lockoutMinutes);
                 if (java.time.LocalDateTime.now().isBefore(lockUntil)) {
-                    throw new AppException(ErrorCode.OTP_LOCKED, "Tài khoản tạm khóa đến " + lockUntil);
+                    throw new AppException(ErrorCode.OTP_LOCKED, "Tài khoản tạm khóa đến " + DateTimeUtils.formatVi(lockUntil));
                 }
             }
             // Chống spam OTP (gửi lại cách nhau tối thiểu 60s)
@@ -370,7 +371,7 @@ public class AuthService {
         if (otp.getFailCount() >= maxFailAttempts) {
             java.time.LocalDateTime lockUntil = otp.getCreatedAt().plusMinutes(lockoutMinutes);
             if (java.time.LocalDateTime.now().isBefore(lockUntil)) {
-                throw new AppException(ErrorCode.OTP_LOCKED, "Tài khoản tạm khóa đến " + lockUntil);
+                throw new AppException(ErrorCode.OTP_LOCKED, "Tài khoản tạm khóa đến " + DateTimeUtils.formatVi(lockUntil));
             }
         }
 
@@ -383,7 +384,7 @@ public class AuthService {
             otpRepository.save(otp);
             if (otp.getFailCount() >= maxFailAttempts) {
                 java.time.LocalDateTime lockUntil = otp.getCreatedAt().plusMinutes(lockoutMinutes);
-                throw new AppException(ErrorCode.OTP_LOCKED, "Tài khoản tạm khóa đến " + lockUntil);
+                throw new AppException(ErrorCode.OTP_LOCKED, "Tài khoản tạm khóa đến " + DateTimeUtils.formatVi(lockUntil));
             }
             throw new AppException(ErrorCode.OTP_WRONG_CODE, "Mã OTP nhập vào không chính xác!");
         }
