@@ -28,8 +28,11 @@ public class VoucherRequest {
     private DiscountType discountType;
 
     @NotNull(message = "Giá trị giảm không được để trống")
-    @DecimalMin(value = "0.0", inclusive = false)
+    @DecimalMin(value = "0.0", inclusive = false, message = "Giá trị giảm phải lớn hơn 0")
     private BigDecimal discountValue;
+
+    @DecimalMin(value = "0.0", message = "Giá trị đơn tối thiểu không được âm")
+    private BigDecimal minOrderAmount;
 
     @NotNull(message = "Ngày bắt đầu không được để trống")
     private LocalDateTime startDate;
@@ -42,4 +45,8 @@ public class VoucherRequest {
 
     @NotNull(message = "Loại phát voucher không được để trống")
     private VoucherIssueType issueType;
+
+    // Số điểm thưởng cần để đổi — CHỈ dùng cho issueType = LOYALTY (đổi điểm).
+    @Positive(message = "Số điểm đổi phải lớn hơn 0")
+    private Integer pointsCost;
 }

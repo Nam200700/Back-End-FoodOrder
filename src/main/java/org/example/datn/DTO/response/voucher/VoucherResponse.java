@@ -19,6 +19,8 @@ public class VoucherResponse {
     private String name;
     private DiscountType discountType;
     private BigDecimal discountValue;
+    private BigDecimal minOrderAmount;
+    private Integer pointsCost;      // số điểm loyalty cần để đổi (chỉ voucher LOYALTY)
     private Integer usedQuantity;
     private LocalDateTime startDate;
     private LocalDateTime endDate;

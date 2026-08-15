@@ -17,7 +17,8 @@ import java.lang.annotation.Target;
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
-@CacheEvict(cacheNames = {"adminInsights", "adminReport", "merchantStats", "merchantInsights", "merchantReport", "voucherAnalytics"},
+@CacheEvict(cacheNames = {"adminOverview", "adminInsights", "adminReport", "merchantStats", "merchantInsights", "merchantReport", "voucherAnalytics",
+        "shipperInsights"},
         allEntries = true)
 public @interface EvictStatsCaches {
 }

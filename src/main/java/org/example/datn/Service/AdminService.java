@@ -27,6 +27,8 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -187,7 +189,19 @@ public class AdminService {
         Page<ShipperRegister> page = (status == null)
                 ? shipperRegisterRepository.findAll(pageable)
                 : shipperRegisterRepository.findByStatus(status, pageable);
-        return PageResponse.from(page.map(this::toShipperRegisterResponse));
+
+        // Nạp 1 lượt Shipper của các hồ sơ ĐÃ DUYỆT trong trang (active/total delivery) → bỏ N+1.
+        List<Long> approvedUserIds = page.getContent().stream()
+                .filter(s -> s.getStatus() == RegisterStatus.APPROVED)
+                .map(s -> s.getUser().getUserId())
+                .distinct()
+                .toList();
+        Map<Long, Shipper> shipperByUser = approvedUserIds.isEmpty()
+                ? Map.of()
+                : shipperRepository.findByUserUserIdIn(approvedUserIds).stream()
+                    .collect(Collectors.toMap(sh -> sh.getUser().getUserId(), sh -> sh, (a, b) -> a));
+
+        return PageResponse.from(page.map(s -> toShipperRegisterResponse(s, shipperByUser)));
     }
 
     @Transactional
@@ -229,7 +243,8 @@ public class AdminService {
             register.setRejectedReason(req.getRejectedReason());
         }
 
-        return toShipperRegisterResponse(shipperRegisterRepository.save(register));
+        // Vừa duyệt xong: Shipper mới tạo có active/total = 0 → map rỗng là đúng.
+        return toShipperRegisterResponse(shipperRegisterRepository.save(register), Map.of());
     }
 
     private RestaurantRegisterResponse toRestaurantRegisterResponse(RestaurantRegister r) {
@@ -251,14 +266,14 @@ public class AdminService {
                 .build();
     }
 
-    private ShipperRegisterResponse toShipperRegisterResponse(ShipperRegister s) {
+    private ShipperRegisterResponse toShipperRegisterResponse(ShipperRegister s, Map<Long, Shipper> shipperByUser) {
         Integer active = 0;
         Integer total = 0;
         if (s.getStatus() == RegisterStatus.APPROVED) {
-            java.util.Optional<Shipper> shipperOpt = shipperRepository.findByUserUserId(s.getUser().getUserId());
-            if (shipperOpt.isPresent()) {
-                active = shipperOpt.get().getActiveDelivery();
-                total = shipperOpt.get().getTotalDelivery();
+            Shipper sh = shipperByUser.get(s.getUser().getUserId());
+            if (sh != null) {
+                active = sh.getActiveDelivery();
+                total = sh.getTotalDelivery();
             }
         }
 

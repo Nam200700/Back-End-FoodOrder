@@ -24,6 +24,7 @@ public class RestaurantResponse {
     private Double rating;
     private Integer reviewsCount;
     private Integer orderCount;
+    private Integer cancelCount;   // số đơn quán tự hủy/từ chối → FE tính tỷ lệ hủy
     private LocalTime opensAt;
     private LocalTime closesAt;
     private Boolean isOpen;

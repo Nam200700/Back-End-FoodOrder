@@ -23,6 +23,8 @@ CREATE TABLE users (
                        avatar          VARCHAR(255),
                        password        VARCHAR(255),
                        role            ENUM('ADMIN','CUSTOMER','OWNER','SHIPPER') NOT NULL,
+                       reputation_score INT NOT NULL DEFAULT 100,       -- điểm uy tín 0..100 (khởi tạo 100)
+                       loyalty_points   INT NOT NULL DEFAULT 0,         -- điểm thưởng tích luỹ để đổi voucher
                        PRIMARY KEY (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -60,6 +62,7 @@ CREATE TABLE restaurants (
                              description     VARCHAR(500),
                              address         VARCHAR(255),
                              image_url       VARCHAR(255),
+                             cancel_count    INT NOT NULL DEFAULT 0,   -- số đơn quán tự hủy/từ chối (tính tỷ lệ hủy)
                              PRIMARY KEY (restaurant_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -136,9 +139,10 @@ CREATE TABLE orders (
                         delivery_address    VARCHAR(255) NOT NULL,
                         note                VARCHAR(255),
                         order_status        ENUM('CANCELLED','COMPLETED','CONFIRMED','DELIVERING',
-                             'PENDING','PICKED_UP','PREPARING','READY_FOR_PICKUP') NOT NULL,
+                             'PENDING','PICKED_UP', 'SHIPPER_ACCEPTED','PREPARING','READY_FOR_PICKUP') NOT NULL,
                         payment_method      ENUM('COD') NOT NULL,
                         payment_status      ENUM('FAILED','PAID','PENDING','REFUNDED') NOT NULL,
+                        group_order_id      BIGINT                  NULL,
                         PRIMARY KEY (order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -150,6 +154,7 @@ CREATE TABLE order_items (
                              order_item_id   BIGINT NOT NULL AUTO_INCREMENT,
                              food_name       VARCHAR(150) NOT NULL,
                              note            VARCHAR(255),
+                             group_order_member_id BIGINT          NULL,
                              PRIMARY KEY (order_item_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -160,6 +165,7 @@ CREATE TABLE deliveries (
                             delivery_id     BIGINT NOT NULL AUTO_INCREMENT,
                             order_id        BIGINT NOT NULL,
                             shipper_id      BIGINT NOT NULL,
+                            status          ENUM('ASSIGNED','COMPLETED','CANCELLED') NOT NULL DEFAULT 'ASSIGNED', -- trạng thái từng lần gán giao
                             updated_at      DATETIME(6),
                             PRIMARY KEY (delivery_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -348,6 +354,7 @@ CREATE TABLE shippers (
                           avg_rating        DECIMAL(3,2) NOT NULL DEFAULT 0,
                           total_delivery    INT NOT NULL DEFAULT 0,
                           active_delivery   INT NOT NULL DEFAULT 0,                   -- [V2] đang giao bao nhiêu đơn
+                          cancel_count      INT NOT NULL DEFAULT 0,                   -- số đơn shipper đã bỏ (tính tỷ lệ hủy)
                           created_at        DATETIME(6),
                           updated_at        DATETIME(6),
                           PRIMARY KEY (shipper_id)
@@ -359,12 +366,14 @@ CREATE TABLE vouchers (
                           name VARCHAR(255) NOT NULL,
                           discount_type ENUM('FIXED','PERCENT','FREESHIP') NOT NULL,
                           discount_value DECIMAL(10,2) NOT NULL,
+                          min_order_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
 --                           quantity INT NOT NULL,
                           used_quantity INT NOT NULL DEFAULT 0,
+                          points_cost INT NULL,                         -- số điểm loyalty cần để đổi (chỉ dùng cho issue_type='LOYALTY')
                           start_date DATETIME NOT NULL,
                           end_date DATETIME NOT NULL,
                           status ENUM('ACTIVE','INACTIVE', 'EXPIRED') NOT NULL DEFAULT 'ACTIVE',
-                          issue_type ENUM('NEW_USER', 'BIRTHDAY', 'EVENT', 'ORDER_CANCELLED') NOT NULL,
+                          issue_type ENUM('EVENT', 'ORDER_CANCELLED', 'LOYALTY') NOT NULL,
                           created_at DATETIME,
                           updated_at DATETIME
 );
@@ -390,6 +399,51 @@ CREATE TABLE user_vouchers (
                                    UNIQUE(user_id, voucher_id)
 );
 
+-- ─── [V3] Group Order: phiên đặt đơn nhóm ─────────────────────
+
+CREATE TABLE group_orders (
+                              group_order_id   BIGINT NOT NULL AUTO_INCREMENT,
+                              host_id          BIGINT NOT NULL,
+                              restaurant_id    BIGINT NOT NULL,
+                              invite_code      VARCHAR(36) NOT NULL,
+                              status           ENUM('OPEN','LOCKED','ORDERED','CANCELLED','EXPIRED') NOT NULL DEFAULT 'OPEN',
+                              address_id       BIGINT              NULL,
+                              delivery_address VARCHAR(255)        NULL,
+                              delivery_lat        DECIMAL(10,7),
+                              delivery_lng        DECIMAL(10,7),
+                              join_deadline    DATETIME(6)         NULL,
+                              locked_at        DATETIME(6)         NULL,
+                              note             VARCHAR(255),
+                              created_at       DATETIME(6),
+                              updated_at       DATETIME(6),
+                              PRIMARY KEY (group_order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE group_order_members (
+                                     member_id        BIGINT NOT NULL AUTO_INCREMENT,
+                                     group_order_id   BIGINT NOT NULL,
+                                     user_id          BIGINT NOT NULL,
+                                     is_host          BIT NOT NULL DEFAULT 0,
+                                     status           ENUM('JOINED','READY','LEFT') NOT NULL DEFAULT 'JOINED',
+                                     joined_at        DATETIME(6),
+                                     left_at          DATETIME(6)     NULL,
+                                     created_at       DATETIME(6),
+                                     updated_at       DATETIME(6),
+                                     PRIMARY KEY (member_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE group_order_items (
+                                   group_order_item_id  BIGINT NOT NULL AUTO_INCREMENT,
+                                   group_order_id       BIGINT NOT NULL,
+                                   member_id            BIGINT NOT NULL,                     -- ai chọn món này (FK group_order_members)
+                                   food_id              BIGINT NOT NULL,
+                                   quantity             INTEGER NOT NULL,
+                                   price_at_add         DECIMAL(12,2) NOT NULL,
+                                   note                 VARCHAR(255),
+                                   created_at           DATETIME(6),
+                                   updated_at           DATETIME(6),
+                                   PRIMARY KEY (group_order_item_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ─── Unique constraints ───────────────────────────────────────
 
@@ -397,7 +451,9 @@ CREATE TABLE user_vouchers (
 --      → 1 customer có thể có nhiều cart, nhưng mỗi restaurant chỉ 1 cart
 ALTER TABLE carts                ADD CONSTRAINT uk_carts_customer_restaurant  UNIQUE (customer_id, restaurant_id);
 ALTER TABLE conversations        ADD CONSTRAINT uk_conversation_pair          UNIQUE (user1_id, user2_id);
-ALTER TABLE deliveries           ADD CONSTRAINT uk_deliveries_order           UNIQUE (order_id);
+-- [reputation] Bỏ UNIQUE(order_id): 1 đơn có thể có nhiều delivery theo thời gian
+-- (shipper bỏ đơn → shipper khác nhận lại). Dùng index thường để tra cứu nhanh.
+CREATE INDEX idx_deliveries_order ON deliveries (order_id);
 ALTER TABLE favorite_restaurants ADD CONSTRAINT uk_favorite                   UNIQUE (customer_id, restaurant_id);
 ALTER TABLE payments             ADD CONSTRAINT uk_payments_order             UNIQUE (order_id);
 ALTER TABLE reviews              ADD CONSTRAINT uk_reviews_order              UNIQUE (order_id);
@@ -405,6 +461,9 @@ ALTER TABLE users                ADD CONSTRAINT uk_users_phone                UN
 ALTER TABLE users                ADD CONSTRAINT uk_users_email                UNIQUE (email);
 ALTER TABLE users                ADD CONSTRAINT uk_users_google_id            UNIQUE (google_id);
 ALTER TABLE shippers             ADD CONSTRAINT uk_shippers_user              UNIQUE (user_id);
+
+ALTER TABLE group_orders         ADD CONSTRAINT uk_group_orders_invite_code UNIQUE (invite_code);
+ALTER TABLE group_order_members  ADD CONSTRAINT uk_group_order_member       UNIQUE (group_order_id, user_id);
 
 
 
@@ -430,6 +489,18 @@ CREATE INDEX idx_carts_customer                 ON carts            (customer_id
 CREATE INDEX idx_customer_addresses_customer    ON customer_addresses (customer_id);                     -- [V2]
 CREATE INDEX idx_review_images_review           ON review_images    (review_id);                         -- [V2]
 CREATE INDEX idx_orders_user_voucher ON orders (user_voucher_id);
+
+CREATE INDEX idx_group_orders_host                 ON group_orders          (host_id);
+CREATE INDEX idx_group_orders_restaurant           ON group_orders          (restaurant_id);
+CREATE INDEX idx_group_orders_status               ON group_orders          (status);
+CREATE INDEX idx_group_order_members_group         ON group_order_members   (group_order_id);
+CREATE INDEX idx_group_order_members_user          ON group_order_members   (user_id);
+CREATE INDEX idx_group_order_items_group           ON group_order_items     (group_order_id);
+CREATE INDEX idx_group_order_items_member          ON group_order_items     (member_id);
+CREATE INDEX idx_group_order_items_food            ON group_order_items     (food_id);
+
+CREATE INDEX idx_orders_group_order        ON orders       (group_order_id);
+CREATE INDEX idx_order_items_group_member  ON order_items  (group_order_member_id);
 
 
 -- ─── Foreign keys ─────────────────────────────────────────────
@@ -477,6 +548,18 @@ ALTER TABLE transactions            ADD CONSTRAINT fk_transactions_order        
 ALTER TABLE transactions            ADD CONSTRAINT fk_transactions_user             FOREIGN KEY (user_id)           REFERENCES users            (user_id);
 ALTER TABLE users                   ADD CONSTRAINT fk_users_deleted_by              FOREIGN KEY (deleted_by)        REFERENCES users            (user_id);  -- [V2]
 
+ALTER TABLE group_orders        ADD CONSTRAINT fk_group_orders_host          FOREIGN KEY (host_id)        REFERENCES users              (user_id);
+ALTER TABLE group_orders        ADD CONSTRAINT fk_group_orders_restaurant    FOREIGN KEY (restaurant_id)  REFERENCES restaurants        (restaurant_id);
+ALTER TABLE group_orders        ADD CONSTRAINT fk_group_orders_address      FOREIGN KEY (address_id)     REFERENCES customer_addresses (address_id);
+ALTER TABLE group_order_members ADD CONSTRAINT fk_gom_group_order            FOREIGN KEY (group_order_id) REFERENCES group_orders       (group_order_id) ON DELETE CASCADE;
+ALTER TABLE group_order_members ADD CONSTRAINT fk_gom_user                   FOREIGN KEY (user_id)        REFERENCES users              (user_id);
+ALTER TABLE group_order_items   ADD CONSTRAINT fk_goi_group_order            FOREIGN KEY (group_order_id) REFERENCES group_orders       (group_order_id) ON DELETE CASCADE;
+ALTER TABLE group_order_items   ADD CONSTRAINT fk_goi_member                 FOREIGN KEY (member_id)      REFERENCES group_order_members(member_id) ON DELETE CASCADE;
+ALTER TABLE group_order_items   ADD CONSTRAINT fk_goi_food                   FOREIGN KEY (food_id)        REFERENCES foods              (food_id);
+
+ALTER TABLE orders       ADD CONSTRAINT fk_orders_group_order          FOREIGN KEY (group_order_id)          REFERENCES group_orders        (group_order_id);
+ALTER TABLE order_items  ADD CONSTRAINT fk_order_items_group_member    FOREIGN KEY (group_order_member_id)   REFERENCES group_order_members (member_id);
+
 
 
 
@@ -486,3 +569,11 @@ ALTER TABLE users                   ADD CONSTRAINT fk_users_deleted_by          
 --  ON DELETE CASCADE trên fk_messages_conversation.
 --  Trước dùng MySQL EVENT (cần quyền EVENT + event_scheduler=ON → dễ fail khi deploy
 --  trên host chia sẻ), nay chuyển sang Spring @Scheduled: ConversationCleanupScheduler.
+
+
+-- ─── Catalog voucher LOYALTY (đổi bằng điểm thưởng) ──────────────────────────
+--  points_cost = số điểm loyalty cần để đổi. Khách đổi 1 lần/mã (uk_user_voucher).
+INSERT INTO vouchers (code, name, discount_type, discount_value, min_order_amount, used_quantity, points_cost, start_date, end_date, status, issue_type, created_at, updated_at) VALUES
+  ('LOYALTYFREESHIP', 'Đổi 60 điểm · Miễn phí giao hàng',  'FREESHIP', 0,      0,      0, 60,  '2024-01-01 00:00:00', '2030-12-31 23:59:59', 'ACTIVE', 'LOYALTY', NOW(), NOW()),
+  ('LOYALTY20K',      'Đổi 100 điểm · Giảm 20.000đ',        'FIXED',    20000,  0,      0, 100, '2024-01-01 00:00:00', '2030-12-31 23:59:59', 'ACTIVE', 'LOYALTY', NOW(), NOW()),
+  ('LOYALTY50K',      'Đổi 220 điểm · Giảm 50.000đ',        'FIXED',    50000,  50000,  0, 220, '2024-01-01 00:00:00', '2030-12-31 23:59:59', 'ACTIVE', 'LOYALTY', NOW(), NOW());

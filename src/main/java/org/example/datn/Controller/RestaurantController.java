@@ -12,6 +12,7 @@ import org.example.datn.Service.FoodService;
 import org.example.datn.Service.RestaurantService;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -46,5 +47,12 @@ public class RestaurantController {
     @GetMapping("/{id}/categories")
     public ResponseEntity<ApiResponse<List<CategoryResponse>>> categories(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(categoryService.listByRestaurant(id)));
+    }
+
+    @GetMapping("/order-again")
+    public ResponseEntity<ApiResponse<PageResponse<RestaurantResponse>>> orderAgain(
+            @AuthenticationPrincipal CustomUserDetails user, Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                PageResponse.from(restaurantService.getOrderAgain(user.getUserId(), pageable))));
     }
 }

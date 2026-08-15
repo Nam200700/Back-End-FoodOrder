@@ -1,16 +1,15 @@
 package org.example.datn.Service;
 
 import lombok.RequiredArgsConstructor;
+import org.example.datn.Repository.*;
 import org.example.datn.domain.Restaurant;
 import org.example.datn.domain.User;
 import org.example.datn.DTO.request.restaurant.CreateRestaurantRequest;
 import org.example.datn.DTO.response.restaurant.RestaurantResponse;
 import org.example.datn.Exception.ErrorCode;
+import org.example.datn.domain.enums.OrderStatus;
 import org.example.datn.mapper.RestaurantMapper;
-import org.example.datn.Repository.RestaurantRepository;
-import org.example.datn.Repository.ReviewRepository;
-import org.example.datn.Repository.OrderRepository;
-import org.example.datn.Repository.UserRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -20,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -37,7 +38,14 @@ public class RestaurantService {
         return enrichPage(restaurantRepository.findByStatusTrue(pageable));
     }
 
-    /** Danh sách quán đang mở có LỌC theo từ khoá (tên/địa chỉ) — dùng cho feed + tìm kiếm trang Khám phá. */
+    /**
+     * Danh sách quán đang mở có LỌC theo từ khoá (tên/địa chỉ) — dùng cho feed + tìm kiếm trang Khám phá.
+     * CHỈ cache feed KHÔNG từ khoá (trang chủ/Khám phá cuộn) vì nó CHUNG cho mọi khách và đổi chậm
+     * (khoảng cách được xếp ở client). Tìm kiếm theo từ khoá không cache (muôn hình vạn trạng).
+     */
+    @Cacheable(value = "restaurantFeed",
+            key = "#pageable.pageNumber + '-' + #pageable.pageSize",
+            condition = "#keyword == null || #keyword.isBlank()")
     @Transactional(readOnly = true)
     public Page<RestaurantResponse> listActive(String keyword, Pageable pageable) {
         Page<Restaurant> page = (keyword == null || keyword.isBlank())
@@ -111,6 +119,8 @@ public class RestaurantService {
         if (!restaurant.getOwner().getUserId().equals(ownerId)) {
             throw new org.example.datn.Exception.AppException(ErrorCode.FORBIDDEN);
         }
+        // Bắt ảnh CŨ TRƯỚC khi ghi đè — nếu không, oldImageUrl == newImageUrl và ảnh cũ không bao giờ bị xoá (rò rỉ Cloudinary).
+        String oldImageUrl = restaurant.getImageUrl();
         restaurant.setRestaurantName(req.getRestaurantName());
         restaurant.setAddress(req.getAddress());
         restaurant.setLatitude(req.getLatitude());
@@ -121,14 +131,11 @@ public class RestaurantService {
         restaurant.setClosesAt(req.getClosesAt());
         restaurant.setOpensAt(req.getOpensAt());
         if (req.getImageUrl() != null && !req.getImageUrl().isBlank()) {
-            String oldImageUrl = restaurant.getImageUrl();
             String newImageUrl = req.getImageUrl().trim();
-            if (!newImageUrl.equals(oldImageUrl)) {
-                if (oldImageUrl != null && !oldImageUrl.trim().isEmpty()) {
-                    imageUploadService.deleteImage(oldImageUrl);
-                }
-                restaurant.setImageUrl(newImageUrl);
+            if (!newImageUrl.equals(oldImageUrl) && oldImageUrl != null && !oldImageUrl.trim().isEmpty()) {
+                imageUploadService.deleteImage(oldImageUrl);
             }
+            restaurant.setImageUrl(newImageUrl);
         }
         return restaurantMapper.toResponse(restaurantRepository.save(restaurant));
     }
@@ -160,5 +167,15 @@ public class RestaurantService {
         }
         
         return restaurantMapper.toResponse(restaurantRepository.save(restaurant));
+    }
+
+    @Transactional(readOnly = true)
+    public Page<RestaurantResponse> getOrderAgain(Long customerId, Pageable pageable) {
+        Page<Restaurant> page = orderRepository.findOrderAgainRestaurants(
+                customerId,
+                OrderStatus.COMPLETED,
+                pageable
+        );
+        return enrichPage(page);
     }
 }

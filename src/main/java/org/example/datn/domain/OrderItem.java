@@ -39,4 +39,9 @@ public class OrderItem {
 
     @Column(length = 255)
     private String note;
+
+    /**  Item này của thành viên nào trong nhóm (để tính chia tiền) — NULL nếu đơn cá nhân. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "group_order_member_id")
+    private GroupOrderMember groupOrderMember;
 }

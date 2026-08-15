@@ -17,30 +17,46 @@ public interface VoucherRepository extends BaseRepository<Voucher, Long> {
     Optional<Voucher> findByCode(String code);
     boolean existsByCode(String code);
     long countByStatus(VoucherStatus status);
-
     long countByEndDateBefore(LocalDateTime now);
 
-    // Thêm method lấy các voucher public đang hoạt động và còn hạn
     List<Voucher> findByIssueTypeAndStatusAndEndDateAfter(VoucherIssueType issueType, VoucherStatus status, LocalDateTime now);
 
     @Query("SELECT v FROM Voucher v WHERE " +
             "(:keyword IS NULL OR :keyword = '' OR LOWER(v.code) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(v.name) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
             "AND (:status IS NULL OR " +
-            "     (:status = 'EXPIRED' AND v.endDate < :now) OR " +
-            "     (:status != 'EXPIRED' AND v.status = :status))")
+            "     (:status = org.example.datn.domain.enums.VoucherStatus.EXPIRED AND v.endDate < :now) OR " +
+            "     (:status != org.example.datn.domain.enums.VoucherStatus.EXPIRED AND v.status = :status)) " +
+            "ORDER BY v.createdAt DESC, v.voucherId DESC")
     Page<Voucher> searchAndFilter(@Param("keyword") String keyword,
                                   @Param("status") VoucherStatus status,
                                   @Param("now") LocalDateTime now,
                                   Pageable pageable);
 
-    @Query("SELECT v FROM Voucher v WHERE v.issueType = :issueType AND v.status = 'ACTIVE' AND (v.endDate IS NULL OR v.endDate > CURRENT_TIMESTAMP)")
-    Optional<Voucher> findActiveVoucherByIssueType(@Param("issueType") VoucherIssueType issueType);
+    // Có thể có NHIỀU voucher cùng issueType đang active (vd nhiều mã ORDER_CANCELLED) →
+    // trả về danh sách đã sắp xếp tất định, tránh NonUniqueResultException.
+    @Query("SELECT v FROM Voucher v WHERE v.issueType = :issueType AND v.status = 'ACTIVE' AND (v.endDate IS NULL OR v.endDate > CURRENT_TIMESTAMP) ORDER BY v.voucherId ASC")
+    List<Voucher> findActiveVouchersByIssueType(@Param("issueType") VoucherIssueType issueType);
+
+    // Lấy 1 voucher active theo issueType (mã đầu tiên theo voucherId) — an toàn khi có nhiều mã.
+    default Optional<Voucher> findActiveVoucherByIssueType(VoucherIssueType issueType) {
+        List<Voucher> list = findActiveVouchersByIssueType(issueType);
+        return list.isEmpty() ? Optional.empty() : Optional.of(list.get(0));
+    }
+
+    // Kiểm tra xem đã có voucher loại issueType đang ACTIVE và chưa hết hạn chưa
+    @Query("SELECT COUNT(v) > 0 FROM Voucher v WHERE v.issueType = :issueType AND v.status = 'ACTIVE' AND v.endDate > :now")
+    boolean existsActiveVoucherByIssueType(@Param("issueType") VoucherIssueType issueType, @Param("now") LocalDateTime now);
+
+    // Kiểm tra tương tự trừ chính voucher đang edit
+    @Query("SELECT COUNT(v) > 0 FROM Voucher v WHERE v.issueType = :issueType AND v.status = 'ACTIVE' AND v.endDate > :now AND v.voucherId != :excludeId")
+    boolean existsActiveVoucherByIssueTypeExcludingId(@Param("issueType") VoucherIssueType issueType, @Param("now") LocalDateTime now, @Param("excludeId") Long excludeId);
 
     @Query("SELECT v FROM Voucher v " +
             "LEFT JOIN v.userVouchers uv ON uv.user.userId = :userId " +
             "WHERE v.issueType = :issueType " +
             "AND v.status = :status " +
             "AND v.endDate > :now " +
+            "AND v.startDate <= :now " +
             "AND uv.userVoucherId IS NULL")
     List<Voucher> findUnclaimedPublicVouchersForUser(@Param("issueType") VoucherIssueType issueType,
                                                      @Param("status") VoucherStatus status,

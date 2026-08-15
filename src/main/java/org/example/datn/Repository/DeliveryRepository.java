@@ -2,6 +2,7 @@ package org.example.datn.Repository;
 
 import org.example.datn.domain.Delivery;
 import org.example.datn.Repository.base.BaseRepository;
+import org.example.datn.domain.enums.DeliveryStatus;
 import org.example.datn.domain.enums.OrderStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -15,6 +16,9 @@ import java.util.Optional;
 public interface DeliveryRepository extends BaseRepository<Delivery, Long> {
 
     Optional<Delivery> findByOrderOrderId(Long orderId);
+
+    // Lần gán ĐANG hoạt động (ASSIGNED) mới nhất của một đơn — dùng khi hoàn tất/bỏ đơn.
+    Optional<Delivery> findFirstByOrderOrderIdAndStatusOrderByAssignedAtDesc(Long orderId, DeliveryStatus status);
 
     @Query("SELECT d FROM Delivery d WHERE d.shipper.userId = :shipperId " +
             "AND (:status IS NULL OR d.order.orderStatus = :status) " +

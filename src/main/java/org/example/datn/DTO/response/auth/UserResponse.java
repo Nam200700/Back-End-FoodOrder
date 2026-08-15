@@ -36,6 +36,11 @@ public class UserResponse {
     private java.math.BigDecimal avgRating;
 
     private Boolean isOnline;
+
+    // Điểm uy tín / thưởng / số đơn shipper đã bỏ (tính tỷ lệ hủy)
+    private Integer reputationScore;
+    private Integer loyaltyPoints;
+    private Integer cancelCount;
 }
 
 

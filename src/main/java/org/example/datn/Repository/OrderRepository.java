@@ -2,6 +2,7 @@ package org.example.datn.Repository;
 
 import org.example.datn.Repository.base.BaseRepository;
 import org.example.datn.domain.Order;
+import org.example.datn.domain.Restaurant;
 import org.example.datn.domain.enums.OrderStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -485,6 +486,49 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
                                                @Param("year") Integer year,
                                                Pageable pageable);
 
+    // ─── Shipper earnings (gộp server-side thay cho nạp toàn bộ đơn hoàn tất) ───
+
+    /** Tổng thu nhập shipper (đơn hoàn tất, phí giao): {SUM(shippingFee), COUNT, MAX(shippingFee)}. */
+    @Query("""
+            SELECT COALESCE(SUM(o.shippingFee),0), COUNT(o), COALESCE(MAX(o.shippingFee),0)
+            FROM Order o
+            WHERE o.shipper.userId = :id
+              AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+            """)
+    List<Object[]> shipperEarningTotals(@Param("id") Long shipperUserId);
+
+    /** Thu nhập shipper theo NGÀY kể từ :since → {yyyy-MM-dd, amount, count}. Native cho DATE(). */
+    @Query(value = """
+            SELECT DATE(created_at) AS d, COALESCE(SUM(shipping_fee),0) AS amt, COUNT(*) AS cnt
+            FROM orders
+            WHERE shipper_id = :id AND order_status = 'COMPLETED'
+              AND created_at >= :since
+            GROUP BY DATE(created_at)
+            ORDER BY DATE(created_at)
+            """, nativeQuery = true)
+    List<Object[]> findShipperDailyEarningsSince(@Param("id") Long shipperUserId,
+                                                 @Param("since") java.time.LocalDateTime since);
+
+    /** Thu nhập shipper gom theo THỨ trong tuần (cả sự nghiệp): {DAYOFWEEK(1=CN..7=T7), amount}. */
+    @Query("""
+            SELECT FUNCTION('DAYOFWEEK', o.createdAt), COALESCE(SUM(o.shippingFee),0)
+            FROM Order o
+            WHERE o.shipper.userId = :id
+              AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+            GROUP BY FUNCTION('DAYOFWEEK', o.createdAt)
+            """)
+    List<Object[]> findShipperEarningsByWeekday(@Param("id") Long shipperUserId);
+
+    /** Thu nhập shipper gom theo GIỜ trong ngày (cả sự nghiệp): {hour, amount}. */
+    @Query("""
+            SELECT FUNCTION('HOUR', o.createdAt), COALESCE(SUM(o.shippingFee),0)
+            FROM Order o
+            WHERE o.shipper.userId = :id
+              AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.COMPLETED
+            GROUP BY FUNCTION('HOUR', o.createdAt)
+            """)
+    List<Object[]> findShipperEarningsByHour(@Param("id") Long shipperUserId);
+
     // Tìm danh sách đơn hàng theo trạng thái và thời gian tạo trước một mốc thời gian cutoffTime
     @EntityGraph(attributePaths = {
             "customer",
@@ -558,10 +602,9 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
     );
 
     @Query("""
-            SELECT DISTINCT o FROM Order o 
+            SELECT o FROM Order o
             JOIN FETCH o.customer c
             JOIN FETCH o.restaurant r
-            LEFT JOIN o.items oi
             WHERE r.restaurantId = :restaurantId
             AND (:status IS NULL OR o.orderStatus = :status)
             AND (:keyword IS NULL OR :keyword = '' OR
@@ -575,4 +618,31 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
             @Param("keyword") String keyword,
             Pageable pageable
     );
+
+    /** Số đơn theo trạng thái của 1 quán — gộp 1 câu GROUP BY (thay việc nạp cả nghìn đơn để đếm ở FE). */
+    @Query("SELECT o.orderStatus, COUNT(o) FROM Order o WHERE o.restaurant.restaurantId = :restaurantId GROUP BY o.orderStatus")
+    List<Object[]> countMerchantOrdersByStatus(@Param("restaurantId") Long restaurantId);
+
+    /** Đơn CHỜ XÁC NHẬN rút gọn của 1 quán (id, tên khách, tổng tiền) — đủ để FE dò & báo đơn mới. */
+    @Query("""
+            SELECT o.orderId, o.customer.fullName, o.totalAmount FROM Order o
+            WHERE o.restaurant.restaurantId = :restaurantId
+              AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.PENDING
+            ORDER BY o.createdAt DESC
+            """)
+    List<Object[]> findPendingBriefByRestaurant(@Param("restaurantId") Long restaurantId);
+
+    @Query("""
+        SELECT o.restaurant
+        FROM Order o
+        WHERE o.customer.userId = :customerId
+          AND o.orderStatus = :status
+          AND o.restaurant.status = true
+        GROUP BY o.restaurant
+        ORDER BY MAX(o.createdAt) DESC
+        """)
+    Page<Restaurant> findOrderAgainRestaurants(
+            @Param("customerId") Long customerId,
+            @Param("status") OrderStatus status,
+            Pageable pageable);
 }

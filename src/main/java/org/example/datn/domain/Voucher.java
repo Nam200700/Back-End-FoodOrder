@@ -41,6 +41,13 @@ public class Voucher extends BaseEntity {
     @Column(name = "used_quantity", nullable = false)
     private Integer usedQuantity = 0;
 
+    @Column(name = "min_order_amount", precision = 12, scale = 2)
+    private BigDecimal minOrderAmount;
+
+    /** Số điểm loyalty cần để đổi voucher này (chỉ dùng cho issue_type = LOYALTY). */
+    @Column(name = "points_cost")
+    private Integer pointsCost;
+
     @Column(name = "start_date", nullable = false)
     private LocalDateTime startDate;
 

@@ -25,7 +25,14 @@ public class CacheConfig {
     @Bean
     public CacheManager cacheManager() {
         CaffeineCacheManager manager = new CaffeineCacheManager(
-                "adminInsights", "adminReport", "merchantStats", "merchantInsights", "merchantReport", "voucherAnalytics");
+                "adminOverview", "adminInsights", "adminReport", "merchantStats", "merchantInsights", "merchantReport", "voucherAnalytics",
+                "shipperInsights",
+                // ── Feed công khai của khách (đọc rất nhiều, chung mọi user) ──
+                "restaurantFeed",  // /restaurants feed không từ khoá (trang chủ + Khám phá)
+                "popularFoods",    // /foods/popular — top món xu hướng
+                "routeInfo",       // tuyến đường ORS theo cặp toạ độ (phí ship giỏ hàng)
+                // ── Tóm tắt đánh giá (nạp + quét toàn bộ review, evict khi có review mới) ──
+                "reviewSummaryShipper", "reviewSummaryMerchant", "reviewSummaryRestaurant");
         manager.setCaffeine(Caffeine.newBuilder()
                 .expireAfterWrite(60, TimeUnit.SECONDS)
                 .maximumSize(500));

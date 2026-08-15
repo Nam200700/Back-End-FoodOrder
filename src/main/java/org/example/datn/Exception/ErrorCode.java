@@ -77,6 +77,16 @@ public enum ErrorCode {
 
     RESTAURANT_CLOSED(400, "Quán ăn hiện không nằm trong khung giờ hoạt động"),
 
+    GROUP_ORDER_NOT_FOUND(404, "Không tìm thấy phiên đặt nhóm"),
+    GROUP_ORDER_MEMBER_NOT_FOUND(404, "Bạn chưa tham gia phiên đặt nhóm này"),
+    GROUP_ORDER_ITEM_NOT_FOUND(404, "Không tìm thấy món trong phiên"),
+    GROUP_ORDER_MEMBERS_NOT_READY(409, "Còn thành viên chưa sẵn sàng"),
+
+    // Reputation / Loyalty
+    REPUTATION_TOO_LOW(403, "Điểm uy tín của bạn quá thấp nên tạm thời chưa thể đặt đơn. Vui lòng liên hệ hỗ trợ."),
+    SHIPPER_REPUTATION_LOW(403, "Điểm uy tín của bạn quá thấp nên tạm thời không thể nhận đơn mới."),
+    INSUFFICIENT_LOYALTY_POINTS(400, "Bạn không đủ điểm thưởng để đổi ưu đãi này."),
+
     // Generic
     VALIDATION_FAILED(400, "Dữ liệu không hợp lệ"),
     NOT_FOUND(404, "Không tìm thấy tài nguyên"),
