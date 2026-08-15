@@ -49,6 +49,7 @@ public class AuthService {
     private final OtpRepository otpRepository;
     private final SmsService smsService;
     private final EmailService emailService;
+    private final ShipperIdentityGuard shipperIdentityGuard;
 
     @Value("${app.otp.max-fail-attempts}")
     private int maxFailAttempts;
@@ -67,14 +68,7 @@ public class AuthService {
         }
         // Check trùng CCCD/CMND và biển số xe (chỉ áp dụng khi đăng ký SHIPPER)
         if ("SHIPPER".equalsIgnoreCase(req.getRole())) {
-            if (req.getIdCard() != null && !req.getIdCard().isBlank()
-                    && shipperRegisterRepository.existsByIdCard(req.getIdCard())) {
-                throw new AppException(ErrorCode.ID_CARD_EXISTS);
-            }
-            if (req.getLicensePlate() != null && !req.getLicensePlate().isBlank()
-                    && shipperRegisterRepository.existsByLicensePlate(req.getLicensePlate())) {
-                throw new AppException(ErrorCode.LICENSE_PLATE_EXISTS);
-            }
+            shipperIdentityGuard.ensureUnique(req.getIdCard(), req.getLicensePlate(), null);
         }
         // Check trùng SĐT quán (chỉ khi đăng ký OWNER và có nhập SĐT quán) — cả hồ sơ chờ duyệt lẫn quán đã duyệt
         if ("OWNER".equalsIgnoreCase(req.getRole())
@@ -130,11 +124,13 @@ public class AuthService {
                     // default MOTORBIKE
                 }
             }
+            // Bỏ trống thì để NULL (không dùng chuỗi "Chưa cung cấp"): UNIQUE cho phép
+            // nhiều NULL, còn nhiều bản ghi cùng một chuỗi placeholder sẽ đụng khoá.
             ShipperRegister reg = ShipperRegister.builder()
                     .user(user)
-                    .idCard(req.getIdCard() != null && !req.getIdCard().isBlank() ? req.getIdCard() : "Chưa cung cấp")
+                    .idCard(req.getIdCard())
                     .vehicleType(vehicleType)
-                    .licensePlate(req.getLicensePlate() != null && !req.getLicensePlate().isBlank() ? req.getLicensePlate() : "Chưa cung cấp")
+                    .licensePlate(req.getLicensePlate())
                     .status(RegisterStatus.PENDING)
                     .build();
             shipperRegisterRepository.save(reg);
