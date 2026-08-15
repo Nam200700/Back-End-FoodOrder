@@ -4,6 +4,7 @@ import lombok.Getter;
 import org.example.datn.util.DateTimeUtils;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 /**
  * Base business exception. Carries an {@link ErrorCode} that maps to an HTTP
@@ -21,22 +22,35 @@ public class AppException extends RuntimeException {
      */
     private final Integer retryAfterSeconds;
 
+    /**
+     * Lỗi theo từng ô nhập, dạng {tên field -> thông báo}. Cho phép trả về NHIỀU lỗi
+     * trong một lần gọi (ví dụ trùng cả CCCD lẫn biển số) thay vì bắt người dùng sửa
+     * xong cái này mới lòi ra cái kia. {@code null} với các lỗi không gắn với ô nào.
+     */
+    private final Map<String, String> fieldErrors;
+
     public AppException(ErrorCode errorCode) {
-        super(errorCode.getMessage());
-        this.errorCode = errorCode;
-        this.retryAfterSeconds = null;
+        this(errorCode, errorCode.getMessage(), null, null);
     }
 
     public AppException(ErrorCode errorCode, String message) {
-        super(message);
-        this.errorCode = errorCode;
-        this.retryAfterSeconds = null;
+        this(errorCode, message, null, null);
     }
 
     public AppException(ErrorCode errorCode, String message, Integer retryAfterSeconds) {
+        this(errorCode, message, retryAfterSeconds, null);
+    }
+
+    public AppException(ErrorCode errorCode, String message, Map<String, String> fieldErrors) {
+        this(errorCode, message, null, fieldErrors);
+    }
+
+    private AppException(ErrorCode errorCode, String message,
+                         Integer retryAfterSeconds, Map<String, String> fieldErrors) {
         super(message);
         this.errorCode = errorCode;
         this.retryAfterSeconds = retryAfterSeconds;
+        this.fieldErrors = fieldErrors;
     }
 
     /**
