@@ -222,6 +222,7 @@ CREATE TABLE review_images (
                                image_url       VARCHAR(255) NOT NULL,
                                display_order   INTEGER NOT NULL DEFAULT 0,
                                created_at      DATETIME(6),
+                               updated_at      DATETIME(6)     NULL,                  -- BaseEntity
                                PRIMARY KEY (image_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -322,21 +323,28 @@ CREATE TABLE restaurant_registers (
                                       description     VARCHAR(500),
                                       status          ENUM('PENDING','APPROVED','REJECTED') NOT NULL DEFAULT 'PENDING',
                                       rejected_reason VARCHAR(500),
+                                      reviewed_by     BIGINT          NULL,           -- admin đã duyệt/từ chối (entity có map, schema trước đây thiếu)
                                       reviewed_at     DATETIME(6)     NULL,
                                       created_at      DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
+                                      updated_at      DATETIME(6)     NULL,           -- BaseEntity
                                       PRIMARY KEY (register_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE shipper_registers (
                                    register_id     BIGINT NOT NULL AUTO_INCREMENT,
                                    user_id         BIGINT NOT NULL,
-                                   id_card         VARCHAR(20) NOT NULL,
+                                   -- NULL khi chưa cung cấp: UNIQUE cho phép nhiều NULL, nên nhiều hồ sơ
+                                   -- thiếu thông tin vẫn lưu được (dùng chuỗi placeholder sẽ đụng khoá).
+                                   id_card         VARCHAR(20)     NULL,
                                    vehicle_type    ENUM('MOTORBIKE','BICYCLE','CAR') NOT NULL,
-                                   license_plate   VARCHAR(20) NOT NULL,
+                                   license_plate   VARCHAR(20)     NULL,               -- dạng hiển thị: 59H1-234.56
+                                   license_plate_norm VARCHAR(20)  NULL,               -- dạng chuẩn hoá để so trùng: 59H123456
                                    status          ENUM('PENDING','APPROVED','REJECTED') NOT NULL DEFAULT 'PENDING',
                                    rejected_reason VARCHAR(300),
+                                   reviewed_by     BIGINT          NULL,              -- admin đã duyệt/từ chối (entity có map, schema trước đây thiếu)
                                    reviewed_at     DATETIME(6)     NULL,
                                    created_at      DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
+                                   updated_at      DATETIME(6)     NULL,              -- BaseEntity
                                    PRIMARY KEY (register_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -346,9 +354,10 @@ CREATE TABLE shipper_registers (
 CREATE TABLE shippers (
                           shipper_id        BIGINT NOT NULL AUTO_INCREMENT,
                           user_id           BIGINT NOT NULL,
-                          id_card           VARCHAR(20) NOT NULL,
+                          id_card           VARCHAR(20)     NULL,                      -- xem ghi chú ở shipper_registers
                           vehicle_type      ENUM('MOTORBIKE','BICYCLE','CAR') NOT NULL,
-                          license_plate     VARCHAR(20) NOT NULL,
+                          license_plate     VARCHAR(20)     NULL,                      -- dạng hiển thị: 59H1-234.56
+                          license_plate_norm VARCHAR(20)    NULL,                      -- dạng chuẩn hoá để so trùng: 59H123456
                           is_online         BIT NOT NULL DEFAULT 0,
                           last_online_at    DATETIME(6)     NULL,                     -- [V2] online lần cuối lúc nào
                           avg_rating        DECIMAL(3,2) NOT NULL DEFAULT 0,
@@ -462,6 +471,15 @@ ALTER TABLE users                ADD CONSTRAINT uk_users_email                UN
 ALTER TABLE users                ADD CONSTRAINT uk_users_google_id            UNIQUE (google_id);
 ALTER TABLE shippers             ADD CONSTRAINT uk_shippers_user              UNIQUE (user_id);
 
+-- Định danh tài xế là DUY NHẤT: một CCCD / một biển số chỉ thuộc về một tài xế.
+-- Tầng Service đã chặn trùng (ShipperIdentityGuard) nhưng vẫn cần khoá ở CSDL làm lưới
+-- an toàn cuối: hai request gửi đồng thời có thể cùng vượt qua bước kiểm tra rồi cùng ghi.
+-- So trùng biển số dựa trên cột đã chuẩn hoá để "59H1-234.56" và "59H123456" là một.
+ALTER TABLE shipper_registers    ADD CONSTRAINT uk_shipper_registers_id_card    UNIQUE (id_card);
+ALTER TABLE shipper_registers    ADD CONSTRAINT uk_shipper_registers_plate_norm UNIQUE (license_plate_norm);
+ALTER TABLE shippers             ADD CONSTRAINT uk_shippers_id_card             UNIQUE (id_card);
+ALTER TABLE shippers             ADD CONSTRAINT uk_shippers_plate_norm          UNIQUE (license_plate_norm);
+
 ALTER TABLE group_orders         ADD CONSTRAINT uk_group_orders_invite_code UNIQUE (invite_code);
 ALTER TABLE group_order_members  ADD CONSTRAINT uk_group_order_member       UNIQUE (group_order_id, user_id);
 
@@ -543,6 +561,8 @@ ALTER TABLE reviews                 ADD CONSTRAINT fk_reviews_customer          
 ALTER TABLE reviews                 ADD CONSTRAINT fk_reviews_order                 FOREIGN KEY (order_id)          REFERENCES orders           (order_id);
 ALTER TABLE reviews                 ADD CONSTRAINT fk_reviews_restaurant            FOREIGN KEY (restaurant_id)     REFERENCES restaurants      (restaurant_id);
 ALTER TABLE shipper_registers       ADD CONSTRAINT fk_shipper_registers_user        FOREIGN KEY (user_id)           REFERENCES users            (user_id);
+ALTER TABLE shipper_registers       ADD CONSTRAINT fk_shipper_registers_reviewer    FOREIGN KEY (reviewed_by)       REFERENCES users            (user_id);
+ALTER TABLE restaurant_registers    ADD CONSTRAINT fk_restaurant_registers_reviewer FOREIGN KEY (reviewed_by)       REFERENCES users            (user_id);
 ALTER TABLE shippers                ADD CONSTRAINT fk_shippers_user                 FOREIGN KEY (user_id)           REFERENCES users            (user_id);
 ALTER TABLE transactions            ADD CONSTRAINT fk_transactions_order            FOREIGN KEY (order_id)          REFERENCES orders           (order_id);
 ALTER TABLE transactions            ADD CONSTRAINT fk_transactions_user             FOREIGN KEY (user_id)           REFERENCES users            (user_id);

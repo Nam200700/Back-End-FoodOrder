@@ -20,12 +20,29 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AppException.class)
     public ResponseEntity<ApiResponse<?>> handleAppException(AppException ex) {
         ErrorCode code = ex.getErrorCode();
-        return ResponseEntity.status(code.getHttpStatus())
-                .body(ApiResponse.builder()
-                        .success(false)
-                        .errorCode(code.name())
-                        .message(ex.getMessage())
-                        .build());
+        Integer retryAfter = ex.getRetryAfterSeconds();
+
+        var builder = ApiResponse.builder()
+                .success(false)
+                .errorCode(code.name())
+                .message(ex.getMessage());
+
+        // Lỗi kiểu "tạm khóa": kèm số giây còn lại để FE đếm ngược theo thời gian thực,
+        // đồng thời phát header Retry-After chuẩn HTTP (đi cùng status 429).
+        if (retryAfter != null) {
+            return ResponseEntity.status(code.getHttpStatus())
+                    .header("Retry-After", String.valueOf(retryAfter))
+                    .body(builder.data(Map.of("retryAfterSeconds", retryAfter)).build());
+        }
+
+        // Lỗi gắn với từng ô nhập: trả nguyên bản đồ {field -> thông báo} để FE tô đỏ
+        // ĐỒNG THỜI mọi ô sai, không bắt người dùng sửa lần lượt từng cái.
+        if (ex.getFieldErrors() != null && !ex.getFieldErrors().isEmpty()) {
+            return ResponseEntity.status(code.getHttpStatus())
+                    .body(builder.data(ex.getFieldErrors()).build());
+        }
+
+        return ResponseEntity.status(code.getHttpStatus()).body(builder.build());
     }
 
     /** 409 — multi-restaurant cart; FE shows replace-confirm modal. */
