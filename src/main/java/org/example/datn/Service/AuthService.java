@@ -54,6 +54,9 @@ public class AuthService {
     @Value("${app.otp.max-fail-attempts}")
     private int maxFailAttempts;
 
+    @Value("${app.otp.max-per-recipient-per-day}")
+    private int maxPerRecipientPerDay;
+
     @Value("${app.otp.lockout-minutes}")
     private int lockoutMinutes;
 
@@ -299,6 +302,15 @@ public class AuthService {
      * Gom logic trùng lặp ở register / resendRegisterOtp / forgotPasswordSendOtp.
      */
     private String generateAndStoreOtp(String target, OtpPurpose purpose) {
+        // Trần theo NGƯỜI NHẬN, tính chung mọi mục đích: RateLimitFilter chỉ chặn theo IP nên
+        // đổi IP là lách được. Từ khi OTP gửi qua SMS (mỗi tin tốn tiền thật), thiếu chốt này
+        // thì một người rảnh rỗi có thể rút cạn tài khoản SMS — kiểu tấn công "SMS pumping".
+        long issuedToday = otpRepository.countByRecipientAndCreatedAtAfter(
+                target, LocalDateTime.now().toLocalDate().atStartOfDay());
+        if (issuedToday >= maxPerRecipientPerDay) {
+            throw new AppException(ErrorCode.OTP_QUOTA_EXCEEDED);
+        }
+
         otpRepository.invalidateOldOtps(target, purpose); // target = nơi nhận (email/SĐT)
         SecureRandom random = new SecureRandom();
         StringBuilder codeBuilder = new StringBuilder(6);

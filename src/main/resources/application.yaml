@@ -73,6 +73,21 @@ app:
     ttl-minutes: 5
     max-fail-attempts: 3
     lockout-minutes: 10
+    # Trần số lần xin mã MỖI NGÀY cho cùng một người nhận. Rate limit theo IP (RateLimitFilter)
+    # đổi IP là lách được, mà mỗi tin SMS nay tốn tiền thật -> phải chặn thêm theo người nhận.
+    max-per-recipient-per-day: 5
+  speedsms:
+    # Gửi SMS OTP qua SpeedSMS. Bỏ trống -> luồng gửi SMS báo lỗi rõ ràng, email vẫn chạy
+    # bình thường. Lưu ý: tài khoản phải được SpeedSMS cấp quyền gửi qua API, nếu không
+    # MỌI sms_type đều trả về "sender not found".
+    access-token: ${SPEEDSMS_ACCESS_TOKEN:}
+    # Để TRỐNG khi dùng sms-type 2 (SpeedSMS tự chọn số gửi ngẫu nhiên).
+    # Chỉ điền khi đã có brandname riêng (type 3/4) hoặc deviceId app Android (type 5).
+    sender: ${SPEEDSMS_SENDER:}
+    # 2 = số ngẫu nhiên, KHÔNG cần brandname -> tài khoản mới gửi được ngay
+    # 3/4 = cần brandname đã đăng ký (thiếu sẽ lỗi "sender not found")
+    # 5 = gửi qua app Android bằng SIM của mình, khi đó SPEEDSMS_SENDER = deviceId
+    sms-type: ${SPEEDSMS_SMS_TYPE:2}
   vnpay:
     tmn-code: ${VNPAY_TMN_CODE:}
     hash-secret: ${VNPAY_HASH_SECRET:}

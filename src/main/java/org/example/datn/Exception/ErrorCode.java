@@ -57,6 +57,8 @@ public enum ErrorCode {
     OTP_EXPIRED(400, "Mã OTP đã hết hạn"),
     OTP_WRONG_CODE(400, "Mã OTP không đúng"),
     OTP_LOCKED(429, "Tài khoản tạm khóa do nhập sai nhiều lần"),
+    OTP_QUOTA_EXCEEDED(429, "Bạn đã yêu cầu mã xác thực quá nhiều lần hôm nay. Vui lòng thử lại vào ngày mai."),
+    SMS_SEND_FAILED(502, "Không gửi được tin nhắn lúc này. Vui lòng chọn nhận mã qua email."),
 
     // Shipping / Payment
     DISTANCE_TOO_FAR(400, "Khoảng cách vượt quá phạm vi giao hàng"),
