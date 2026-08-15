@@ -222,6 +222,7 @@ CREATE TABLE review_images (
                                image_url       VARCHAR(255) NOT NULL,
                                display_order   INTEGER NOT NULL DEFAULT 0,
                                created_at      DATETIME(6),
+                               updated_at      DATETIME(6)     NULL,                  -- BaseEntity
                                PRIMARY KEY (image_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -322,8 +323,10 @@ CREATE TABLE restaurant_registers (
                                       description     VARCHAR(500),
                                       status          ENUM('PENDING','APPROVED','REJECTED') NOT NULL DEFAULT 'PENDING',
                                       rejected_reason VARCHAR(500),
+                                      reviewed_by     BIGINT          NULL,           -- admin đã duyệt/từ chối (entity có map, schema trước đây thiếu)
                                       reviewed_at     DATETIME(6)     NULL,
                                       created_at      DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
+                                      updated_at      DATETIME(6)     NULL,           -- BaseEntity
                                       PRIMARY KEY (register_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -338,8 +341,10 @@ CREATE TABLE shipper_registers (
                                    license_plate_norm VARCHAR(20)  NULL,               -- dạng chuẩn hoá để so trùng: 59H123456
                                    status          ENUM('PENDING','APPROVED','REJECTED') NOT NULL DEFAULT 'PENDING',
                                    rejected_reason VARCHAR(300),
+                                   reviewed_by     BIGINT          NULL,              -- admin đã duyệt/từ chối (entity có map, schema trước đây thiếu)
                                    reviewed_at     DATETIME(6)     NULL,
                                    created_at      DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
+                                   updated_at      DATETIME(6)     NULL,              -- BaseEntity
                                    PRIMARY KEY (register_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -556,6 +561,8 @@ ALTER TABLE reviews                 ADD CONSTRAINT fk_reviews_customer          
 ALTER TABLE reviews                 ADD CONSTRAINT fk_reviews_order                 FOREIGN KEY (order_id)          REFERENCES orders           (order_id);
 ALTER TABLE reviews                 ADD CONSTRAINT fk_reviews_restaurant            FOREIGN KEY (restaurant_id)     REFERENCES restaurants      (restaurant_id);
 ALTER TABLE shipper_registers       ADD CONSTRAINT fk_shipper_registers_user        FOREIGN KEY (user_id)           REFERENCES users            (user_id);
+ALTER TABLE shipper_registers       ADD CONSTRAINT fk_shipper_registers_reviewer    FOREIGN KEY (reviewed_by)       REFERENCES users            (user_id);
+ALTER TABLE restaurant_registers    ADD CONSTRAINT fk_restaurant_registers_reviewer FOREIGN KEY (reviewed_by)       REFERENCES users            (user_id);
 ALTER TABLE shippers                ADD CONSTRAINT fk_shippers_user                 FOREIGN KEY (user_id)           REFERENCES users            (user_id);
 ALTER TABLE transactions            ADD CONSTRAINT fk_transactions_order            FOREIGN KEY (order_id)          REFERENCES orders           (order_id);
 ALTER TABLE transactions            ADD CONSTRAINT fk_transactions_user             FOREIGN KEY (user_id)           REFERENCES users            (user_id);
