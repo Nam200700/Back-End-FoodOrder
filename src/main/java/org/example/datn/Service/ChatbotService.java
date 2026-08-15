@@ -222,10 +222,10 @@ public class ChatbotService {
     private String callOpenRouterAPI(List<Map<String, String>> messages) {
         String key = openrouterApiKey;
         if (key == null || key.trim().isEmpty()) {
-            String encodedKey = "c2stb3ItdjEtZGVkNzhhZjdiYTdhNzNlYjc2NzAwNzJkN2I5YjUwZjI2MmJmMmYwYWIyNzRkNDkyZjBkMzdiMzMzMDM4ZDA0NQ==";
+            String encodedKey = "c2stb3ItdjEtZjFhNWJkY2I5M2YxZTZjNzI2MmUxZDRkZDJkM2YzYWY0Njg1YmE3YmYxOGNkYjAzZTI2Y2RjODUyMzZiMDcwOA==";
             key = new String(java.util.Base64.getDecoder().decode(encodedKey));
         }
-        String model = "tencent/hy3";
+        String model = "openrouter/free";
         String url = "https://openrouter.ai/api/v1/chat/completions";
 
         HttpHeaders headers = new HttpHeaders();

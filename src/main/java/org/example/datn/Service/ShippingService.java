@@ -84,7 +84,7 @@ public class ShippingService {
                             "&end=%f,%f" +
                             "&preference=fastest" +
                             "&instructions=false",
-                    openRouteServiceApiKey,
+                    decodeIfBase64(openRouteServiceApiKey),
                     startLng, startLat,
                     endLng, endLat
             );
@@ -126,6 +126,25 @@ public class ShippingService {
         } catch (Exception e) {
             log.error("Lỗi khi gọi OpenRouteService", e);
             throw new AppException(ErrorCode.INTERNAL_ERROR, "Không thể lấy dữ liệu từ OpenRouteService");
+        }
+    }
+
+    private String decodeIfBase64(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return value;
+        }
+        try {
+            String trimmed = value.trim();
+            if (trimmed.matches("^[a-zA-Z0-9+/]*={0,2}$") && trimmed.length() % 4 == 0) {
+                byte[] decoded = java.util.Base64.getDecoder().decode(trimmed);
+                String decodedStr = new String(decoded, java.nio.charset.StandardCharsets.UTF_8);
+                if (decodedStr.chars().allMatch(c -> c >= 32 && c < 127)) {
+                    return decodedStr;
+                }
+            }
+            return value;
+        } catch (Exception e) {
+            return value;
         }
     }
 }

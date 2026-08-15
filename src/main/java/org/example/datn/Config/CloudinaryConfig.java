@@ -21,9 +21,28 @@ public class CloudinaryConfig {
     @Bean
     public Cloudinary cloudinary() {
         return new Cloudinary(ObjectUtils.asMap(
-            "cloud_name", cloudName,
-            "api_key", apiKey,
-            "api_secret", apiSecret
+            "cloud_name", decodeIfBase64(cloudName),
+            "api_key", decodeIfBase64(apiKey),
+            "api_secret", decodeIfBase64(apiSecret)
         ));
+    }
+
+    private String decodeIfBase64(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return value;
+        }
+        try {
+            String trimmed = value.trim();
+            if (trimmed.matches("^[a-zA-Z0-9+/]*={0,2}$") && trimmed.length() % 4 == 0) {
+                byte[] decoded = java.util.Base64.getDecoder().decode(trimmed);
+                String decodedStr = new String(decoded, java.nio.charset.StandardCharsets.UTF_8);
+                if (decodedStr.chars().allMatch(c -> c >= 32 && c < 127)) {
+                    return decodedStr;
+                }
+            }
+            return value;
+        } catch (Exception e) {
+            return value;
+        }
     }
 }
