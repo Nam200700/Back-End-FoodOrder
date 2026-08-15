@@ -36,8 +36,7 @@ public class OtpService {
             if (latest.getFailCount() >= maxFailAttempts && latest.getCreatedAt() != null) {
                 LocalDateTime lockUntil = latest.getCreatedAt().plusMinutes(lockoutMinutes);
                 if (LocalDateTime.now().isBefore(lockUntil)) {
-                    throw new AppException(ErrorCode.OTP_LOCKED,
-                            "Tài khoản tạm khóa đến " + lockUntil);
+                    throw AppException.otpLocked(lockUntil);
                 }
             }
         });
@@ -57,7 +56,12 @@ public class OtpService {
         smsService.sendOtp(phone, code);
     }
 
-    @Transactional
+    /*
+     * noRollbackFor = AppException: nhập sai mã thì tăng fail_count rồi ném lỗi. AppException
+     * là RuntimeException nên mặc định Spring rollback, khiến fail_count không bao giờ được
+     * lưu và cơ chế khóa sau 3 lần sai trở nên vô hiệu.
+     */
+    @Transactional(noRollbackFor = AppException.class)
     public boolean verifyOtp(String phone, String code, OtpPurpose purpose) {
         Otp otp = otpRepository.findFirstByRecipientAndPurposeAndIsUsedFalseOrderByCreatedAtDesc(phone, purpose)
                 .orElseThrow(() -> new AppException(ErrorCode.OTP_INVALID));
@@ -65,7 +69,7 @@ public class OtpService {
         if (otp.getFailCount() >= maxFailAttempts) {
             LocalDateTime lockUntil = otp.getCreatedAt().plusMinutes(lockoutMinutes);
             if (LocalDateTime.now().isBefore(lockUntil)) {
-                throw new AppException(ErrorCode.OTP_LOCKED, "Tài khoản tạm khóa đến " + lockUntil);
+                throw AppException.otpLocked(lockUntil);
             }
         }
 
@@ -77,7 +81,7 @@ public class OtpService {
             otpRepository.save(otp);
             if (otp.getFailCount() >= maxFailAttempts) {
                 LocalDateTime lockUntil = otp.getCreatedAt().plusMinutes(lockoutMinutes);
-                throw new AppException(ErrorCode.OTP_LOCKED, "Tài khoản tạm khóa đến " + lockUntil);
+                throw AppException.otpLocked(lockUntil);
             }
             throw new AppException(ErrorCode.OTP_WRONG_CODE);
         }
