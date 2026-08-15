@@ -35,6 +35,13 @@ public class GlobalExceptionHandler {
                     .body(builder.data(Map.of("retryAfterSeconds", retryAfter)).build());
         }
 
+        // Lỗi gắn với từng ô nhập: trả nguyên bản đồ {field -> thông báo} để FE tô đỏ
+        // ĐỒNG THỜI mọi ô sai, không bắt người dùng sửa lần lượt từng cái.
+        if (ex.getFieldErrors() != null && !ex.getFieldErrors().isEmpty()) {
+            return ResponseEntity.status(code.getHttpStatus())
+                    .body(builder.data(ex.getFieldErrors()).build());
+        }
+
         return ResponseEntity.status(code.getHttpStatus()).body(builder.build());
     }
 
