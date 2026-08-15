@@ -72,8 +72,7 @@ public class OtpService {
         if (otp.getFailCount() >= maxFailAttempts) {
             LocalDateTime lockUntil = otp.getCreatedAt().plusMinutes(lockoutMinutes);
             if (LocalDateTime.now().isBefore(lockUntil)) {
-                throw new AppException(ErrorCode.OTP_LOCKED, "Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau "
-                        + DateTimeUtils.humanizeUntil(lockUntil) + ".");
+                throw AppException.otpLocked(lockUntil);
             }
         }
 
@@ -85,8 +84,7 @@ public class OtpService {
             otpRepository.save(otp);
             if (otp.getFailCount() >= maxFailAttempts) {
                 LocalDateTime lockUntil = otp.getCreatedAt().plusMinutes(lockoutMinutes);
-                throw new AppException(ErrorCode.OTP_LOCKED, "Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau "
-                        + DateTimeUtils.humanizeUntil(lockUntil) + ".");
+                throw AppException.otpLocked(lockUntil);
             }
             throw new AppException(ErrorCode.OTP_WRONG_CODE);
         }
