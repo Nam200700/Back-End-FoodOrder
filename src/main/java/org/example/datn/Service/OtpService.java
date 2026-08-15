@@ -27,6 +27,8 @@ public class OtpService {
     private int ttlMinutes;
     @Value("${app.otp.max-fail-attempts}")
     private int maxFailAttempts;
+    @Value("${app.otp.max-per-recipient-per-day}")
+    private int maxPerRecipientPerDay;
     @Value("${app.otp.lockout-minutes}")
     private int lockoutMinutes;
 
@@ -40,6 +42,14 @@ public class OtpService {
                 }
             }
         });
+
+        // Trần số mã mỗi ngày cho một người nhận — chống rút cạn tài khoản SMS.
+        // Xem giải thích đầy đủ ở AuthService.generateAndStoreOtp.
+        long issuedToday = otpRepository.countByRecipientAndCreatedAtAfter(
+                phone, LocalDateTime.now().toLocalDate().atStartOfDay());
+        if (issuedToday >= maxPerRecipientPerDay) {
+            throw new AppException(ErrorCode.OTP_QUOTA_EXCEEDED);
+        }
 
         otpRepository.invalidateOldOtps(phone, purpose);
 
