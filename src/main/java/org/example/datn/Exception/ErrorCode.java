@@ -37,6 +37,7 @@ public enum ErrorCode {
     CART_CONFLICT(409, "Giỏ hàng đang chứa món từ quán khác"),
     CART_ITEM_NOT_FOUND(404, "Không tìm thấy món trong giỏ"),
     CART_NOT_FOUND(404, "không tìm thấy giỏ hàng"),
+    CART_ITEM_ALREADY_EXISTS(409, "Món đã tồn tại trong giỏ hàng"),
 
     // Order
     ORDER_NOT_FOUND(404, "Không tìm thấy đơn hàng"),
