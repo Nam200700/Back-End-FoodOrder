@@ -6,7 +6,6 @@ import org.example.datn.domain.enums.OtpPurpose;
 import org.example.datn.Exception.AppException;
 import org.example.datn.Exception.ErrorCode;
 import org.example.datn.Repository.OtpRepository;
-import org.example.datn.util.DateTimeUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,9 +36,7 @@ public class OtpService {
             if (latest.getFailCount() >= maxFailAttempts && latest.getCreatedAt() != null) {
                 LocalDateTime lockUntil = latest.getCreatedAt().plusMinutes(lockoutMinutes);
                 if (LocalDateTime.now().isBefore(lockUntil)) {
-                    throw new AppException(ErrorCode.OTP_LOCKED,
-                            "Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau "
-                        + DateTimeUtils.humanizeUntil(lockUntil) + ".");
+                    throw AppException.otpLocked(lockUntil);
                 }
             }
         });
