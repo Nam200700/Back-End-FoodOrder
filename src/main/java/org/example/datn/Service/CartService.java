@@ -3,6 +3,7 @@ package org.example.datn.Service;
 import lombok.RequiredArgsConstructor;
 import org.example.datn.DTO.request.cart.AddCartItemRequest;
 import org.example.datn.DTO.request.cart.UpdateCartItemNoteRequest;
+import org.example.datn.DTO.request.cart.UpdateCartItemQuantityRequest;
 import org.example.datn.DTO.response.cart.CartResponse;
 import org.example.datn.Exception.AppException;
 import org.example.datn.Exception.ErrorCode;
@@ -38,30 +39,35 @@ public class CartService {
 
     @Transactional
     public CartResponse addItem(Long customerId, AddCartItemRequest req) {
-        Food food = foodRepository.findByIdOrThrow(req.getFoodId(), ErrorCode.FOOD_NOT_FOUND);
-        Restaurant newRestaurant = food.getRestaurant();
+        Food food = foodRepository.findByIdOrThrow(
+                req.getFoodId(),
+                ErrorCode.FOOD_NOT_FOUND
+        );
+        Restaurant restaurant = food.getRestaurant();
+        Cart cart = cartRepository.findByCustomerUserIdAndRestaurantRestaurantId(customerId, restaurant.getRestaurantId())
+                .orElseGet(() -> Cart.builder()
+                        .customer(userRepository.getReferenceById(customerId))
+                        .restaurant(restaurant)
+                        .build());
 
-        Optional<Cart> existing = cartRepository.findByCustomerUserIdAndRestaurantRestaurantId(customerId, newRestaurant.getRestaurantId());
-        Cart cart;
-        if (existing.isPresent()) {
-            cart = existing.get();
-            addOrUpdateItem(cart, food, req);
-        } else {
-            if (req.getQuantity() <= 0) {
-                return cartMapper.toEmptyResponse(newRestaurant);
-            }
-            cart = Cart.builder()
-                    .customer(userRepository.getReferenceById(customerId))
-                    .restaurant(newRestaurant)
-                    .build();
-            addOrUpdateItem(cart, food, req);
+        boolean exists = cart.getItems().stream()
+                .anyMatch(item -> item.getFood().getFoodId().equals(food.getFoodId()));
+
+        if (exists) {
+            throw new AppException(ErrorCode.CART_ITEM_ALREADY_EXISTS);
         }
 
-        if (cart.getItems().isEmpty()) {
-            cartRepository.delete(cart);
-            return cartMapper.toEmptyResponse(newRestaurant);
-        }
+        cart.getItems().add(
+                CartItem.builder()
+                        .cart(cart)
+                        .food(food)
+                        .quantity(req.getQuantity())
+                        .note(req.getNote() != null ? req.getNote() : "")
+                        .build()
+        );
+
         cartRepository.save(cart);
+
         return cartMapper.toResponse(cart);
     }
 
@@ -140,6 +146,46 @@ public class CartService {
         item.setNote(req.getNote());
 
         cartRepository.save(cart);
+        return cartMapper.toResponse(cart);
+    }
+
+    @Transactional
+    public CartResponse updateItemQuantity(
+            Long customerId,
+            Long cartItemId,
+            UpdateCartItemQuantityRequest req
+    ) {
+        CartItem item = cartItemRepository.findByIdOrThrow(
+                cartItemId,
+                ErrorCode.CART_ITEM_NOT_FOUND
+        );
+
+        Cart cart = item.getCart();
+
+        if (!cart.getCustomer().getUserId().equals(customerId)) {
+            throw new AppException(ErrorCode.CART_ITEM_NOT_FOUND);
+        }
+
+        // quantity = 0 → xóa món
+        if (req.getQuantity() == 0) {
+            cart.getItems().remove(item);
+            cartItemRepository.delete(item);
+
+            if (cart.getItems().isEmpty()) {
+                Restaurant restaurant = cart.getRestaurant();
+                cartRepository.delete(cart);
+                return cartMapper.toEmptyResponse(restaurant);
+            }
+
+            cartRepository.save(cart);
+            return cartMapper.toResponse(cart);
+        }
+
+        // quantity > 0 → cập nhật số lượng
+        item.setQuantity(req.getQuantity());
+
+        cartRepository.save(cart);
+
         return cartMapper.toResponse(cart);
     }
 
