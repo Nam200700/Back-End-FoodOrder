@@ -17,4 +17,7 @@ public interface RestaurantRegisterRepository extends BaseRepository<RestaurantR
 
     // Chống trùng số điện thoại quán ngay từ khâu đăng ký đối tác
     boolean existsByPhone(String phone);
+
+    // Như trên nhưng BỎ QUA hồ sơ của chính chủ quán này, để họ không bị hồ sơ cũ của mình chặn
+    boolean existsByPhoneAndOwner_UserIdNot(String phone, Long ownerId);
 }

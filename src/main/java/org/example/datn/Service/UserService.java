@@ -35,6 +35,7 @@ public class UserService {
     private final ShipperRepository shipperRepository;
     private final ImageUploadService imageUploadService;
     private final ShipperIdentityGuard shipperIdentityGuard;
+    private final RestaurantPhoneGuard restaurantPhoneGuard;
 
     @Transactional(readOnly = true)
     public UserResponse getProfile(Long userId) {
@@ -61,7 +62,16 @@ public class UserService {
             user.setFullName(req.getFullName().trim());
         }
         if (req.getPhone() != null && !req.getPhone().trim().isEmpty()) {
-            user.setPhone(req.getPhone().trim());
+            String newPhone = req.getPhone().trim();
+            if (!newPhone.equals(user.getPhone())) {
+                // users.phone có UNIQUE (uk_users_phone) và còn là TÊN ĐĂNG NHẬP. Thiếu kiểm tra ở
+                // đây thì lỗi chỉ nổ lúc flush dưới DB -> người dùng nhận 500 vô nghĩa thay vì
+                // biết là số đã có người dùng.
+                if (userRepository.existsByPhone(newPhone)) {
+                    throw new AppException(ErrorCode.PHONE_EXISTS, "Số điện thoại này đã được đăng ký cho tài khoản khác!");
+                }
+                user.setPhone(newPhone);
+            }
         }
         if (req.getEmail() != null && !req.getEmail().trim().isEmpty()) {
             String newEmail = req.getEmail().trim();
@@ -160,6 +170,9 @@ public class UserService {
         User user = userRepository.findByIdOrThrow(userId, ErrorCode.USER_NOT_FOUND);
         RestaurantRegister reg = restaurantRegisterRepository.findTopByOwnerUserIdOrderByRegisterIdDesc(userId)
                 .orElseGet(() -> RestaurantRegister.builder().owner(user).build());
+
+        // Soi cả quán đã duyệt lẫn hồ sơ đang chờ, bỏ qua hồ sơ cũ của chính mình.
+        restaurantPhoneGuard.ensureUnique(req.getRestaurantPhone(), null, userId);
 
         reg.setRestaurantName(req.getRestaurantName().trim());
         reg.setAddress(req.getRestaurantAddress().trim());

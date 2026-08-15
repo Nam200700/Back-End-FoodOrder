@@ -33,4 +33,7 @@ public interface RestaurantRepository extends BaseRepository<Restaurant, Long> {
 
     // Chống trùng số điện thoại quán (quán đã được duyệt)
     boolean existsByPhone(String phone);
+
+    // Như trên nhưng BỎ QUA một quán — dùng khi chủ quán sửa hồ sơ, tránh quán tự đụng chính nó
+    boolean existsByPhoneAndRestaurantIdNot(String phone, Long restaurantId);
 }
