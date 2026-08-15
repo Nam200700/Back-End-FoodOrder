@@ -6,6 +6,7 @@ import org.example.datn.domain.enums.OtpPurpose;
 import org.example.datn.Exception.AppException;
 import org.example.datn.Exception.ErrorCode;
 import org.example.datn.Repository.OtpRepository;
+import org.example.datn.util.DateTimeUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,7 +38,7 @@ public class OtpService {
                 LocalDateTime lockUntil = latest.getCreatedAt().plusMinutes(lockoutMinutes);
                 if (LocalDateTime.now().isBefore(lockUntil)) {
                     throw new AppException(ErrorCode.OTP_LOCKED,
-                            "Tài khoản tạm khóa đến " + lockUntil);
+                            "Tài khoản tạm khóa đến " + DateTimeUtils.formatVi(lockUntil));
                 }
             }
         });
@@ -70,7 +71,7 @@ public class OtpService {
         if (otp.getFailCount() >= maxFailAttempts) {
             LocalDateTime lockUntil = otp.getCreatedAt().plusMinutes(lockoutMinutes);
             if (LocalDateTime.now().isBefore(lockUntil)) {
-                throw new AppException(ErrorCode.OTP_LOCKED, "Tài khoản tạm khóa đến " + lockUntil);
+                throw new AppException(ErrorCode.OTP_LOCKED, "Tài khoản tạm khóa đến " + DateTimeUtils.formatVi(lockUntil));
             }
         }
 
@@ -82,7 +83,7 @@ public class OtpService {
             otpRepository.save(otp);
             if (otp.getFailCount() >= maxFailAttempts) {
                 LocalDateTime lockUntil = otp.getCreatedAt().plusMinutes(lockoutMinutes);
-                throw new AppException(ErrorCode.OTP_LOCKED, "Tài khoản tạm khóa đến " + lockUntil);
+                throw new AppException(ErrorCode.OTP_LOCKED, "Tài khoản tạm khóa đến " + DateTimeUtils.formatVi(lockUntil));
             }
             throw new AppException(ErrorCode.OTP_WRONG_CODE);
         }
