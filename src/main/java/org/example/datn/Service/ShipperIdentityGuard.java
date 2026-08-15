@@ -8,6 +8,9 @@ import org.example.datn.Repository.ShipperRepository;
 import org.example.datn.util.ShipperIdentityNormalizer;
 import org.springframework.stereotype.Component;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
  * Chặn trùng CCCD/CMND và biển số xe giữa các tài xế.
  *
@@ -36,18 +39,31 @@ public class ShipperIdentityGuard {
     public void ensureUnique(String rawIdCard, String rawPlate, Long excludeUserId) {
         Long exclude = excludeUserId != null ? excludeUserId : NO_EXCLUSION;
 
+        // Kiểm tra HẾT rồi mới ném: nếu trùng cả CCCD lẫn biển số, người dùng thấy cả hai
+        // lỗi trong một lần, không phải sửa xong cái này mới lòi ra cái kia.
+        Map<String, String> fieldErrors = new LinkedHashMap<>();
+        ErrorCode primary = null;
+
         String idCard = ShipperIdentityNormalizer.normalizeIdCard(rawIdCard);
         if (idCard != null
                 && (shipperRegisterRepository.existsByIdCardAndUser_UserIdNot(idCard, exclude)
                 || shipperRepository.existsByIdCardAndUser_UserIdNot(idCard, exclude))) {
-            throw new AppException(ErrorCode.ID_CARD_EXISTS);
+            fieldErrors.put("idCard", "Số CCCD/CMND này đã được sử dụng để đăng ký tài khoản khác!");
+            primary = ErrorCode.ID_CARD_EXISTS;
         }
 
         String plateNorm = ShipperIdentityNormalizer.normalizeLicensePlate(rawPlate);
         if (plateNorm != null
                 && (shipperRegisterRepository.existsByLicensePlateNormAndUser_UserIdNot(plateNorm, exclude)
                 || shipperRepository.existsByLicensePlateNormAndUser_UserIdNot(plateNorm, exclude))) {
-            throw new AppException(ErrorCode.LICENSE_PLATE_EXISTS);
+            fieldErrors.put("licensePlate", "Biển số xe này đã được đăng ký bởi tài xế khác!");
+            if (primary == null) primary = ErrorCode.LICENSE_PLATE_EXISTS;
         }
+
+        if (fieldErrors.isEmpty()) return;
+
+        // Giữ errorCode cụ thể (ID_CARD_EXISTS/LICENSE_PLATE_EXISTS) cho các màn chỉ đọc
+        // message, đồng thời đính kèm bản đồ lỗi cho các form nhiều ô.
+        throw new AppException(primary, String.join(" ", fieldErrors.values()), fieldErrors);
     }
 }
