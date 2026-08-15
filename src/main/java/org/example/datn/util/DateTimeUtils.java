@@ -1,25 +1,38 @@
 package org.example.datn.util;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 
 /**
- * Định dạng thời gian cho các thông báo hiển thị TRỰC TIẾP cho người dùng.
+ * Diễn đạt thời gian cho các thông báo hiển thị TRỰC TIẾP cho người dùng.
  *
  * <p>Nối thẳng {@link LocalDateTime} vào chuỗi sẽ ra dạng ISO khó đọc
- * ("2026-08-15T15:26:58.270900"), nên mọi thông báo gửi ra FE cần đi qua đây.
+ * ("2026-08-15T15:26:58.270900"). Với thông báo khóa tạm thời, người dùng quan tâm
+ * "còn phải chờ bao lâu" hơn là "đến mấy giờ" — nói theo thời lượng còn tránh được
+ * hiểu nhầm khi đồng hồ máy người dùng lệch với đồng hồ máy chủ.
  */
 public final class DateTimeUtils {
-
-    /** Ví dụ: "15:26 ngày 15/08/2026". */
-    private static final DateTimeFormatter VI_DATE_TIME =
-            DateTimeFormatter.ofPattern("HH:mm 'ngày' dd/MM/yyyy");
 
     private DateTimeUtils() {
     }
 
-    /** Định dạng mốc thời gian theo cách viết quen thuộc với người Việt. */
-    public static String formatVi(LocalDateTime time) {
-        return time == null ? "" : time.format(VI_DATE_TIME);
+    /**
+     * Khoảng thời gian còn lại từ bây giờ tới {@code until}, viết theo lối tự nhiên:
+     * "45 giây", "8 phút", "1 giờ 5 phút". Phút luôn được làm tròn LÊN để không bao giờ
+     * hiện "0 phút" khi thực tế vẫn còn phải chờ.
+     */
+    public static String humanizeUntil(LocalDateTime until) {
+        if (until == null) return "ít phút";
+
+        long seconds = Duration.between(LocalDateTime.now(), until).getSeconds();
+        if (seconds <= 0) return "vài giây";
+        if (seconds < 60) return seconds + " giây";
+
+        long minutes = (seconds + 59) / 60;
+        if (minutes < 60) return minutes + " phút";
+
+        long hours = minutes / 60;
+        long remainMinutes = minutes % 60;
+        return remainMinutes == 0 ? hours + " giờ" : hours + " giờ " + remainMinutes + " phút";
     }
 }
