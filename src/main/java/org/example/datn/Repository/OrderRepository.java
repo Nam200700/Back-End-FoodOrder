@@ -582,18 +582,22 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
 
 
     @Query("""
-            SELECT DISTINCT o FROM Order o
-            JOIN FETCH o.customer c
-            JOIN FETCH o.restaurant r
-            LEFT JOIN o.items oi
-            WHERE o.customer.userId = :customerId
-            AND (:status IS NULL OR o.orderStatus = :status)
-            AND (:keyword IS NULL OR :keyword = '' OR
-                   CAST(o.orderId AS string) LIKE LOWER(CONCAT('%', :keyword, '%')) OR
-                   LOWER(r.restaurantName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR
-                   LOWER(oi.foodName) LIKE LOWER(CONCAT('%', :keyword, '%')))
-            ORDER BY o.createdAt DESC, o.orderId DESC
-            """)
+        SELECT DISTINCT o FROM Order o
+        JOIN FETCH o.customer c
+        JOIN FETCH o.restaurant r
+        LEFT JOIN o.items oi
+        LEFT JOIN o.groupOrder go
+        LEFT JOIN go.members gm
+        WHERE (o.customer.userId = :customerId
+               OR (gm.user.userId = :customerId
+                   AND gm.status <> org.example.datn.domain.enums.GroupOrderMemberStatus.LEFT))
+          AND (:status IS NULL OR o.orderStatus = :status)
+          AND (:keyword IS NULL OR :keyword = '' OR
+                 CAST(o.orderId AS string) LIKE LOWER(CONCAT('%', :keyword, '%')) OR
+                 LOWER(r.restaurantName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR
+                 LOWER(oi.foodName) LIKE LOWER(CONCAT('%', :keyword, '%')))
+        ORDER BY o.createdAt DESC, o.orderId DESC
+        """)
     Page<Order> searchCustomerOrders(
             @Param("customerId") Long customerId,
             @Param("status") OrderStatus status,
