@@ -61,4 +61,9 @@ public class OrderResponse {
     private Integer shipperRating;
 
     private List<OrderItemResponse> items;
+
+    // Thông tin đơn đặt nhóm — null nếu là đơn cá nhân
+    private Long groupOrderId;
+    private Long groupHostId;
+    private String groupHostName;
 }
