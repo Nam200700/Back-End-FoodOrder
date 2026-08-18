@@ -1,7 +1,9 @@
 package org.example.datn.Repository;
 
+import jakarta.persistence.LockModeType;
 import org.example.datn.Repository.base.BaseRepository;
 import org.example.datn.domain.UserVoucher;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -23,5 +25,9 @@ public interface UserVoucherRepository extends BaseRepository<UserVoucher, Long>
     List<UserVoucher> findValidUserVouchers(@Param("userId") Long userId,
                                             @Param("used") Boolean used,
                                             @Param("currentDate") LocalDateTime currentDate);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT uv FROM UserVoucher uv WHERE uv.userVoucherId = :id")
+    Optional<UserVoucher> findByIdForUpdate(@Param("id") Long id);
 
 }
