@@ -75,8 +75,9 @@ public class OrderService {
     private static final Map<OrderStatus, Set<OrderStatus>> VALID_TRANSITIONS = Map.of(
             PENDING, Set.of(CONFIRMED, CANCELLED),
             CONFIRMED, Set.of(PREPARING, CANCELLED),
-            PREPARING, Set.of(READY_FOR_PICKUP),
-            READY_FOR_PICKUP, Set.of(PICKED_UP),
+            PREPARING, Set.of(READY_FOR_PICKUP, SHIPPER_ACCEPTED),
+            READY_FOR_PICKUP, Set.of(SHIPPER_ACCEPTED),
+            SHIPPER_ACCEPTED, Set.of(PICKED_UP),
             PICKED_UP, Set.of(DELIVERING),
             DELIVERING, Set.of(COMPLETED)
     );
@@ -171,7 +172,7 @@ public class OrderService {
 
         // 1. Validate và chuẩn bị dữ liệu cho tất cả các quán trước (Fail-fast)
         for (Long restaurantId : req.getRestaurantId()) {
-            Cart cart = cartRepository.findByCustomerUserIdAndRestaurantRestaurantId(customerId, restaurantId)
+            Cart cart = cartRepository.findByCustomerAndRestaurantForUpdate(customerId, restaurantId)
                     .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
 
             if (cart.getItems().isEmpty()) {
@@ -184,7 +185,7 @@ public class OrderService {
             Voucher voucher = null;
 
             if (userVoucherId != null) {
-                userVoucher = userVoucherRepository.findById(userVoucherId)
+                userVoucher = userVoucherRepository.findByIdForUpdate(userVoucherId)
                         .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
 
                 if (!userVoucher.getUser().getUserId().equals(customerId)) {
@@ -488,6 +489,8 @@ public class OrderService {
                         s.setActiveDelivery(Math.max(0, s.getActiveDelivery() - 1));
                         shipperRepository.save(s);
                     });
+            //
+            deliveryService.cancelDelivery(order);
         }
 
         orderRepository.save(order);
@@ -610,7 +613,9 @@ public class OrderService {
 
         notificationService.notifyUser(order.getCustomer().getUserId(),
                 NotificationType.ORDER_PREPARING, order.getOrderId());
+        notificationService.broadcastToShippers(order.getOrderId(), NotificationType.ORDER_PREPARING);
         webSocketService.broadcastOrderStatus(order);
+        webSocketService.broadcastAvailableOrder(order);
         return enrichOne(order, orderMapper.toResponse(order));
     }
 
@@ -618,14 +623,28 @@ public class OrderService {
     @EvictStatsCaches
     public OrderResponse markReadyForPickup(Long merchantId, Long orderId) {
         Order order = getOrderForMerchant(merchantId, orderId);
-        validateTransition(order.getOrderStatus(), READY_FOR_PICKUP);
-        order.setOrderStatus(READY_FOR_PICKUP);
-        order.setReadyAt(LocalDateTime.now());
-        orderRepository.save(order);
+        //validateTransition(order.getOrderStatus(), READY_FOR_PICKUP);
+        OrderStatus st = order.getOrderStatus();
 
-        notificationService.broadcastToShippers(order.getOrderId(), NotificationType.ORDER_READY_PICKUP);
+        if (st == PREPARING) {
+            // Chưa có shipper nhận -> chuyển READY_FOR_PICKUP
+            order.setOrderStatus(READY_FOR_PICKUP);
+            order.setReadyAt(LocalDateTime.now());
+            orderRepository.save(order);
+            notificationService.broadcastToShippers(order.getOrderId(), NotificationType.ORDER_READY_PICKUP);
+            webSocketService.broadcastAvailableOrder(order);
+        } else if (st == SHIPPER_ACCEPTED) {
+            // Đã có shipper nhận từ lúc PREPARING -> không đổi status, chỉ báo đúng shipper đó
+            order.setReadyAt(LocalDateTime.now());
+            orderRepository.save(order);
+            if (order.getShipper() != null) {
+                notificationService.notifyUser(order.getShipper().getUserId(), NotificationType.ORDER_READY_PICKUP, order.getOrderId());
+            }
+        } else {
+            throw new OrderStatusException("Không thể đánh dấu sẵn sàng lấy hàng từ trạng thái " + st);
+        }
+
         webSocketService.broadcastOrderStatus(order);
-        webSocketService.broadcastAvailableOrder(order);
         return enrichOne(order, orderMapper.toResponse(order));
     }
 
@@ -649,8 +668,10 @@ public class OrderService {
         if (order.getShipper() != null) {
             throw new AppException(ErrorCode.ORDER_ALREADY_TAKEN);
         }
-        if (order.getOrderStatus() != READY_FOR_PICKUP) {
-            throw new AppException(ErrorCode.ORDER_NOT_READY_FOR_PICKUP);
+
+        OrderStatus st = order.getOrderStatus();
+        if (st != PREPARING && st != READY_FOR_PICKUP) {
+            throw new AppException(ErrorCode.ORDER_NOT_PREPARING);
         }
 
         if (!Boolean.TRUE.equals(shipper.getIsOnline())) {
@@ -668,6 +689,7 @@ public class OrderService {
         }
 
         order.setShipper(userRepository.getReferenceById(shipperId));
+        order.setOrderStatus(SHIPPER_ACCEPTED);
         orderRepository.save(order);
 
         shipper.setActiveDelivery(shipper.getActiveDelivery() + 1);
