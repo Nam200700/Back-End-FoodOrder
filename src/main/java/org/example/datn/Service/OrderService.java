@@ -392,7 +392,7 @@ public class OrderService {
     @Transactional(readOnly = true)
     public OrderResponse getCustomerOrder(Long customerId, Long orderId) {
         Order order = loadWithItems(orderId);
-        ownershipGuard.checkOrderOwner(order, customerId);
+        ownershipGuard.checkOrderViewer(order, customerId);
         return enrichOne(order, orderMapper.toResponse(order));
     }
 

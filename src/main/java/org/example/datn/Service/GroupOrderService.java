@@ -189,6 +189,10 @@ public class GroupOrderService {
                 .filter(m -> m.getStatus() != GroupOrderMemberStatus.LEFT)
                 .orElseThrow(() -> new AppException(ErrorCode.GROUP_ORDER_MEMBER_NOT_FOUND, "Bạn chưa tham gia phiên này"));
 
+        if (member.getStatus() == GroupOrderMemberStatus.READY) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, "Bạn đã hoàn tất chọn món, không thể thêm món mới.");
+        }
+
         Food food = foodRepository.findByIdOrThrow(req.getFoodId(), ErrorCode.FOOD_NOT_FOUND);
         if (!food.getRestaurant().getRestaurantId().equals(groupOrder.getRestaurant().getRestaurantId())) {
             throw new AppException(ErrorCode.VALIDATION_FAILED, "Món ăn không thuộc quán của phiên này");
@@ -207,10 +211,10 @@ public class GroupOrderService {
                 .build();
         groupItemRepository.save(item);
 
-        if (member.getStatus() == GroupOrderMemberStatus.READY) {
-            member.setStatus(GroupOrderMemberStatus.JOINED);
-            memberRepository.save(member);
-        }
+//        if (member.getStatus() == GroupOrderMemberStatus.READY) {
+//            member.setStatus(GroupOrderMemberStatus.JOINED);
+//            memberRepository.save(member);
+//        }
 
         return toResponseWithInvite(getOrThrowDetail(groupOrderId));
     }
@@ -223,6 +227,10 @@ public class GroupOrderService {
         GroupOrderMember member = memberRepository
                 .findByGroupOrderGroupOrderIdAndUserUserId(groupOrderId, userId)
                 .orElseThrow(() -> new AppException(ErrorCode.GROUP_ORDER_MEMBER_NOT_FOUND));
+
+        if (member.getStatus() == GroupOrderMemberStatus.READY) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, "Bạn đã hoàn tất chọn món, không thể chỉnh sửa món nữa.");
+        }
 
         GroupOrderItem item = groupItemRepository.findByGroupOrderItemIdAndMemberMemberId(itemId, member.getMemberId())
                 .orElseThrow(() -> new AppException(ErrorCode.GROUP_ORDER_ITEM_NOT_FOUND));
@@ -242,6 +250,10 @@ public class GroupOrderService {
         GroupOrderMember member = memberRepository
                 .findByGroupOrderGroupOrderIdAndUserUserId(groupOrderId, userId)
                 .orElseThrow(() -> new AppException(ErrorCode.GROUP_ORDER_MEMBER_NOT_FOUND));
+
+        if (member.getStatus() == GroupOrderMemberStatus.READY) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, "Bạn đã hoàn tất chọn món, không thể xóa món nữa.");
+        }
 
         GroupOrderItem item = groupItemRepository.findByGroupOrderItemIdAndMemberMemberId(itemId, member.getMemberId())
                 .orElseThrow(() -> new AppException(ErrorCode.GROUP_ORDER_ITEM_NOT_FOUND));

@@ -5,6 +5,7 @@ import org.example.datn.domain.Order;
 import org.example.datn.domain.Restaurant;
 import org.example.datn.Exception.AppException;
 import org.example.datn.Exception.ErrorCode;
+import org.example.datn.domain.enums.GroupOrderMemberStatus;
 import org.springframework.stereotype.Component;
 
 /**
@@ -39,5 +40,21 @@ public class OwnershipGuard {
         if (!member) {
             throw new AppException(ErrorCode.FORBIDDEN);
         }
+    }
+
+    //check quyền xem đơn nhóm
+    public void checkOrderViewer(Order order, Long userId) {
+        if (order.getCustomer().getUserId().equals(userId)) {
+            return;
+        }
+        if (order.getGroupOrder() != null && order.getGroupOrder().getMembers() != null) {
+            boolean isActiveMember = order.getGroupOrder().getMembers().stream()
+                    .anyMatch(m -> m.getUser().getUserId().equals(userId)
+                            && m.getStatus() != GroupOrderMemberStatus.LEFT);
+            if (isActiveMember) {
+                return;
+            }
+        }
+        throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem đơn hàng này");
     }
 }
