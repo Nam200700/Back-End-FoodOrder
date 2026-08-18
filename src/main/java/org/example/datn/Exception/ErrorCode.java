@@ -47,6 +47,7 @@ public enum ErrorCode {
     ORDER_ALREADY_COMPLETED(400, "Đơn đã hoàn tất, vui lòng dùng chức năng khiếu nại/hoàn tiền"),
     ORDER_CANCEL_STAGE_INVALID(400, "Đơn đang được chuẩn bị/giao, không thể hủy"),
     ORDER_NOT_READY_FOR_PICKUP(409, "Đơn chưa sẵn sàng để nhận"),
+    ORDER_NOT_PREPARING(409, "Đơn chưa sẵn sàng để nhận"),
 
     // Review
     REVIEW_NOT_ALLOWED(422, "Không thể đánh giá lúc này"),
