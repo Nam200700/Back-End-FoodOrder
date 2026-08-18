@@ -53,11 +53,12 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
 
     /** Orders confirmed by the merchant and not yet picked up by any shipper. */
     @Query("""
-            SELECT o FROM Order o
-            WHERE o.orderStatus = org.example.datn.domain.enums.OrderStatus.READY_FOR_PICKUP
-              AND o.shipper IS NULL
-            ORDER BY o.createdAt ASC
-            """)
+        SELECT o FROM Order o
+        WHERE o.orderStatus IN (org.example.datn.domain.enums.OrderStatus.PREPARING,
+                                 org.example.datn.domain.enums.OrderStatus.READY_FOR_PICKUP)
+          AND o.shipper IS NULL
+        ORDER BY o.createdAt ASC
+        """)
     List<Order> findAvailableOrders();
 
     // ─── Statistics ───────────────────────────────────────────
@@ -606,16 +607,19 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
     );
 
     @Query("""
-            SELECT o FROM Order o
-            JOIN FETCH o.customer c
-            JOIN FETCH o.restaurant r
-            WHERE r.restaurantId = :restaurantId
-            AND (:status IS NULL OR o.orderStatus = :status)
-            AND (:keyword IS NULL OR :keyword = '' OR
-                   CAST(o.orderId AS string) LIKE LOWER(CONCAT('%', :keyword, '%')) OR 
-                   LOWER(c.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')))
-            ORDER BY o.createdAt DESC, o.orderId DESC
-            """)
+        SELECT o FROM Order o
+        JOIN FETCH o.customer c
+        JOIN FETCH o.restaurant r
+        WHERE r.restaurantId = :restaurantId
+        AND (:status IS NULL
+             OR o.orderStatus = :status
+             OR (:status = org.example.datn.domain.enums.OrderStatus.READY_FOR_PICKUP
+                 AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.SHIPPER_ACCEPTED))
+        AND (:keyword IS NULL OR :keyword = '' OR
+               CAST(o.orderId AS string) LIKE LOWER(CONCAT('%', :keyword, '%')) OR 
+               LOWER(c.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')))
+        ORDER BY o.createdAt DESC, o.orderId DESC
+        """)
     Page<Order> searchMerchantOrders(
             @Param("restaurantId") Long restaurantId,
             @Param("status") OrderStatus status,
