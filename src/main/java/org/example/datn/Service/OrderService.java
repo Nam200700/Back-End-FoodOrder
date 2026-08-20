@@ -702,9 +702,9 @@ public class OrderService {
         Order order = getOrderForShipper(shipperId, orderId);
 
         // Kiểm tra xem Quán đã nấu xong chưa
-//        if (order.getReadyAt() == null || order.getOrderStatus() != READY_FOR_PICKUP) {
-//            throw new AppException(ErrorCode.ORDER_NOT_READY, "Quán chưa nấu xong món, chưa thể lấy hàng!");
-//        }
+        if (order.getReadyAt() == null || order.getOrderStatus() != READY_FOR_PICKUP) {
+            throw new AppException(ErrorCode.ORDER_NOT_READY);
+        }
 
         validateTransition(order.getOrderStatus(), PICKED_UP);
         order.setOrderStatus(PICKED_UP);
