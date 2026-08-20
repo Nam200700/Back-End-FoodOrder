@@ -12,7 +12,6 @@ import org.example.datn.domain.enums.PaymentMethod;
 @Builder
 public class CheckoutGroupOrderRequest {
 
-    /** Hệ thống hiện chỉ hỗ trợ COD (xem enum PaymentMethod) nên mặc định luôn là COD. */
     @Builder.Default
     private PaymentMethod paymentMethod = PaymentMethod.COD;
 
