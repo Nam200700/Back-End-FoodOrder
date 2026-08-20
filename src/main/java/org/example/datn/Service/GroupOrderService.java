@@ -66,35 +66,20 @@ public class GroupOrderService {
             throw new AppException(ErrorCode.RESTAURANT_CLOSED, "Quán hiện không nhận đơn.");
         }
 
-        CustomerAddress address = null;
-        String deliveryAddress = req.getDeliveryAddress();
-        BigDecimal lat = req.getDeliveryLat();
-        BigDecimal lng = req.getDeliveryLng();
-
-        if (req.getAddressId() != null) {
-            address = customerAddressRepository.findById(req.getAddressId())
-                    .orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_FOUND));
-            if (!address.getCustomer().getUserId().equals(hostUserId)) {
-                throw new AppException(ErrorCode.FORBIDDEN, "Địa chỉ không thuộc về bạn");
-            }
-            deliveryAddress = address.getAddress();
-            lat = address.getLatitude();
-            lng = address.getLongitude();
-        }
-
-        if (deliveryAddress == null || lat == null || lng == null) {
-            throw new AppException(ErrorCode.ADDRESS_NOT_FOUND, "Vui lòng chọn địa chỉ giao hàng hợp lệ.");
-        }
+        CustomerAddress defaultAddress = customerAddressRepository
+                .findByCustomerUserIdAndIsDefaultTrue(hostUserId)
+                .orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_FOUND,
+                        "Bạn chưa có địa chỉ mặc định, vui lòng thêm địa chỉ giao hàng trước khi tạo phiên nhóm."));
 
         GroupOrder groupOrder = GroupOrder.builder()
                 .host(host)
                 .restaurant(restaurant)
                 .inviteCode(generateUniqueInviteCode())
                 .status(GroupOrderStatus.OPEN)
-                .address(address)
-                .deliveryAddress(deliveryAddress)
-                .deliveryLat(lat)
-                .deliveryLng(lng)
+                .address(defaultAddress)
+                .deliveryAddress(defaultAddress.getAddress())
+                .deliveryLat(defaultAddress.getLatitude())
+                .deliveryLng(defaultAddress.getLongitude())
                 .joinDeadline(req.getJoinDeadline())
                 .note(req.getNote())
                 .build();
@@ -382,6 +367,8 @@ public class GroupOrderService {
         // đang chọn dở, đồng thời không khóa cứng nếu có người "mất tích" không phản hồi.
         ensureMembersReadyOrForce(groupOrder, req.isForce());
 
+        updateAddressFromCustomerAddress(groupOrder, hostUserId);
+
         Restaurant restaurant = groupOrder.getRestaurant();
         if (restaurant.getLatitude() == null || restaurant.getLongitude() == null) {
             throw new AppException(ErrorCode.RESTAURANT_NOT_FOUND, "Quán chưa cập nhật tọa độ vị trí.");
@@ -609,5 +596,18 @@ public class GroupOrderService {
         if (!overdue.isEmpty()) {
             groupOrderRepository.saveAll(overdue);
         }
+    }
+
+    private void updateAddressFromCustomerAddress(GroupOrder groupOrder, Long hostUserId) {
+        CustomerAddress defaultAddress = customerAddressRepository
+                .findByCustomerUserIdAndIsDefaultTrue(hostUserId)
+                .orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_FOUND,
+                        "Bạn chưa có địa chỉ mặc định, vui lòng thêm địa chỉ giao hàng trước khi đặt hàng."));
+
+        groupOrder.setAddress(defaultAddress);
+        groupOrder.setDeliveryAddress(defaultAddress.getAddress());
+        groupOrder.setDeliveryLat(defaultAddress.getLatitude());
+        groupOrder.setDeliveryLng(defaultAddress.getLongitude());
+        groupOrderRepository.save(groupOrder);
     }
 }
