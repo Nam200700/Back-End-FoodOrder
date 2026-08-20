@@ -316,7 +316,7 @@ public class GroupOrderService {
     public GroupOrderResponse updateAddress(Long hostUserId, Long groupOrderId, UpdateGroupOrderAddressRequest req) {
         GroupOrder groupOrder = getOrThrowDetail(groupOrderId);
         ensureHost(groupOrder, hostUserId);
-        ensureJoinable(groupOrder); // chỉ sửa được khi status = OPEN
+        //ensureJoinable(groupOrder); // chỉ sửa được khi status = OPEN
 
         CustomerAddress address = null;
         String deliveryAddress = req.getDeliveryAddress();
