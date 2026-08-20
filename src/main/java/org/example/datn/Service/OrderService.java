@@ -75,11 +75,10 @@ public class OrderService {
     private static final Map<OrderStatus, Set<OrderStatus>> VALID_TRANSITIONS = Map.of(
             PENDING, Set.of(CONFIRMED, CANCELLED),
             CONFIRMED, Set.of(PREPARING, CANCELLED),
-            PREPARING, Set.of(READY_FOR_PICKUP, SHIPPER_ACCEPTED),
-            READY_FOR_PICKUP, Set.of(SHIPPER_ACCEPTED),
-            SHIPPER_ACCEPTED, Set.of(PICKED_UP),
-            PICKED_UP, Set.of(DELIVERING),
-            DELIVERING, Set.of(COMPLETED)
+            PREPARING, Set.of(READY_FOR_PICKUP, CANCELLED),
+            READY_FOR_PICKUP, Set.of(PICKED_UP, CANCELLED),
+            PICKED_UP, Set.of(DELIVERING, CANCELLED),
+            DELIVERING, Set.of(COMPLETED, CANCELLED)
     );
 
     @Scheduled(fixedRate = 30000)
@@ -623,25 +622,20 @@ public class OrderService {
     @EvictStatsCaches
     public OrderResponse markReadyForPickup(Long merchantId, Long orderId) {
         Order order = getOrderForMerchant(merchantId, orderId);
-        //validateTransition(order.getOrderStatus(), READY_FOR_PICKUP);
-        OrderStatus st = order.getOrderStatus();
+        validateTransition(order.getOrderStatus(), READY_FOR_PICKUP);
 
-        if (st == PREPARING) {
-            // Chưa có shipper nhận -> chuyển READY_FOR_PICKUP
-            order.setOrderStatus(READY_FOR_PICKUP);
-            order.setReadyAt(LocalDateTime.now());
-            orderRepository.save(order);
+        order.setOrderStatus(READY_FOR_PICKUP);
+        order.setReadyAt(LocalDateTime.now());
+        orderRepository.save(order);
+
+        // Nếu đã có Shipper nhận đơn từ trước thì thông báo riêng cho Shipper đó
+        if (order.getShipper() != null) {
+            notificationService.notifyUser(
+                    order.getShipper().getUserId(), NotificationType.ORDER_READY_PICKUP, order.getOrderId());
+        } else {
+            // Chưa có Shipper -> bắn thông báo cho pool các Shipper
             notificationService.broadcastToShippers(order.getOrderId(), NotificationType.ORDER_READY_PICKUP);
             webSocketService.broadcastAvailableOrder(order);
-        } else if (st == SHIPPER_ACCEPTED) {
-            // Đã có shipper nhận từ lúc PREPARING -> không đổi status, chỉ báo đúng shipper đó
-            order.setReadyAt(LocalDateTime.now());
-            orderRepository.save(order);
-            if (order.getShipper() != null) {
-                notificationService.notifyUser(order.getShipper().getUserId(), NotificationType.ORDER_READY_PICKUP, order.getOrderId());
-            }
-        } else {
-            throw new OrderStatusException("Không thể đánh dấu sẵn sàng lấy hàng từ trạng thái " + st);
         }
 
         webSocketService.broadcastOrderStatus(order);
@@ -689,7 +683,6 @@ public class OrderService {
         }
 
         order.setShipper(userRepository.getReferenceById(shipperId));
-        order.setOrderStatus(SHIPPER_ACCEPTED);
         orderRepository.save(order);
 
         shipper.setActiveDelivery(shipper.getActiveDelivery() + 1);
@@ -707,6 +700,12 @@ public class OrderService {
     @EvictStatsCaches
     public OrderResponse markPickedUp(Long shipperId, Long orderId) {
         Order order = getOrderForShipper(shipperId, orderId);
+
+        // Kiểm tra xem Quán đã nấu xong chưa
+        if (order.getReadyAt() == null || order.getOrderStatus() != READY_FOR_PICKUP) {
+            throw new AppException(ErrorCode.ORDER_NOT_READY);
+        }
+
         validateTransition(order.getOrderStatus(), PICKED_UP);
         order.setOrderStatus(PICKED_UP);
         order.setPickedUpAt(LocalDateTime.now());
@@ -792,7 +791,7 @@ public class OrderService {
 
         // Trả đơn về pool: bỏ gán shipper, đưa trạng thái về READY_FOR_PICKUP.
         order.setShipper(null);
-        order.setOrderStatus(READY_FOR_PICKUP);
+        //order.setOrderStatus(READY_FOR_PICKUP);
         if (reason != null && !reason.isBlank()) {
             order.setCancelReason("Shipper bỏ đơn: " + reason.trim());
         }

@@ -6,6 +6,7 @@ import org.example.datn.domain.Cart;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.web.bind.annotation.RequestParam;
 
@@ -22,6 +23,6 @@ public interface CartRepository extends BaseRepository<Cart, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT c FROM Cart c WHERE c.customer.userId = :customerId AND c.restaurant.restaurantId = :restaurantId")
-    Optional<Cart> findByCustomerAndRestaurantForUpdate(@RequestParam("customerId") Long customerId, @RequestParam("restaurantId") Long restaurantId);
+    Optional<Cart> findByCustomerAndRestaurantForUpdate(@Param("customerId") Long customerId, @Param("restaurantId") Long restaurantId);
 
 }
