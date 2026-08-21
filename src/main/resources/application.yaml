@@ -68,6 +68,8 @@ app:
     base-km: 2.0
     per-km-fee: 5000       # VND per extra km
     max-distance-km: 10.0
+  order:
+    pending-timeout-minutes: 5
   otp:
     length: 6
     ttl-minutes: 5
