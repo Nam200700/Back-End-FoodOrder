@@ -12,6 +12,7 @@ import org.example.datn.mapper.ReportMapper;
 import org.example.datn.Repository.ReportRepository;
 import org.example.datn.Repository.RestaurantRepository;
 import org.example.datn.Repository.UserRepository;
+import org.example.datn.util.DateTimeUtils;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -72,7 +73,7 @@ public class ReportService {
     public ReportResponse resolve(Long reportId, ReportStatus status) {
         Report report = reportRepository.findByIdOrThrow(reportId, ErrorCode.NOT_FOUND);
         report.setStatus(status);
-        report.setResolvedAt(LocalDateTime.now());
+        report.setResolvedAt(DateTimeUtils.now());
         return toResponseWithTarget(reportRepository.save(report));
     }
 
