@@ -6,6 +6,7 @@ import org.example.datn.domain.Order;
 import org.example.datn.domain.enums.DeliveryStatus;
 import org.example.datn.Repository.DeliveryRepository;
 import org.example.datn.Repository.UserRepository;
+import org.example.datn.util.DateTimeUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,7 +25,7 @@ public class DeliveryService {
                 .order(order)
                 .shipper(userRepository.getReferenceById(shipperId))
                 .status(DeliveryStatus.ASSIGNED)
-                .assignedAt(LocalDateTime.now())
+                .assignedAt(DateTimeUtils.now())
                 .build();
         deliveryRepository.save(delivery);
     }
@@ -35,7 +36,7 @@ public class DeliveryService {
         deliveryRepository.findFirstByOrderOrderIdAndStatusOrderByAssignedAtDesc(
                 order.getOrderId(), DeliveryStatus.ASSIGNED).ifPresent(d -> {
             d.setStatus(DeliveryStatus.COMPLETED);
-            d.setCompletedAt(LocalDateTime.now());
+            d.setCompletedAt(DateTimeUtils.now());
             deliveryRepository.save(d);
         });
     }
