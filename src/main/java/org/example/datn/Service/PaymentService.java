@@ -11,6 +11,7 @@ import org.example.datn.Exception.AppException;
 import org.example.datn.Exception.ErrorCode;
 import org.example.datn.Repository.OrderRepository;
 import org.example.datn.Repository.PaymentRepository;
+import org.example.datn.util.DateTimeUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,7 +47,7 @@ public class PaymentService {
         order.setPaymentStatus(PaymentStatus.PAID);
         paymentRepository.findByOrderOrderId(order.getOrderId()).ifPresent(p -> {
             p.setStatus(PaymentStatus.PAID);
-            p.setPaidAt(LocalDateTime.now());
+            p.setPaidAt(DateTimeUtils.now());
             paymentRepository.save(p);
         });
     }
@@ -78,7 +79,7 @@ public class PaymentService {
             order.setPaymentStatus(PaymentStatus.PAID);
             payment.setStatus(PaymentStatus.PAID);
             payment.setTransactionNo(transactionNo);
-            payment.setPaidAt(LocalDateTime.now());
+            payment.setPaidAt(DateTimeUtils.now());
         } else {
             order.setPaymentStatus(PaymentStatus.FAILED);
             payment.setStatus(PaymentStatus.FAILED);
