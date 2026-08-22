@@ -112,7 +112,7 @@ public class NotificationService {
     @Async("notificationExecutor")
     public void broadcastToShippers(Long orderId, NotificationType type) {
         messagingTemplate.convertAndSend("/topic/available-orders",
-                new NotificationEvent(type, title(type), body(type, orderId), orderId, java.time.LocalDateTime.now()));
+                new NotificationEvent(type, title(type), body(type, orderId), orderId, org.example.datn.util.DateTimeUtils.now()));
     }
 
     // ─── Read APIs ────────────────────────────────────────────
