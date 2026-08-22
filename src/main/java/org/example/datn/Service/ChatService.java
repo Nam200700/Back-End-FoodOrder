@@ -14,6 +14,7 @@ import org.example.datn.Repository.ConversationRepository;
 import org.example.datn.Repository.MessageRepository;
 import org.example.datn.Repository.UserRepository;
 import org.example.datn.security.OwnershipGuard;
+import org.example.datn.util.DateTimeUtils;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,7 +77,7 @@ public class ChatService {
                 .isRead(false)
                 .build());
 
-        conversation.setLastMessageAt(LocalDateTime.now());
+        conversation.setLastMessageAt(DateTimeUtils.now());
         conversationRepository.save(conversation);
 
         return messageMapper.toResponse(message);
