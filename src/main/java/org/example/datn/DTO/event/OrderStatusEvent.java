@@ -2,6 +2,7 @@ package org.example.datn.DTO.event;
 
 import org.example.datn.domain.Order;
 import org.example.datn.domain.enums.OrderStatus;
+import org.example.datn.util.DateTimeUtils;
 
 import java.time.LocalDateTime;
 
@@ -11,6 +12,6 @@ import java.time.LocalDateTime;
 public record OrderStatusEvent(Long orderId, OrderStatus newStatus, LocalDateTime timestamp) {
 
     public static OrderStatusEvent from(Order order) {
-        return new OrderStatusEvent(order.getOrderId(), order.getOrderStatus(), LocalDateTime.now());
+        return new OrderStatusEvent(order.getOrderId(), order.getOrderStatus(), DateTimeUtils.now());
     }
 }
