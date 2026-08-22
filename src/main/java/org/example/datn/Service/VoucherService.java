@@ -19,6 +19,7 @@ import org.example.datn.domain.enums.DiscountType;
 import org.example.datn.domain.enums.VoucherIssueType;
 import org.example.datn.domain.enums.VoucherStatus;
 import org.example.datn.mapper.VoucherMapper;
+import org.example.datn.util.DateTimeUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -51,7 +52,7 @@ public class VoucherService {
         }
         if (request.getIssueType() == VoucherIssueType.ORDER_CANCELLED && request.getStatus() == VoucherStatus.ACTIVE) {
             boolean hasActiveCompensation = voucherRepository.existsActiveVoucherByIssueType(
-                    VoucherIssueType.ORDER_CANCELLED, LocalDateTime.now()
+                    VoucherIssueType.ORDER_CANCELLED, DateTimeUtils.now()
             );
             if (hasActiveCompensation) {
                 throw new AppException(ErrorCode.VALIDATION_FAILED,
@@ -106,7 +107,7 @@ public class VoucherService {
 
         if (request.getIssueType() == VoucherIssueType.ORDER_CANCELLED && request.getStatus() == VoucherStatus.ACTIVE) {
             boolean hasActiveOther = voucherRepository.existsActiveVoucherByIssueTypeExcludingId(
-                    VoucherIssueType.ORDER_CANCELLED, LocalDateTime.now(), voucherId
+                    VoucherIssueType.ORDER_CANCELLED, DateTimeUtils.now(), voucherId
             );
             if (hasActiveOther) {
                 throw new AppException(ErrorCode.VALIDATION_FAILED,
@@ -144,19 +145,19 @@ public class VoucherService {
                 .totalVouchers(voucherRepository.count())
                 .activeVouchers(voucherRepository.countByStatus(VoucherStatus.ACTIVE))
                 .inactiveVouchers(voucherRepository.countByStatus(VoucherStatus.INACTIVE))
-                .expiredVouchers(voucherRepository.countByEndDateBefore(LocalDateTime.now()))
+                .expiredVouchers(voucherRepository.countByEndDateBefore(DateTimeUtils.now()))
                 .build();
     }
 
     @Transactional(readOnly = true)
     public PageResponse<VoucherResponse> getVouchersWithFilter(String keyword, VoucherStatus status, Pageable pageable) {
-        Page<Voucher> page = voucherRepository.searchAndFilter(keyword, status, LocalDateTime.now(), pageable);
+        Page<Voucher> page = voucherRepository.searchAndFilter(keyword, status, DateTimeUtils.now(), pageable);
         return PageResponse.from(page.map(voucherMapper::toResponse));
     }
 
     @Transactional(readOnly = true)
     public List<UserVoucherResponse> getMyVouchers(Long userId) {
-        List<UserVoucher> list = userVoucherRepository.findValidUserVouchers(userId, false, LocalDateTime.now());
+        List<UserVoucher> list = userVoucherRepository.findValidUserVouchers(userId, false, DateTimeUtils.now());
         return list.stream().map(uv -> UserVoucherResponse.builder()
                 .userVoucherId(uv.getUserVoucherId())
                 .voucherId(uv.getVoucher().getVoucherId())
@@ -176,7 +177,7 @@ public class VoucherService {
     @Transactional(readOnly = true)
     public List<VoucherResponse> getPublicVouchers(Long userId) {
         List<Voucher> vouchers = voucherRepository.findUnclaimedPublicVouchersForUser(
-                VoucherIssueType.EVENT, VoucherStatus.ACTIVE, LocalDateTime.now(), userId
+                VoucherIssueType.EVENT, VoucherStatus.ACTIVE, DateTimeUtils.now(), userId
         );
         return vouchers.stream().map(voucherMapper::toResponse).toList();
     }
@@ -189,7 +190,7 @@ public class VoucherService {
             throw new AppException(ErrorCode.VOUCHER_NOT_FOUND);
         }
 
-        if (LocalDateTime.now().isAfter(voucher.getEndDate())) {
+        if (DateTimeUtils.now().isAfter(voucher.getEndDate())) {
             throw new AppException(ErrorCode.VOUCHER_EXPIRED);
         }
 
@@ -204,7 +205,7 @@ public class VoucherService {
         UserVoucher userVoucher = UserVoucher.builder()
                 .user(user)
                 .voucher(voucher)
-                .receivedAt(LocalDateTime.now())
+                .receivedAt(DateTimeUtils.now())
                 .expiredAt(voucher.getEndDate())
                 .used(false)
                 .build();
@@ -218,7 +219,7 @@ public class VoucherService {
     @Transactional(readOnly = true)
     public List<VoucherResponse> getLoyaltyCatalog() {
         return voucherRepository.findByIssueTypeAndStatusAndEndDateAfter(
-                        VoucherIssueType.LOYALTY, VoucherStatus.ACTIVE, LocalDateTime.now())
+                        VoucherIssueType.LOYALTY, VoucherStatus.ACTIVE, DateTimeUtils.now())
                 .stream()
                 .map(v -> VoucherResponse.builder()
                         .voucherId(v.getVoucherId())
@@ -244,7 +245,7 @@ public class VoucherService {
         if (voucher.getIssueType() != VoucherIssueType.LOYALTY || voucher.getStatus() != VoucherStatus.ACTIVE) {
             throw new AppException(ErrorCode.VOUCHER_NOT_FOUND);
         }
-        if (voucher.getEndDate() != null && LocalDateTime.now().isAfter(voucher.getEndDate())) {
+        if (voucher.getEndDate() != null && DateTimeUtils.now().isAfter(voucher.getEndDate())) {
             throw new AppException(ErrorCode.VOUCHER_EXPIRED);
         }
         if (userVoucherRepository.existsByUser_UserIdAndVoucher_VoucherId(userId, voucherId)) {
@@ -266,7 +267,7 @@ public class VoucherService {
                 .user(user)
                 .voucher(voucher)
                 .used(false)
-                .receivedAt(LocalDateTime.now())
+                .receivedAt(DateTimeUtils.now())
                 .expiredAt(voucher.getEndDate())
                 .build());
     }
