@@ -16,6 +16,7 @@ import org.example.datn.DTO.response.stats.VoucherAnalyticsResponse;
 import org.example.datn.Repository.VoucherRepository;
 import org.example.datn.domain.enums.PaymentStatus;
 import org.example.datn.domain.enums.VoucherStatus;
+import org.example.datn.util.DateTimeUtils;
 import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDate;
@@ -148,7 +149,7 @@ public class StatisticsService {
     @Cacheable("adminInsights")
     @Transactional(readOnly = true)
     public AdminInsightsResponse adminInsights() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = DateTimeUtils.now();
         LocalDateTime last7 = now.minusDays(7);
         LocalDateTime prev7 = now.minusDays(14);
         LocalDateTime since30 = now.minusDays(30);
@@ -274,7 +275,7 @@ public class StatisticsService {
         Restaurant restaurant = restaurantRepository.findByIdOrThrow(restaurantId, ErrorCode.RESTAURANT_NOT_FOUND);
         ownershipGuard.checkRestaurantOwner(restaurant, merchantId);
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = DateTimeUtils.now();
         LocalDateTime last7 = now.minusDays(7);
         LocalDateTime prev7 = now.minusDays(14);
         LocalDateTime since30 = now.minusDays(30);
@@ -346,7 +347,7 @@ public class StatisticsService {
     /** Quy đổi range → cửa sổ [from, to). "all" dùng mốc rất cũ để bao toàn bộ. */
     private LocalDateTime[] resolveRange(String range) {
         LocalDate today = LocalDate.now();
-        LocalDateTime to = LocalDateTime.now();
+        LocalDateTime to = DateTimeUtils.now();
         LocalDateTime from;
         switch (range == null ? "all" : range) {
             case "today" -> from = today.atStartOfDay();

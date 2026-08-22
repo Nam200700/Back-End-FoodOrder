@@ -1,19 +1,41 @@
 package org.example.datn.util;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 
 /**
- * Diễn đạt thời gian cho các thông báo hiển thị TRỰC TIẾP cho người dùng.
- *
- * <p>Nối thẳng {@link LocalDateTime} vào chuỗi sẽ ra dạng ISO khó đọc
- * ("2026-08-15T15:26:58.270900"). Với thông báo khóa tạm thời, người dùng quan tâm
- * "còn phải chờ bao lâu" hơn là "đến mấy giờ" — nói theo thời lượng còn tránh được
- * hiểu nhầm khi đồng hồ máy người dùng lệch với đồng hồ máy chủ.
+ * Diễn đạt thời gian cho các thông báo hiển thị TRỰC TIẾP cho người dùng
+ * và chuẩn hóa thời gian ở Việt Nam (Asia/Ho_Chi_Minh).
  */
 public final class DateTimeUtils {
 
+    public static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+
     private DateTimeUtils() {
+    }
+
+    /**
+     * Trả về LocalDateTime hiện tại theo múi giờ Việt Nam.
+     */
+    public static LocalDateTime now() {
+        return LocalDateTime.now(VN_ZONE);
+    }
+
+    /**
+     * Trả về LocalDate hiện tại theo múi giờ Việt Nam.
+     */
+    public static LocalDate nowDate() {
+        return LocalDate.now(VN_ZONE);
+    }
+
+    /**
+     * Trả về LocalTime hiện tại theo múi giờ Việt Nam.
+     */
+    public static LocalTime nowTime() {
+        return LocalTime.now(VN_ZONE);
     }
 
     /**
@@ -22,7 +44,7 @@ public final class DateTimeUtils {
      */
     public static int secondsUntil(LocalDateTime until) {
         if (until == null) return 0;
-        long seconds = Duration.between(LocalDateTime.now(), until).getSeconds();
+        long seconds = Duration.between(now(), until).getSeconds();
         return seconds <= 0 ? 0 : (int) Math.min(seconds, Integer.MAX_VALUE);
     }
 
@@ -34,7 +56,7 @@ public final class DateTimeUtils {
     public static String humanizeUntil(LocalDateTime until) {
         if (until == null) return "ít phút";
 
-        long seconds = Duration.between(LocalDateTime.now(), until).getSeconds();
+        long seconds = Duration.between(now(), until).getSeconds();
         if (seconds <= 0) return "vài giây";
         if (seconds < 60) return seconds + " giây";
 

@@ -18,6 +18,7 @@ import org.example.datn.Repository.ShipperRepository;
 import org.example.datn.domain.Shipper;
 import org.example.datn.domain.enums.Role;
 import org.example.datn.domain.enums.VehicleType;
+import org.example.datn.util.DateTimeUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -143,7 +144,7 @@ public class UserService {
                     }
                     shipper.setIsOnline(req.getIsOnline());
                     if (req.getIsOnline()) {
-                        shipper.setLastOnlineAt(java.time.LocalDateTime.now());
+                        shipper.setLastOnlineAt(DateTimeUtils.now());
                     }
                 }
 

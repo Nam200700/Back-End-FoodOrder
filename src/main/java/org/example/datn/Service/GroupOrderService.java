@@ -14,6 +14,7 @@ import org.example.datn.domain.enums.*;
 import org.example.datn.mapper.GroupOrderMapper;
 import org.example.datn.mapper.GroupOrderMemberMapper;
 import org.example.datn.mapper.OrderMapper;
+import org.example.datn.util.DateTimeUtils;
 import org.example.datn.util.ShippingFeeCalculator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -89,7 +90,7 @@ public class GroupOrderService {
                 .user(host)
                 .isHost(true)
                 .status(GroupOrderMemberStatus.JOINED)
-                .joinedAt(LocalDateTime.now())
+                .joinedAt(DateTimeUtils.now())
                 .build();
 
         groupOrder.getMembers().add(hostMember);
@@ -132,7 +133,7 @@ public class GroupOrderService {
                                 .user(user)
                                 .isHost(false)
                                 .status(GroupOrderMemberStatus.JOINED)
-                                .joinedAt(LocalDateTime.now())
+                                .joinedAt(DateTimeUtils.now())
                                 .build();
                         memberRepository.saveAndFlush(member);
                     });
@@ -159,7 +160,7 @@ public class GroupOrderService {
 
         groupItemRepository.deleteByMemberMemberId(member.getMemberId());
         member.setStatus(GroupOrderMemberStatus.LEFT);
-        member.setLeftAt(LocalDateTime.now());
+        member.setLeftAt(DateTimeUtils.now());
         memberRepository.save(member);
     }
 
@@ -279,7 +280,7 @@ public class GroupOrderService {
         }
 
         groupOrder.setStatus(GroupOrderStatus.LOCKED);
-        groupOrder.setLockedAt(LocalDateTime.now());
+        groupOrder.setLockedAt(DateTimeUtils.now());
 
         // [MỚI] Khóa phiên = không ai còn thêm/sửa món được nữa (nút "Hoàn tất chọn món"
         // chỉ hiện khi status = OPEN) → tự động chuyển các thành viên còn "JOINED" sang
@@ -454,7 +455,7 @@ public class GroupOrderService {
                 case FREESHIP -> discountAmount = shippingFee;
             }
             userVoucher.setUsed(true);
-            userVoucher.setUsedAt(LocalDateTime.now());
+            userVoucher.setUsedAt(DateTimeUtils.now());
             userVoucherRepository.save(userVoucher);
             voucher.setUsedQuantity((voucher.getUsedQuantity() != null ? voucher.getUsedQuantity() : 0) + 1);
         }
@@ -554,7 +555,7 @@ public class GroupOrderService {
         if (groupOrder.getStatus() != GroupOrderStatus.OPEN) {
             throw new AppException(ErrorCode.VALIDATION_FAILED, "Phiên đã khóa/hủy/hết hạn, không thể thao tác");
         }
-        if (groupOrder.getJoinDeadline() != null && groupOrder.getJoinDeadline().isBefore(LocalDateTime.now())) {
+        if (groupOrder.getJoinDeadline() != null && groupOrder.getJoinDeadline().isBefore(DateTimeUtils.now())) {
             throw new AppException(ErrorCode.VALIDATION_FAILED, "Phiên đã hết hạn tham gia");
         }
     }
@@ -589,7 +590,7 @@ public class GroupOrderService {
     @Transactional
     public void expireOverdueGroupOrders() {
         List<GroupOrder> overdue = groupOrderRepository
-                .findByStatusAndJoinDeadlineBefore(GroupOrderStatus.OPEN, LocalDateTime.now());
+                .findByStatusAndJoinDeadlineBefore(GroupOrderStatus.OPEN, DateTimeUtils.now());
         for (GroupOrder g : overdue) {
             g.setStatus(GroupOrderStatus.EXPIRED);
         }

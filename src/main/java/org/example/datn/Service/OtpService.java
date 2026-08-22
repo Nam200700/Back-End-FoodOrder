@@ -6,6 +6,7 @@ import org.example.datn.domain.enums.OtpPurpose;
 import org.example.datn.Exception.AppException;
 import org.example.datn.Exception.ErrorCode;
 import org.example.datn.Repository.OtpRepository;
+import org.example.datn.util.DateTimeUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,7 +38,7 @@ public class OtpService {
         otpRepository.findFirstByRecipientAndPurposeOrderByCreatedAtDesc(phone, purpose).ifPresent(latest -> {
             if (latest.getFailCount() >= maxFailAttempts && latest.getCreatedAt() != null) {
                 LocalDateTime lockUntil = latest.getCreatedAt().plusMinutes(lockoutMinutes);
-                if (LocalDateTime.now().isBefore(lockUntil)) {
+                if (DateTimeUtils.now().isBefore(lockUntil)) {
                     throw AppException.otpLocked(lockUntil);
                 }
             }
@@ -46,7 +47,7 @@ public class OtpService {
         // Trần số mã mỗi ngày cho một người nhận — chống rút cạn tài khoản SMS.
         // Xem giải thích đầy đủ ở AuthService.generateAndStoreOtp.
         long issuedToday = otpRepository.countByRecipientAndCreatedAtAfter(
-                phone, LocalDateTime.now().toLocalDate().atStartOfDay());
+                phone, DateTimeUtils.now().toLocalDate().atStartOfDay());
         if (issuedToday >= maxPerRecipientPerDay) {
             throw new AppException(ErrorCode.OTP_QUOTA_EXCEEDED);
         }
@@ -58,7 +59,7 @@ public class OtpService {
                 .recipient(phone)
                 .code(code)
                 .purpose(purpose)
-                .expiredAt(LocalDateTime.now().plusMinutes(ttlMinutes))
+                .expiredAt(DateTimeUtils.now().plusMinutes(ttlMinutes))
                 .failCount(0)
                 .isUsed(false)
                 .build());
@@ -78,12 +79,12 @@ public class OtpService {
 
         if (otp.getFailCount() >= maxFailAttempts) {
             LocalDateTime lockUntil = otp.getCreatedAt().plusMinutes(lockoutMinutes);
-            if (LocalDateTime.now().isBefore(lockUntil)) {
+            if (DateTimeUtils.now().isBefore(lockUntil)) {
                 throw AppException.otpLocked(lockUntil);
             }
         }
 
-        if (otp.getExpiredAt().isBefore(LocalDateTime.now())) {
+        if (otp.getExpiredAt().isBefore(DateTimeUtils.now())) {
             throw new AppException(ErrorCode.OTP_EXPIRED);
         }
         if (!otp.getCode().equals(code)) {

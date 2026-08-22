@@ -3,6 +3,8 @@ spring:
     name: DATN
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
+  jackson:
+    time-zone: Asia/Ho_Chi_Minh
   jpa:
     open-in-view: false
     properties:

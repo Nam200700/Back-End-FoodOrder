@@ -18,6 +18,7 @@ import org.example.datn.DTO.request.auth.ReviewRegisterRequest;
 import org.example.datn.Exception.ErrorCode;
 import org.example.datn.mapper.OrderMapper;
 import org.example.datn.mapper.UserMapper;
+import org.example.datn.util.DateTimeUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -122,7 +123,7 @@ public class AdminService {
         User user = userRepository.findByIdOrThrow(userId, ErrorCode.USER_NOT_FOUND);
         user.setStatus(active);
         if (!active) {
-            user.setLockedAt(LocalDateTime.now());
+            user.setLockedAt(DateTimeUtils.now());
             user.setLockedReason(lockedReason != null && !lockedReason.trim().isEmpty()
                     ? lockedReason
                     : "Tài khoản bị khóa bởi quản trị viên");
@@ -154,7 +155,7 @@ public class AdminService {
         RegisterStatus status = RegisterStatus.valueOf(req.getStatus().toUpperCase());
         register.setStatus(status);
         register.setReviewedBy(admin);
-        register.setReviewedAt(LocalDateTime.now());
+        register.setReviewedAt(DateTimeUtils.now());
 
         if (status == RegisterStatus.APPROVED) {
             register.setRejectedReason(null);
@@ -217,7 +218,7 @@ public class AdminService {
         RegisterStatus status = RegisterStatus.valueOf(req.getStatus().toUpperCase());
         register.setStatus(status);
         register.setReviewedBy(admin);
-        register.setReviewedAt(LocalDateTime.now());
+        register.setReviewedAt(DateTimeUtils.now());
 
         if (status == RegisterStatus.APPROVED) {
             register.setRejectedReason(null);

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Data;
 import org.example.datn.Exception.ErrorCode;
+import org.example.datn.util.DateTimeUtils;
 
 import java.time.LocalDateTime;
 
@@ -23,7 +24,7 @@ public class ApiResponse<T> {
     private String errorCode;
 
     @Builder.Default
-    private LocalDateTime timestamp = LocalDateTime.now();
+    private LocalDateTime timestamp = DateTimeUtils.now();
 
     public static <T> ApiResponse<T> ok(T data) {
         return ApiResponse.<T>builder().success(true).data(data).build();

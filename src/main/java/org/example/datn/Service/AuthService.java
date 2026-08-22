@@ -30,6 +30,7 @@ import java.time.LocalDateTime;
 import org.example.datn.Service.SmsService;
 import org.example.datn.Service.EmailService;
 import org.example.datn.security.JwtTokenProvider;
+import org.example.datn.util.DateTimeUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -166,12 +167,12 @@ public class AuthService {
 
         if (otp.getFailCount() >= maxFailAttempts) {
             java.time.LocalDateTime lockUntil = otp.getCreatedAt().plusMinutes(lockoutMinutes);
-            if (java.time.LocalDateTime.now().isBefore(lockUntil)) {
+            if (DateTimeUtils.now().isBefore(lockUntil)) {
                 throw AppException.otpLocked(lockUntil);
             }
         }
 
-        if (otp.getExpiredAt().isBefore(java.time.LocalDateTime.now())) {
+        if (otp.getExpiredAt().isBefore(DateTimeUtils.now())) {
             throw new AppException(ErrorCode.OTP_EXPIRED, "Mã OTP đã hết hạn!");
         }
 
@@ -212,12 +213,12 @@ public class AuthService {
         otpRepository.findFirstByRecipientAndPurposeOrderByCreatedAtDesc(email, org.example.datn.domain.enums.OtpPurpose.REGISTER).ifPresent(latest -> {
             if (latest.getFailCount() >= maxFailAttempts && latest.getCreatedAt() != null) {
                 java.time.LocalDateTime lockUntil = latest.getCreatedAt().plusMinutes(lockoutMinutes);
-                if (java.time.LocalDateTime.now().isBefore(lockUntil)) {
+                if (DateTimeUtils.now().isBefore(lockUntil)) {
                     throw AppException.otpLocked(lockUntil);
                 }
             }
             // Chống spam OTP (gửi lại cách nhau tối thiểu 60s)
-            if (latest.getCreatedAt() != null && latest.getCreatedAt().plusSeconds(60).isAfter(java.time.LocalDateTime.now())) {
+            if (latest.getCreatedAt() != null && latest.getCreatedAt().plusSeconds(60).isAfter(DateTimeUtils.now())) {
                 throw new AppException(ErrorCode.VALIDATION_FAILED, "Vui lòng đợi 60 giây trước khi yêu cầu mã OTP mới!");
             }
         });
@@ -305,7 +306,7 @@ public class AuthService {
         // đổi IP là lách được. Từ khi OTP gửi qua SMS (mỗi tin tốn tiền thật), thiếu chốt này
         // thì một người rảnh rỗi có thể rút cạn tài khoản SMS — kiểu tấn công "SMS pumping".
         long issuedToday = otpRepository.countByRecipientAndCreatedAtAfter(
-                target, LocalDateTime.now().toLocalDate().atStartOfDay());
+                target, DateTimeUtils.now().toLocalDate().atStartOfDay());
         if (issuedToday >= maxPerRecipientPerDay) {
             throw new AppException(ErrorCode.OTP_QUOTA_EXCEEDED);
         }
@@ -321,7 +322,7 @@ public class AuthService {
                 .recipient(target)
                 .code(code)
                 .purpose(purpose)
-                .expiredAt(LocalDateTime.now().plusMinutes(5))
+                .expiredAt(DateTimeUtils.now().plusMinutes(5))
                 .failCount(0)
                 .isUsed(false)
                 .build());
@@ -342,12 +343,12 @@ public class AuthService {
         otpRepository.findFirstByRecipientAndPurposeOrderByCreatedAtDesc(phoneOrEmail, org.example.datn.domain.enums.OtpPurpose.RESET_PASSWORD).ifPresent(latest -> {
             if (latest.getFailCount() >= maxFailAttempts && latest.getCreatedAt() != null) {
                 java.time.LocalDateTime lockUntil = latest.getCreatedAt().plusMinutes(lockoutMinutes);
-                if (java.time.LocalDateTime.now().isBefore(lockUntil)) {
+                if (DateTimeUtils.now().isBefore(lockUntil)) {
                     throw AppException.otpLocked(lockUntil);
                 }
             }
             // Chống spam OTP (gửi lại cách nhau tối thiểu 60s)
-            if (latest.getCreatedAt() != null && latest.getCreatedAt().plusSeconds(60).isAfter(java.time.LocalDateTime.now())) {
+            if (latest.getCreatedAt() != null && latest.getCreatedAt().plusSeconds(60).isAfter(DateTimeUtils.now())) {
                 throw new AppException(ErrorCode.VALIDATION_FAILED, "Vui lòng đợi 60 giây trước khi yêu cầu mã OTP mới!");
             }
         });
@@ -376,12 +377,14 @@ public class AuthService {
 
         if (otp.getFailCount() >= maxFailAttempts) {
             java.time.LocalDateTime lockUntil = otp.getCreatedAt().plusMinutes(lockoutMinutes);
-            if (java.time.LocalDateTime.now().isBefore(lockUntil)) {
+            if (DateTimeUtils.now().isBefore(lockUntil)) {
                 throw AppException.otpLocked(lockUntil);
             }
         }
 
-        if (otp.getExpiredAt().isBefore(java.time.LocalDateTime.now())) {
+
+
+        if (otp.getExpiredAt().isBefore(DateTimeUtils.now())) {
             throw new AppException(ErrorCode.OTP_EXPIRED, "Mã OTP đã hết hạn!");
         }
 

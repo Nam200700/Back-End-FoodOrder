@@ -20,6 +20,7 @@ import org.example.datn.Repository.ReviewRepository;
 import org.example.datn.Repository.UserRepository;
 import org.example.datn.Repository.ShipperRepository;
 import org.example.datn.Repository.RestaurantRepository;
+import org.example.datn.util.DateTimeUtils;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
@@ -86,7 +87,7 @@ public class ReviewService {
             throw new AppException(ErrorCode.REVIEW_NOT_ALLOWED, "Chỉ đánh giá đơn đã hoàn thành");
         }
         if (order.getCompletedAt() != null
-                && order.getCompletedAt().plusDays(REVIEW_WINDOW_DAYS).isBefore(LocalDateTime.now())) {
+                && order.getCompletedAt().plusDays(REVIEW_WINDOW_DAYS).isBefore(DateTimeUtils.now())) {
             throw new AppException(ErrorCode.REVIEW_NOT_ALLOWED, "Đã quá ngày để đánh giá");
         }
         if (reviewRepository.existsByOrderOrderId(req.getOrderId())) {
@@ -148,7 +149,7 @@ public class ReviewService {
             throw new AppException(ErrorCode.FORBIDDEN);
         }
         review.setMerchantReply(reply);
-        review.setRepliedAt(LocalDateTime.now());
+        review.setRepliedAt(DateTimeUtils.now());
         return reviewMapper.toResponse(reviewRepository.save(review));
     }
 
@@ -212,7 +213,7 @@ public class ReviewService {
         double sum = 0;
         long positive = 0, recentCount = 0;
         double recentSum = 0;
-        LocalDateTime since30 = LocalDateTime.now().minusDays(30);
+        LocalDateTime since30 = DateTimeUtils.now().minusDays(30);
 
         Map<String, Long> goodCount = new HashMap<>(), badCount = new HashMap<>();
         Map<String, String> goodText = new HashMap<>(), badText = new HashMap<>();
@@ -281,7 +282,7 @@ public class ReviewService {
         double sum = 0;
         long positive = 0, recentCount = 0;
         double recentSum = 0;
-        LocalDateTime since30 = LocalDateTime.now().minusDays(30);
+        LocalDateTime since30 = DateTimeUtils.now().minusDays(30);
 
         Map<String, Long> goodCount = new HashMap<>(), badCount = new HashMap<>();
         Map<String, String> goodText = new HashMap<>(), badText = new HashMap<>();
