@@ -20,6 +20,7 @@ import org.example.datn.domain.enums.Role;
 import org.example.datn.domain.enums.VoucherIssueType;
 import org.example.datn.mapper.OrderMapper;
 import org.example.datn.security.OwnershipGuard;
+import org.example.datn.util.DateTimeUtils;
 import org.example.datn.util.ShippingFeeCalculator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -87,7 +88,7 @@ public class OrderService {
 
     @Scheduled(fixedRate = 30000)
     public void autoCancelExpiredPendingOrders() {
-        LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(pendingTimeoutMinutes);
+        LocalDateTime cutoffTime = DateTimeUtils.now().minusMinutes(pendingTimeoutMinutes);
         List<Order> expiredOrders = orderRepository.findByOrderStatusAndCreatedAtBefore(OrderStatus.PENDING, cutoffTime);
 
         if (expiredOrders.isEmpty()) {
@@ -121,13 +122,13 @@ public class OrderService {
 
         // 2. Phát Voucher đền bù cho khách hàng
         if (compensationVoucher != null && customer != null) {
-            LocalDateTime expiredAt = LocalDateTime.now().plusDays(30);
+            LocalDateTime expiredAt = DateTimeUtils.now().plusDays(30);
 
             UserVoucher userVoucher = UserVoucher.builder()
                     .user(customer)
                     .voucher(compensationVoucher)
                     .used(false)
-                    .receivedAt(LocalDateTime.now())
+                    .receivedAt(DateTimeUtils.now())
                     .expiredAt(expiredAt)
                     .build();
             userVoucherRepository.save(userVoucher);
@@ -186,7 +187,7 @@ public class OrderService {
 
             if (userVoucher != null) {
                 userVoucher.setUsed(true);
-                userVoucher.setUsedAt(LocalDateTime.now());
+                userVoucher.setUsedAt(DateTimeUtils.now());
                 vouchersToUpdate.add(userVoucher);
 
                 Voucher voucher = userVoucher.getVoucher();
@@ -288,7 +289,7 @@ public class OrderService {
         if (Boolean.TRUE.equals(userVoucher.getUsed())) {
             throw new AppException(ErrorCode.VOUCHER_ALREADY_USED);
         }
-        if (userVoucher.getExpiredAt() != null && userVoucher.getExpiredAt().isBefore(LocalDateTime.now())) {
+        if (userVoucher.getExpiredAt() != null && userVoucher.getExpiredAt().isBefore(DateTimeUtils.now())) {
             throw new AppException(ErrorCode.VOUCHER_EXPIRED);
         }
         return userVoucher;
@@ -575,7 +576,7 @@ public class OrderService {
         Order order = getOrderForMerchant(merchantId, orderId);
         validateTransition(order.getOrderStatus(), CONFIRMED);
         order.setOrderStatus(CONFIRMED);
-        order.setConfirmedAt(LocalDateTime.now());
+        order.setConfirmedAt(DateTimeUtils.now());
         orderRepository.save(order);
 
         notificationService.notifyUser(order.getCustomer().getUserId(),
@@ -620,7 +621,7 @@ public class OrderService {
         Order order = getOrderForMerchant(merchantId, orderId);
         validateTransition(order.getOrderStatus(), PREPARING);
         order.setOrderStatus(PREPARING);
-        order.setPreparingAt(LocalDateTime.now());
+        order.setPreparingAt(DateTimeUtils.now());
         orderRepository.save(order);
 
         notificationService.notifyUser(order.getCustomer().getUserId(),
@@ -638,7 +639,7 @@ public class OrderService {
         validateTransition(order.getOrderStatus(), READY_FOR_PICKUP);
 
         order.setOrderStatus(READY_FOR_PICKUP);
-        order.setReadyAt(LocalDateTime.now());
+        order.setReadyAt(DateTimeUtils.now());
         orderRepository.save(order);
 
         // Nếu đã có Shipper nhận đơn từ trước thì thông báo riêng cho Shipper đó
@@ -721,7 +722,7 @@ public class OrderService {
 
         validateTransition(order.getOrderStatus(), PICKED_UP);
         order.setOrderStatus(PICKED_UP);
-        order.setPickedUpAt(LocalDateTime.now());
+        order.setPickedUpAt(DateTimeUtils.now());
         orderRepository.save(order);
         webSocketService.broadcastOrderStatus(order);
         return enrichOne(order, orderMapper.toResponse(order));
@@ -744,7 +745,7 @@ public class OrderService {
         Order order = getOrderForShipper(shipperId, orderId);
         validateTransition(order.getOrderStatus(), COMPLETED);
         order.setOrderStatus(COMPLETED);
-        order.setCompletedAt(LocalDateTime.now());
+        order.setCompletedAt(DateTimeUtils.now());
         order.setPaymentStatus(PaymentStatus.PAID);
         orderRepository.save(order);
 
@@ -849,8 +850,8 @@ public class OrderService {
                         .user(customer)
                         .voucher(v)
                         .used(false)
-                        .receivedAt(LocalDateTime.now())
-                        .expiredAt(LocalDateTime.now().plusDays(30))
+                        .receivedAt(DateTimeUtils.now())
+                        .expiredAt(DateTimeUtils.now().plusDays(30))
                         .build());
             }
         });
