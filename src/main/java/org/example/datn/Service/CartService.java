@@ -30,6 +30,8 @@ public class CartService {
     private final UserRepository userRepository;
     private final CartMapper cartMapper;
 
+    private static final int MAX_QUANTITY_PER_ITEM = 20;
+
     @Transactional(readOnly = true)
     public List<CartResponse> getCart(Long customerId) {
         return cartRepository.findByCustomerUserIdOrderByCreatedAtDesc(customerId).stream()
@@ -43,6 +45,11 @@ public class CartService {
                 req.getFoodId(),
                 ErrorCode.FOOD_NOT_FOUND
         );
+
+        if (req.getQuantity() > MAX_QUANTITY_PER_ITEM) {
+            throw new AppException(ErrorCode.CART_ITEM_QUANTITY_EXCEEDED);
+        }
+
         Restaurant restaurant = food.getRestaurant();
         Cart cart = cartRepository.findByCustomerUserIdAndRestaurantRestaurantId(customerId, restaurant.getRestaurantId())
                 .orElseGet(() -> Cart.builder()
@@ -150,20 +157,17 @@ public class CartService {
     }
 
     @Transactional
-    public CartResponse updateItemQuantity(
-            Long customerId,
-            Long cartItemId,
-            UpdateCartItemQuantityRequest req
-    ) {
-        CartItem item = cartItemRepository.findByIdOrThrow(
-                cartItemId,
-                ErrorCode.CART_ITEM_NOT_FOUND
-        );
+    public CartResponse updateItemQuantity(Long customerId, Long cartItemId, UpdateCartItemQuantityRequest req) {
+        CartItem item = cartItemRepository.findByIdOrThrow(cartItemId, ErrorCode.CART_ITEM_NOT_FOUND);
 
         Cart cart = item.getCart();
 
         if (!cart.getCustomer().getUserId().equals(customerId)) {
             throw new AppException(ErrorCode.CART_ITEM_NOT_FOUND);
+        }
+
+        if (req.getQuantity() > MAX_QUANTITY_PER_ITEM) {
+            throw new AppException(ErrorCode.CART_ITEM_QUANTITY_EXCEEDED);
         }
 
         // quantity = 0 → xóa món
