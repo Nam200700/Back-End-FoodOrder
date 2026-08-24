@@ -38,6 +38,7 @@ public enum ErrorCode {
     CART_ITEM_NOT_FOUND(404, "Không tìm thấy món trong giỏ"),
     CART_NOT_FOUND(404, "không tìm thấy giỏ hàng"),
     CART_ITEM_ALREADY_EXISTS(409, "Món đã tồn tại trong giỏ hàng"),
+    CART_ITEM_QUANTITY_EXCEEDED(422, "Số lượng mỗi món tối đa là 20"),
 
     // Order
     ORDER_NOT_FOUND(404, "Không tìm thấy đơn hàng"),
