@@ -35,8 +35,10 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
     @Value("${app.oauth2.redirect-uri}")
     private String redirectUri;
 
-    @Value("${app.auth.cookie.secure:false}")
-    private boolean cookieSecure;
+    // "auto" (mặc định) = suy từ giao thức thật của request; true/false = ép cứng.
+    // Xem AuthController#resolveCookieSecure — cùng quy tắc, giữ đồng bộ hai luồng đăng nhập.
+    @Value("${app.auth.cookie.secure:auto}")
+    private String cookieSecureMode;
 
     @Value("${app.auth.cookie.same-site:Lax}")
     private String cookieSameSite;
@@ -61,6 +63,8 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         // Đồng bộ với luồng login thường: refresh token đi trong cookie HttpOnly, KHÔNG
         // nhét vào URL (tránh lộ token qua lịch sử trình duyệt / referer). URL chỉ mang
         // access token sống ngắn cho FE nạp vào bộ nhớ.
+        boolean cookieSecure = "true".equalsIgnoreCase(cookieSecureMode)
+                || (!"false".equalsIgnoreCase(cookieSecureMode) && request.isSecure());
         ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken)
                 .httpOnly(true)
                 .secure(cookieSecure)
