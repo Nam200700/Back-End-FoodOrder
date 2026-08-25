@@ -86,7 +86,6 @@ public class OrderService {
     @Value("${app.order.pending-timeout-minutes:5}")
     private int pendingTimeoutMinutes;
 
-    @Scheduled(fixedRate = 30000)
     public void autoCancelExpiredPendingOrders() {
         LocalDateTime cutoffTime = DateTimeUtils.now().minusMinutes(pendingTimeoutMinutes);
         List<Order> expiredOrders = orderRepository.findByOrderStatusAndCreatedAtBefore(OrderStatus.PENDING, cutoffTime);
