@@ -11,6 +11,34 @@ spring:
     properties:
       hibernate.format_sql: true
 
+# ─────────────────────────────────────────────────────────────────────────────────────
+#  Kéo các URL từ tên miền thật (mặc định ở application.yaml) về máy cá nhân.
+#
+#  Chỉ profile dev mới ghi đè, nên bản deploy quên khai gì cũng vẫn dùng cấu hình thật.
+#  Đây là chủ đích: hỏng ở máy dev thì mình thấy ngay trong lúc code, còn hỏng trên bản
+#  deploy thì phải chờ người dùng báo mới biết.
+# ─────────────────────────────────────────────────────────────────────────────────────
+app:
+  frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+
+  oauth2:
+    redirect-uri: ${OAUTH2_REDIRECT_URI:http://localhost:5173/oauth2/callback}
+
+  auth:
+    cookie:
+      # Vẫn để auto: máy dev chạy http nên request.isSecure() = false -> cookie không gắn
+      # cờ Secure, đăng nhập ở localhost hoạt động bình thường. Không cần khai riêng.
+      secure: ${AUTH_COOKIE_SECURE:auto}
+
+  cors:
+    # Cổng 5173 là Vite dev server. Thêm 127.0.0.1 vì trình duyệt coi đây là origin khác
+    # với localhost, gõ nhầm một trong hai là dính 403.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+
+  vnpay:
+    return-url: ${VNPAY_RETURN_URL:http://localhost:5173/payment/result}
+    ipn-url: ${VNPAY_IPN_URL:http://localhost:8080/api/v1/payments/vnpay/ipn}
+
 logging:
   level:
     org.example.datn: DEBUG

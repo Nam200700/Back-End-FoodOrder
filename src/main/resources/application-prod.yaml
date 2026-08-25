@@ -1,3 +1,8 @@
+# Profile prod chỉ còn phần phụ thuộc hạ tầng của máy chủ.
+#
+# Các URL và CORS của tên miền thật KHÔNG nằm ở đây mà là giá trị mặc định trong
+# application.yaml — chủ đích, để bản deploy quên bật SPRING_PROFILES_ACTIVE=prod thì
+# vẫn chạy đúng cấu hình thật. Lặp lại ở cả hai nơi thì sớm muộn cũng lệch nhau.
 spring:
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:fresh_delivery}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Ho_Chi_Minh

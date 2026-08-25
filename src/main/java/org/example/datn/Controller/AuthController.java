@@ -1,5 +1,6 @@
 package org.example.datn.Controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -43,9 +44,20 @@ public class AuthController {
     private static final String REFRESH_COOKIE = "refreshToken";
     private static final String REFRESH_COOKIE_PATH = "/api/v1/auth";
 
-    // Bật secure=true ở production (HTTPS). Dev localhost để false vì chạy http.
-    @Value("${app.auth.cookie.secure:false}")
-    private boolean cookieSecure;
+    /*
+     * Cờ Secure của cookie refresh token. Ba giá trị:
+     *   auto  (mặc định) — tự suy từ giao thức thật của request đang xử lý
+     *   true / false     — ép cứng, dùng khi cần đè lên phán đoán tự động
+     *
+     * Vì sao mặc định là "auto": nếu để một hằng số trong file cấu hình thì chỉ cần quên
+     * khai một biến môi trường lúc deploy là cookie chạy sai — mà kiểu sai này rất khó
+     * thấy. Đặt nhầm false trên HTTPS thì mọi thứ vẫn chạy bình thường, chỉ là cookie
+     * không còn được bảo vệ. Đặt nhầm true trên HTTP thì trình duyệt lặng lẽ vứt cookie
+     * và người dùng bị đăng xuất sau mỗi lần tải lại trang, không có lỗi nào được ném ra.
+     * Suy từ chính request thì không có gì để quên: chạy HTTPS là bật, chạy HTTP là tắt.
+     */
+    @Value("${app.auth.cookie.secure:auto}")
+    private String cookieSecureMode;
 
     // Lax hợp lệ cho FE/BE cùng site (localhost khác port vẫn same-site). Cross-domain
     // thật thì đặt None (bắt buộc kèm secure=true).
@@ -64,9 +76,10 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest req,
+                                                           HttpServletRequest request,
                                                            HttpServletResponse response) {
         AuthResponse auth = authService.login(req);
-        setRefreshCookie(response, auth.getRefreshToken());
+        setRefreshCookie(request, response, auth.getRefreshToken());
         auth.setRefreshToken(null); // không lộ refresh token cho JS
         return ResponseEntity.ok(ApiResponse.ok(auth, "Đăng nhập thành công"));
     }
@@ -83,9 +96,10 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<ApiResponse<Void>> logout(HttpServletResponse response) {
+    public ResponseEntity<ApiResponse<Void>> logout(HttpServletRequest request,
+                                                   HttpServletResponse response) {
         // Xoá cookie refresh token phía trình duyệt (maxAge=0).
-        clearRefreshCookie(response);
+        clearRefreshCookie(request, response);
         return ResponseEntity.ok(ApiResponse.ok(null, "Đăng xuất thành công"));
     }
 
@@ -106,12 +120,13 @@ public class AuthController {
     @PostMapping("/verify-otp")
     public ResponseEntity<ApiResponse<AuthResponse>> verifyRegisterOtp(
             @RequestBody java.util.Map<String, String> req,
+            HttpServletRequest request,
             HttpServletResponse response) {
         String email = req.get("email");
         String code = req.get("otp");
         AuthResponse res = authService.verifyRegisterOtp(email, code);
         // Verify OTP thành công = cấp token -> đặt refresh cookie như login.
-        setRefreshCookie(response, res.getRefreshToken());
+        setRefreshCookie(request, response, res.getRefreshToken());
         res.setRefreshToken(null);
         return ResponseEntity.ok(ApiResponse.ok(res, "Xác thực OTP thành công!"));
     }
@@ -179,20 +194,35 @@ public class AuthController {
     @PostMapping("/qr/exchange")
     public ResponseEntity<ApiResponse<AuthResponse>> qrExchange(
             @RequestBody Map<String, String> req,
+            HttpServletRequest request,
             HttpServletResponse response) {
         Long userId = qrLoginService.exchange(req.get("sid"), req.get("secret"));
         AuthResponse auth = authService.issueTokensForUserId(userId);
-        setRefreshCookie(response, auth.getRefreshToken());
+        setRefreshCookie(request, response, auth.getRefreshToken());
         auth.setRefreshToken(null);
         return ResponseEntity.ok(ApiResponse.ok(auth, "Đăng nhập thành công"));
     }
 
     // ─── Cookie helpers ────────────────────────────────────────────────────────
-    private void setRefreshCookie(HttpServletResponse response, String refreshToken) {
+
+    /**
+     * Quyết định cờ Secure cho cookie, dựa trên request đang xử lý khi ở chế độ "auto".
+     *
+     * <p>{@code request.isSecure()} trả về đúng cả khi ứng dụng đứng sau nginx, với điều
+     * kiện đã bật {@code server.forward-headers-strategy} để Spring đọc header
+     * {@code X-Forwarded-Proto} do nginx gửi kèm.
+     */
+    private boolean resolveCookieSecure(HttpServletRequest request) {
+        if ("true".equalsIgnoreCase(cookieSecureMode)) return true;
+        if ("false".equalsIgnoreCase(cookieSecureMode)) return false;
+        return request != null && request.isSecure();
+    }
+
+    private void setRefreshCookie(HttpServletRequest request, HttpServletResponse response, String refreshToken) {
         if (refreshToken == null) return;
         ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE, refreshToken)
                 .httpOnly(true)
-                .secure(cookieSecure)
+                .secure(resolveCookieSecure(request))
                 .sameSite(cookieSameSite)
                 .path(REFRESH_COOKIE_PATH)
                 .maxAge(Duration.ofMillis(refreshTokenExpiry))
@@ -200,10 +230,12 @@ public class AuthController {
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     }
 
-    private void clearRefreshCookie(HttpServletResponse response) {
+    private void clearRefreshCookie(HttpServletRequest request, HttpServletResponse response) {
+        // Cờ Secure phải khớp với lúc đặt, nếu không trình duyệt coi là cookie khác và
+        // không xoá — người dùng bấm đăng xuất mà phiên vẫn còn.
         ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE, "")
                 .httpOnly(true)
-                .secure(cookieSecure)
+                .secure(resolveCookieSecure(request))
                 .sameSite(cookieSameSite)
                 .path(REFRESH_COOKIE_PATH)
                 .maxAge(0)
