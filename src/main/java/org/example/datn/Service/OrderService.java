@@ -398,8 +398,9 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
-    public Page<OrderResponse> getCustomerOrders(Long customerId, OrderStatus status, String keyword, Pageable pageable) {
-        Page<Order> orderPage = orderRepository.searchCustomerOrders(customerId, status, keyword, pageable);
+    public Page<OrderResponse> getCustomerOrders(Long customerId, OrderStatus status, String keyword,
+                                                 LocalDateTime fromDate, LocalDateTime toDate, Pageable pageable) {
+        Page<Order> orderPage = orderRepository.searchCustomerOrders(customerId, status, keyword, fromDate, toDate, pageable);
         return new PageImpl<>(enrichPage(orderPage.getContent()), orderPage.getPageable(), orderPage.getTotalElements());
     }
 
@@ -527,10 +528,11 @@ public class OrderService {
 
     // ─── Merchant ────────────────────────────────────────────
     @Transactional(readOnly = true)
-    public Page<OrderResponse> getMerchantOrders(Long merchantId, Long restaurantId, OrderStatus status, String keyword, Pageable pageable) {
+    public Page<OrderResponse> getMerchantOrders(Long merchantId, Long restaurantId, OrderStatus status, String keyword,
+                                                 LocalDateTime fromDate, LocalDateTime toDate, Pageable pageable) {
         Restaurant restaurant = restaurantRepository.findByIdOrThrow(restaurantId, ErrorCode.RESTAURANT_NOT_FOUND);
         ownershipGuard.checkRestaurantOwner(restaurant, merchantId);
-        Page<Order> orderPage = orderRepository.searchMerchantOrders(restaurantId, status, keyword, pageable);
+        Page<Order> orderPage = orderRepository.searchMerchantOrders(restaurantId, status, keyword, fromDate, toDate, pageable);
         return new PageImpl<>(enrichPage(orderPage.getContent()), orderPage.getPageable(), orderPage.getTotalElements());
     }
 
