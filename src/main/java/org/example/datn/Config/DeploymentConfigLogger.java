@@ -29,8 +29,9 @@ public class DeploymentConfigLogger {
     @Value("${app.cors.allowed-origins}")
     private List<String> allowedOrigins;
 
+    // Kiểu String chứ không phải boolean: giá trị mặc định là "auto" (suy từ request).
     @Value("${app.auth.cookie.secure}")
-    private boolean cookieSecure;
+    private String cookieSecureMode;
 
     @Value("${app.auth.cookie.same-site}")
     private String cookieSameSite;
@@ -47,28 +48,37 @@ public class DeploymentConfigLogger {
         String[] profiles = environment.getActiveProfiles();
         String profileList = profiles.length == 0 ? "(không có — đang dùng default)" : String.join(", ", profiles);
 
+        String cookieSecureDesc = "auto".equalsIgnoreCase(cookieSecureMode)
+                ? "auto (bật khi request đi qua HTTPS)"
+                : cookieSecureMode + " (ép cứng)";
+
         log.info("──────── CẤU HÌNH TRIỂN KHAI ĐANG ÁP DỤNG ────────");
         log.info("  Profile         : {}", profileList);
         log.info("  CORS origins    : {}", allowedOrigins);
-        log.info("  Cookie secure   : {}", cookieSecure);
+        log.info("  Cookie secure   : {}", cookieSecureDesc);
         log.info("  Cookie SameSite : {}", cookieSameSite);
         log.info("  Frontend URL    : {}", frontendBaseUrl);
 
         // Cảnh báo các tổ hợp chắc chắn hỏng khi chạy thật, để không phải chờ người dùng báo lỗi.
         boolean localhostOrigin = allowedOrigins.stream().anyMatch(o -> o.contains("localhost"));
         boolean httpsOrigin = allowedOrigins.stream().anyMatch(o -> o.startsWith("https://"));
+        boolean forcedInsecure = "false".equalsIgnoreCase(cookieSecureMode);
 
-        if (httpsOrigin && !cookieSecure) {
-            log.warn("  [!] CORS cho phép origin HTTPS nhưng cookie secure=false — trình duyệt "
-                    + "có thể bỏ qua cookie refresh token. Đặt AUTH_COOKIE_SECURE=true.");
+        if (httpsOrigin && forcedInsecure) {
+            log.warn("  [!] CORS cho phép origin HTTPS nhưng cookie secure bị ép false — cookie "
+                    + "refresh token sẽ không được bảo vệ. Bỏ AUTH_COOKIE_SECURE để dùng auto.");
         }
-        if ("None".equalsIgnoreCase(cookieSameSite) && !cookieSecure) {
+        if ("None".equalsIgnoreCase(cookieSameSite) && forcedInsecure) {
             log.warn("  [!] SameSite=None bắt buộc phải đi kèm secure=true, nếu không trình duyệt "
                     + "sẽ từ chối lưu cookie.");
         }
         if (localhostOrigin && httpsOrigin) {
             log.warn("  [!] Danh sách CORS lẫn cả localhost và tên miền thật — nên bỏ localhost "
                     + "khỏi cấu hình chạy thật.");
+        }
+        if (frontendBaseUrl.contains("localhost") && httpsOrigin) {
+            log.warn("  [!] Frontend URL còn trỏ localhost trong khi CORS đã là tên miền thật — "
+                    + "link mời đơn nhóm sinh ra sẽ không mở được trên máy người khác.");
         }
         log.info("──────────────────────────────────────────────────");
     }
