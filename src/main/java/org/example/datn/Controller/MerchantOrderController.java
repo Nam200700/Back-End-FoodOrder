@@ -12,10 +12,14 @@ import org.example.datn.common.PageResponse;
 import org.example.datn.domain.enums.OrderStatus;
 import org.example.datn.security.CustomUserDetails;
 import org.springframework.data.domain.Pageable;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api/v1/merchant/orders")
@@ -31,11 +35,15 @@ public class MerchantOrderController {
             @RequestParam Long restaurantId,
             @RequestParam(required = false) OrderStatus status,
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
             Pageable pageable) {
+        // toDate lấy tới hết ngày (đầu ngày hôm sau) để bao trọn ngày được chọn
+        LocalDateTime from = fromDate != null ? fromDate.atStartOfDay() : null;
+        LocalDateTime to = toDate != null ? toDate.plusDays(1).atStartOfDay() : null;
         return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(
-                orderService.getMerchantOrders(user.getUserId(), restaurantId, status, keyword, pageable))));
+                orderService.getMerchantOrders(user.getUserId(), restaurantId, status, keyword, from, to, pageable))));
     }
-
     /** Theo dõi nhẹ: đếm đơn theo trạng thái + danh sách đơn chờ rút gọn (thay việc tải cả nghìn đơn để đếm). */
     @GetMapping("/monitor")
     public ResponseEntity<ApiResponse<MerchantOrderMonitorResponse>> monitor(
