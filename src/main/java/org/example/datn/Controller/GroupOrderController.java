@@ -64,6 +64,13 @@ public class GroupOrderController {
         return ResponseEntity.ok(ApiResponse.ok(groupOrderService.joinGroupOrder(user.getUserId(), inviteCode)));
     }
 
+    @DeleteMapping("/{id}/members/{memberId}")
+    public ResponseEntity<ApiResponse<GroupOrderResponse>> kickMember(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @PathVariable Long id, @PathVariable Long memberId) {
+        return ResponseEntity.ok(ApiResponse.ok(groupOrderService.kickMember(user.getUserId(), id, memberId)));
+    }
+
     @DeleteMapping("/{id}/leave")
     public ResponseEntity<ApiResponse<Void>> leave(
             @AuthenticationPrincipal CustomUserDetails user, @PathVariable Long id) {

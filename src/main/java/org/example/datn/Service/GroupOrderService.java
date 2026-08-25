@@ -19,6 +19,7 @@ import org.example.datn.util.ShippingFeeCalculator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -146,6 +147,31 @@ public class GroupOrderService {
     }
 
     @Transactional
+    public GroupOrderResponse kickMember(Long hostUserId, Long groupOrderId, Long memberId) {
+        GroupOrder groupOrder = getOrThrowDetail(groupOrderId);
+        ensureHost(groupOrder, hostUserId);
+        ensureJoinable(groupOrder);
+
+        GroupOrderMember member = memberRepository.findById(memberId)
+                .filter(m -> m.getGroupOrder().getGroupOrderId().equals(groupOrderId))
+                .orElseThrow(() -> new AppException(ErrorCode.GROUP_ORDER_MEMBER_NOT_FOUND));
+
+        if (Boolean.TRUE.equals(member.getIsHost())) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Không thể tự loại chính mình (chủ phiên).");
+        }
+        if (member.getStatus() == GroupOrderMemberStatus.LEFT) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, "Thành viên này đã rời phiên trước đó.");
+        }
+
+        groupItemRepository.deleteByMemberMemberId(member.getMemberId());
+        member.setStatus(GroupOrderMemberStatus.LEFT);
+        member.setLeftAt(DateTimeUtils.now());
+        memberRepository.save(member);
+
+        return toResponseWithInvite(getOrThrowDetail(groupOrderId));
+    }
+
+    @Transactional
     public void leaveGroupOrder(Long userId, Long groupOrderId) {
         GroupOrder groupOrder = getOrThrow(groupOrderId);
         ensureJoinable(groupOrder);
@@ -230,19 +256,27 @@ public class GroupOrderService {
 
     @Transactional
     public GroupOrderResponse removeItem(Long userId, Long groupOrderId, Long itemId) {
-        GroupOrder groupOrder = getOrThrow(groupOrderId);
+        GroupOrder groupOrder = getOrThrowDetail(groupOrderId); // cần detail để biết host
         ensureJoinable(groupOrder);
 
-        GroupOrderMember member = memberRepository
-                .findByGroupOrderGroupOrderIdAndUserUserId(groupOrderId, userId)
-                .orElseThrow(() -> new AppException(ErrorCode.GROUP_ORDER_MEMBER_NOT_FOUND));
+        boolean isHost = groupOrder.getHost().getUserId().equals(userId);
 
-        if (member.getStatus() == GroupOrderMemberStatus.READY) {
-            throw new AppException(ErrorCode.VALIDATION_FAILED, "Bạn đã hoàn tất chọn món, không thể xóa món nữa.");
+        GroupOrderItem item = groupItemRepository
+                .findByGroupOrderItemIdAndGroupOrderGroupOrderId(itemId, groupOrderId)
+                .orElseThrow(() -> new AppException(ErrorCode.GROUP_ORDER_ITEM_NOT_FOUND));
+
+        GroupOrderMember owner = item.getMember();
+        boolean isOwnItem = owner.getUser().getUserId().equals(userId);
+
+        if (!isHost && !isOwnItem) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xóa món của thành viên khác");
         }
 
-        GroupOrderItem item = groupItemRepository.findByGroupOrderItemIdAndMemberMemberId(itemId, member.getMemberId())
-                .orElseThrow(() -> new AppException(ErrorCode.GROUP_ORDER_ITEM_NOT_FOUND));
+        // Chỉ chặn bởi trạng thái READY khi member tự xóa món của MÌNH.
+        // Host được quyền override (xóa cả khi member đã "Hoàn tất chọn món").
+        if (!isHost && owner.getStatus() == GroupOrderMemberStatus.READY) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED, "Bạn đã hoàn tất chọn món, không thể xóa món nữa.");
+        }
 
         groupItemRepository.delete(item);
         groupItemRepository.flush();
@@ -586,17 +620,16 @@ public class GroupOrderService {
         return res;
     }
 
+
+
     // ─── Job tự động hết hạn ────────────────────────────────────
     @Transactional
     public void expireOverdueGroupOrders() {
-        List<GroupOrder> overdue = groupOrderRepository
-                .findByStatusAndJoinDeadlineBefore(GroupOrderStatus.OPEN, DateTimeUtils.now());
-        for (GroupOrder g : overdue) {
-            g.setStatus(GroupOrderStatus.EXPIRED);
-        }
-        if (!overdue.isEmpty()) {
-            groupOrderRepository.saveAll(overdue);
-        }
+        List<GroupOrder> overdue = groupOrderRepository.findOverdueActiveGroupOrders(DateTimeUtils.now());
+        if (overdue.isEmpty()) return;
+
+        overdue.forEach(g -> g.setStatus(GroupOrderStatus.EXPIRED));
+        groupOrderRepository.saveAll(overdue);
     }
 
     private void updateAddressFromCustomerAddress(GroupOrder groupOrder, Long hostUserId) {
@@ -611,4 +644,5 @@ public class GroupOrderService {
         groupOrder.setDeliveryLng(defaultAddress.getLongitude());
         groupOrderRepository.save(groupOrder);
     }
+
 }

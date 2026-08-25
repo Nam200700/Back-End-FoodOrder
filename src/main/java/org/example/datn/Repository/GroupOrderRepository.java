@@ -70,4 +70,13 @@ public interface GroupOrderRepository extends BaseRepository<GroupOrder, Long> {
             """)
     List<GroupOrder> findActiveByUserAndRestaurant(@Param("userId") Long userId,
                                                    @Param("restaurantId") Long restaurantId);
+
+    @Query("""
+        SELECT g FROM GroupOrder g
+        WHERE g.status IN (org.example.datn.domain.enums.GroupOrderStatus.OPEN,
+                            org.example.datn.domain.enums.GroupOrderStatus.LOCKED)
+          AND g.joinDeadline IS NOT NULL
+          AND g.joinDeadline < :cutoff
+        """)
+    List<GroupOrder> findOverdueActiveGroupOrders(@Param("cutoff") LocalDateTime cutoff);
 }

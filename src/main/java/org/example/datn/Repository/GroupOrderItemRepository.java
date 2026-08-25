@@ -17,4 +17,6 @@ public interface GroupOrderItemRepository extends BaseRepository<GroupOrderItem,
     Optional<GroupOrderItem> findByGroupOrderItemIdAndMemberMemberId(Long itemId, Long memberId);
 
     void deleteByMemberMemberId(Long memberId);
+
+    Optional<GroupOrderItem> findByGroupOrderItemIdAndGroupOrderGroupOrderId(Long groupOrderItemId, Long groupOrderId);
 }
