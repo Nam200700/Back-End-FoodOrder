@@ -193,6 +193,7 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
                    LOWER(c.phone) LIKE LOWER(CONCAT('%', :keyword, '%')))
             AND (:status IS NULL OR o.orderStatus = :status) 
             AND (:statuses IS NULL OR o.orderStatus IN :statuses)
+            ORDER BY o.createdAt DESC
             """)
     Page<Order> searchAdminOrders(
             @Param("keyword") String keyword,
@@ -597,12 +598,16 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
                  CAST(o.orderId AS string) LIKE LOWER(CONCAT('%', :keyword, '%')) OR
                  LOWER(r.restaurantName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR
                  LOWER(oi.foodName) LIKE LOWER(CONCAT('%', :keyword, '%')))
+          AND (:fromDate IS NULL OR o.createdAt >= :fromDate)
+          AND (:toDate IS NULL OR o.createdAt < :toDate)
         ORDER BY o.createdAt DESC, o.orderId DESC
         """)
     Page<Order> searchCustomerOrders(
             @Param("customerId") Long customerId,
             @Param("status") OrderStatus status,
             @Param("keyword") String keyword,
+            @Param("fromDate") LocalDateTime fromDate,
+            @Param("toDate") LocalDateTime toDate,
             Pageable pageable
     );
 
@@ -613,17 +618,20 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
         WHERE r.restaurantId = :restaurantId
         AND (:status IS NULL
              OR o.orderStatus = :status
-             OR (:status = org.example.datn.domain.enums.OrderStatus.READY_FOR_PICKUP
-                 AND o.orderStatus = org.example.datn.domain.enums.OrderStatus.SHIPPER_ACCEPTED))
+             OR (:status = org.example.datn.domain.enums.OrderStatus.READY_FOR_PICKUP))
         AND (:keyword IS NULL OR :keyword = '' OR
                CAST(o.orderId AS string) LIKE LOWER(CONCAT('%', :keyword, '%')) OR 
                LOWER(c.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')))
+        AND (:fromDate IS NULL OR o.createdAt >= :fromDate)
+        AND (:toDate IS NULL OR o.createdAt < :toDate)
         ORDER BY o.createdAt DESC, o.orderId DESC
-        """)
+    """)
     Page<Order> searchMerchantOrders(
             @Param("restaurantId") Long restaurantId,
             @Param("status") OrderStatus status,
             @Param("keyword") String keyword,
+            @Param("fromDate") LocalDateTime fromDate,
+            @Param("toDate") LocalDateTime toDate,
             Pageable pageable
     );
 
