@@ -2,7 +2,14 @@ spring:
   application:
     name: DATN
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
+    # Mặc định là prod — mắt xích cuối của nguyên tắc "quên khai gì thì rơi vào cấu hình
+    # thật". Để mặc định dev thì mọi thứ bên dưới thành vô nghĩa: bản deploy quên biến môi
+    # trường sẽ bật profile dev, và application-dev.yaml kéo hết URL về localhost.
+    #
+    # Máy dev phải khai SPRING_PROFILES_ACTIVE=dev (đặt trong cấu hình chạy của IDE là xong).
+    # Quên thì app DỪNG NGAY vì profile prod bắt buộc có DB_USERNAME/DB_PASSWORD — hỏng ồn
+    # ào ngay trên máy mình, thay vì hỏng lặng lẽ trên bản deploy.
+    active: ${SPRING_PROFILES_ACTIVE:prod}
   jackson:
     time-zone: Asia/Ho_Chi_Minh
   jpa:
@@ -44,12 +51,29 @@ spring:
 
 server:
   port: 8080
+  # Ứng dụng luôn chạy sau nginx ở môi trường thật (nginx nhận HTTPS rồi proxy sang HTTP
+  # nội bộ). Bật cờ này để Spring đọc X-Forwarded-Proto/Host mà nginx gửi kèm, nhờ đó
+  # request.isSecure() trả về đúng và cookie tự bật cờ Secure. Ở máy dev không có proxy
+  # nên không có header nào để đọc — cờ này thành vô hại.
+  forward-headers-strategy: framework
 
+# ─────────────────────────────────────────────────────────────────────────────────────
+#  NGUYÊN TẮC: giá trị mặc định ở file này là giá trị DÙNG CHO MÔI TRƯỜNG THẬT.
+#
+#  Trước đây mặc định là localhost, nên chỉ cần quên SPRING_PROFILES_ACTIVE=prod hoặc
+#  quên một biến môi trường là bản deploy âm thầm chạy bằng cấu hình máy cá nhân: CORS
+#  chặn tên miền thật (mọi thao tác ghi trả 403 trong khi GET vẫn chạy nên rất khó đoán),
+#  link mời đơn nhóm trỏ về localhost.
+#
+#  Đảo lại: quên khai gì thì rơi vào cấu hình production, còn máy dev thì đã có
+#  application-dev.yaml ghi đè ngược về localhost. Sai sót lúc deploy vì thế không còn
+#  âm thầm nữa — cùng lắm là máy dev chạy nhầm cấu hình thật, chuyện lộ ra ngay lập tức.
+# ─────────────────────────────────────────────────────────────────────────────────────
 app:
-  frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+  frontend-base-url: ${FRONTEND_BASE_URL:https://clbdeveloper.com}
   oauth2:
     # Success handler redirects here with ?token=...&refreshToken=...
-    redirect-uri: ${OAUTH2_REDIRECT_URI:http://localhost:5173/oauth2/callback}
+    redirect-uri: ${OAUTH2_REDIRECT_URI:https://clbdeveloper.com/oauth2/callback}
   jwt:
     # Minimum 32 chars (256-bit) for HS256
     secret: ${JWT_SECRET:antigravity-food-dev-secret-key-change-me-256bit}
@@ -58,13 +82,19 @@ app:
   auth:
     cookie:
       # Refresh token đặt trong cookie HttpOnly (JS không đọc được -> chống XSS trộm token).
-      # Dev localhost chạy http nên secure=false; PROD (HTTPS) đặt AUTH_COOKIE_SECURE=true.
-      # SameSite=Lax hợp lệ khi FE/BE cùng site (localhost khác port vẫn same-site); nếu FE và
-      # BE ở hai domain khác nhau thật thì đặt AUTH_COOKIE_SAMESITE=None kèm secure=true.
-      secure: ${AUTH_COOKIE_SECURE:false}
+      #
+      # auto = tự suy từ giao thức thật của request (xem AuthController#resolveCookieSecure):
+      # chạy HTTPS thì bật cờ Secure, chạy HTTP ở máy dev thì tắt. Không phải khai gì thêm
+      # khi deploy, và cũng không thể khai sai. Vẫn ép được bằng true/false nếu cần.
+      secure: ${AUTH_COOKIE_SECURE:auto}
+      # Lax hợp lệ khi FE/BE cùng site. Chỉ khi tách backend sang tên miền khác mới cần
+      # None, và None bắt buộc đi kèm secure=true.
       same-site: ${AUTH_COOKIE_SAMESITE:Lax}
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+    # Trình duyệt LUÔN gửi header Origin với POST/PUT/PATCH/DELETE, kể cả cùng origin —
+    # thiếu tên miền ở đây là hỏng toàn bộ thao tác ghi. Khai cả dạng có www lẫn không www
+    # vì so khớp Origin là so chuỗi chính xác. localhost do application-dev.yaml thêm vào.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:https://clbdeveloper.com,https://www.clbdeveloper.com}
   shipping:
     base-fee: 15000        # VND for first 2km
     base-km: 2.0
@@ -96,8 +126,8 @@ app:
     tmn-code: ${VNPAY_TMN_CODE:}
     hash-secret: ${VNPAY_HASH_SECRET:}
     url: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
-    return-url: ${VNPAY_RETURN_URL:http://localhost:5173/payment/result}
-    ipn-url: ${VNPAY_IPN_URL:http://localhost:8080/api/v1/payments/vnpay/ipn}
+    return-url: ${VNPAY_RETURN_URL:https://clbdeveloper.com/payment/result}
+    ipn-url: ${VNPAY_IPN_URL:https://clbdeveloper.com/api/v1/payments/vnpay/ipn}
   cloudinary:
     cloud-name: ${CLOUDINARY_CLOUD_NAME:}
     api-key: ${CLOUDINARY_API_KEY:}
