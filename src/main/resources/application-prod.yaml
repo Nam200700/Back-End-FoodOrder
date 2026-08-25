@@ -1,3 +1,8 @@
+# Profile prod chỉ còn phần phụ thuộc hạ tầng của máy chủ.
+#
+# Các URL và CORS của tên miền thật KHÔNG nằm ở đây mà là giá trị mặc định trong
+# application.yaml — chủ đích, để bản deploy quên bật SPRING_PROFILES_ACTIVE=prod thì
+# vẫn chạy đúng cấu hình thật. Lặp lại ở cả hai nơi thì sớm muộn cũng lệch nhau.
 spring:
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:fresh_delivery}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Ho_Chi_Minh
@@ -8,51 +13,6 @@ spring:
     hibernate:
       ddl-auto: validate      # schema managed by migrations
     show-sql: false
-
-server:
-  # Ứng dụng chạy sau nginx (nginx nhận HTTPS rồi proxy sang HTTP nội bộ). Không bật cờ này
-  # thì Spring chỉ thấy "http" và cổng nội bộ, nên mọi URL tuyệt đối do framework sinh ra
-  # (redirect OAuth2, Location header) sẽ mang scheme http:// — trình duyệt trên trang HTTPS
-  # sẽ chặn. Bật lên để Spring đọc X-Forwarded-Proto / X-Forwarded-Host mà nginx gửi kèm.
-  forward-headers-strategy: framework
-
-app:
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Tên miền thật: https://clbdeveloper.com
-  # nginx phục vụ cả frontend (/) lẫn backend (/api/v1, /ws) trên CÙNG một origin.
-  #
-  # Tất cả vẫn để dạng ${BIEN:mặc định} nên có thể ghi đè bằng biến môi trường khi
-  # đổi tên miền, mà không cần sửa file và build lại.
-  # ─────────────────────────────────────────────────────────────────────────────
-  frontend-base-url: ${FRONTEND_BASE_URL:https://clbdeveloper.com}
-
-  oauth2:
-    redirect-uri: ${OAUTH2_REDIRECT_URI:https://clbdeveloper.com/oauth2/callback}
-
-  auth:
-    cookie:
-      # BẮT BUỘC true trên HTTPS: cờ Secure khiến trình duyệt chỉ gửi cookie refresh token
-      # qua kết nối mã hoá. Để false thì cookie vẫn đi qua HTTP nếu ai đó ép trang xuống
-      # http:// — mất luôn tác dụng chống nghe lén.
-      secure: ${AUTH_COOKIE_SECURE:true}
-      # Lax là đủ vì frontend và backend cùng origin (clbdeveloper.com). Chỉ khi tách
-      # backend sang tên miền khác mới cần None, và None bắt buộc đi kèm secure=true.
-      same-site: ${AUTH_COOKIE_SAMESITE:Lax}
-
-  cors:
-    # Trình duyệt LUÔN gửi header Origin với POST/PUT/PATCH/DELETE, kể cả khi cùng origin.
-    # Thiếu tên miền ở đây thì Spring Security trả 403 cho mọi thao tác ghi — đăng nhập,
-    # đặt đơn, cập nhật hồ sơ đều hỏng, trong khi các API đọc bằng GET vẫn chạy bình
-    # thường nên rất dễ tưởng là lỗi chỗ khác.
-    #
-    # Khai CẢ hai dạng có www và không www: cả hai tên miền đều đang phân giải về máy chủ
-    # này, mà so khớp Origin là so khớp chuỗi chính xác — người dùng gõ www rồi đăng nhập
-    # sẽ bị 403 nếu chỉ khai một dạng.
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:https://clbdeveloper.com,https://www.clbdeveloper.com}
-
-  vnpay:
-    return-url: ${VNPAY_RETURN_URL:https://clbdeveloper.com/payment/result}
-    ipn-url: ${VNPAY_IPN_URL:https://clbdeveloper.com/api/v1/payments/vnpay/ipn}
 
 logging:
   level:
