@@ -65,7 +65,6 @@ public class CustomerOrderController {
             @AuthenticationPrincipal CustomUserDetails user,
             @PathVariable Long id,
             @Valid @RequestBody CancelOrderRequest req) {
-        return ResponseEntity.ok(ApiResponse.ok(
-                orderService.cancelOrderByCustomer(user.getUserId(), id, req.getReason())));
+        return ResponseEntity.ok(ApiResponse.ok(orderService.cancelOrder(id, req, user.getUserId())));
     }
 }
