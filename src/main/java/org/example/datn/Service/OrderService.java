@@ -73,6 +73,7 @@ public class OrderService {
     private final VoucherRepository voucherRepository;
     private final VoucherService voucherService;
     private final ReputationService reputationService;
+    private final CustomerAddressRepository customerAddressRepository;
 
     private static final Map<OrderStatus, Set<OrderStatus>> VALID_TRANSITIONS = Map.of(
             PENDING, Set.of(CONFIRMED, CANCELLED),
@@ -163,24 +164,42 @@ public class OrderService {
         User customer = userRepository.getReferenceById(customerId);
         validateCustomerReputation(customer);
 
+        CustomerAddress deliveryAddress = customerAddressRepository.findById(req.getAddressId())
+                .orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_FOUND));
+        if (!deliveryAddress.getCustomer().getUserId().equals(customerId)) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Địa chỉ giao hàng không thuộc về bạn");
+        }
+        if (deliveryAddress.getLatitude() == null || deliveryAddress.getLongitude() == null) {
+            throw new AppException(ErrorCode.ADDRESS_NOT_FOUND, "Địa chỉ giao hàng chưa có toạ độ hợp lệ");
+        }
+
         List<Order> ordersToSave = new ArrayList<>();
         List<Cart> cartsToDelete = new ArrayList<>();
         List<UserVoucher> vouchersToUpdate = new ArrayList<>();
         List<Voucher> rawVouchersToUpdate = new ArrayList<>();
+        Set<Long> usedVoucherIdsInThisRequest = new java.util.HashSet<>();
 
-        // 1. Validate và chuẩn bị dữ liệu cho tất cả các quán trước (Fail-fast)
         for (Long restaurantId : req.getRestaurantId()) {
+            // 1. Kiểm tra khung giờ hoạt động của quán
+            Restaurant restaurant = restaurantRepository.findByIdOrThrow(restaurantId, ErrorCode.RESTAURANT_NOT_FOUND);
+            validateRestaurantOperatingHours(restaurant);
+
             Cart cart = cartRepository.findByCustomerAndRestaurantForUpdate(customerId, restaurantId)
                     .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
-
             if (cart.getItems().isEmpty()) {
                 throw new AppException(ErrorCode.CART_ITEM_NOT_FOUND);
             }
 
             Long userVoucherId = (req.getRestaurantVouchers() != null) ? req.getRestaurantVouchers().get(restaurantId) : null;
+
+            // Chặn 1 voucher bị dùng cho ≥2 quán trong CÙNG 1 lần đặt
+            if (userVoucherId != null && !usedVoucherIdsInThisRequest.add(userVoucherId)) {
+                throw new AppException(ErrorCode.VALIDATION_FAILED, "Mỗi voucher chỉ được áp dụng cho một quán trong đơn hàng!");
+            }
+
             UserVoucher userVoucher = validateAndGetVoucher(customerId, userVoucherId);
 
-            Order order = buildOrderEntity(customer, cart, req, userVoucher);
+            Order order = buildOrderEntity(customer, cart, restaurant, deliveryAddress, req, userVoucher);
             ordersToSave.add(order);
             cartsToDelete.add(cart);
 
@@ -198,40 +217,24 @@ public class OrderService {
         }
 
         List<Order> savedOrders = orderRepository.saveAll(ordersToSave);
-
-        // Lưu các thay đổi của Voucher
-        if (!vouchersToUpdate.isEmpty()) {
-            userVoucherRepository.saveAll(vouchersToUpdate);
-        }
-        if (!rawVouchersToUpdate.isEmpty()) {
-            voucherRepository.saveAll(rawVouchersToUpdate);
-        }
-
-        // Tạo bản ghi Payment
-        for (Order saved : savedOrders) {
-            paymentService.createForOrder(saved);
-        }
-
+        if (!vouchersToUpdate.isEmpty()) userVoucherRepository.saveAll(vouchersToUpdate);
+        if (!rawVouchersToUpdate.isEmpty()) voucherRepository.saveAll(rawVouchersToUpdate);
+        for (Order saved : savedOrders) paymentService.createForOrder(saved);
         cartRepository.deleteAll(cartsToDelete);
-
-        // 3. Gửi thông báo và WebSocket
         sendOrderNotifications(savedOrders);
-
         return savedOrders.stream().map(orderMapper::toResponse).toList();
     }
 
-    private Order buildOrderEntity(User customer, Cart cart, CreateOrderRequest req, UserVoucher userVoucher) {
-        Restaurant restaurant = cart.getRestaurant();
-
-        // 1. Kiểm tra khung giờ hoạt động của quán
-        validateRestaurantOperatingHours(restaurant);
+    private Order buildOrderEntity(User customer, Cart cart, Restaurant restaurant, CustomerAddress deliveryAddress,
+                                   CreateOrderRequest req, UserVoucher userVoucher) {
 
         Order order = Order.builder()
                 .customer(customer)
                 .restaurant(restaurant)
-                .deliveryAddress(req.getDeliveryAddress())
-                .deliveryLat(req.getDeliveryLat())
-                .deliveryLng(req.getDeliveryLng())
+                .address(deliveryAddress)
+                .deliveryAddress(deliveryAddress.getAddress())
+                .deliveryLat(deliveryAddress.getLatitude())
+                .deliveryLng(deliveryAddress.getLongitude())
                 .paymentMethod(req.getPaymentMethod())
                 .discountAmount(BigDecimal.ZERO)
                 .orderStatus(PENDING)
@@ -239,29 +242,23 @@ public class OrderService {
                 .userVoucher(userVoucher)
                 .build();
 
-        // 2. Snapshot món ăn từ giỏ hàng
         List<OrderItem> items = buildOrderItems(order, cart.getItems());
         order.getItems().addAll(items);
 
-        // 3. Tính phí giao hàng & kiểm tra khoảng cách
-        BigDecimal shippingFeeBd = calculateShippingFee(restaurant, req.getDeliveryLat(), req.getDeliveryLng());
+        BigDecimal shippingFeeBd = calculateShippingFee(restaurant, deliveryAddress.getLatitude(), deliveryAddress.getLongitude());
         order.setShippingFee(shippingFeeBd);
 
-        // 4. Tính tổng tiền món ăn (Subtotal)
         BigDecimal subtotal = items.stream()
                 .map(i -> i.getPriceAtOrder().multiply(BigDecimal.valueOf(i.getQuantity())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         order.setSubtotalAmount(subtotal);
 
-        // 5. Tính giảm giá Voucher & Tổng tiền cuối cùng
         Voucher voucher = (userVoucher != null) ? userVoucher.getVoucher() : null;
         BigDecimal discountAmount = calculateDiscountAmount(voucher, subtotal, shippingFeeBd, restaurant.getRestaurantName());
         order.setDiscountAmount(discountAmount);
 
         BigDecimal totalAmount = subtotal.add(shippingFeeBd).subtract(discountAmount);
-        if (totalAmount.compareTo(BigDecimal.ZERO) < 0) {
-            totalAmount = BigDecimal.ZERO;
-        }
+        if (totalAmount.compareTo(BigDecimal.ZERO) < 0) totalAmount = BigDecimal.ZERO;
         order.setTotalAmount(totalAmount);
 
         return order;
