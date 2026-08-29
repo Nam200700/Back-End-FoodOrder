@@ -12,15 +12,11 @@ import java.util.Map;
 @Data
 public class CreateOrderRequest {
 
-    @NotBlank(message = "Địa chỉ giao hàng không được để trống")
-    private String deliveryAddress;
+    @NotNull(message = "Vui lòng chọn địa chỉ giao hàng")
+    private Long addressId;
 
     @NotNull(message = "ID nhà hàng không được để trống")
     private List<Long> restaurantId;
-
-    private BigDecimal deliveryLat;
-
-    private BigDecimal deliveryLng;
 
     @NotNull(message = "Phương thức thanh toán không được để trống")
     private PaymentMethod paymentMethod;
