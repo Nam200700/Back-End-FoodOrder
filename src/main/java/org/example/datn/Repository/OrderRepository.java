@@ -616,9 +616,7 @@ public interface OrderRepository extends BaseRepository<Order, Long> {
         JOIN FETCH o.customer c
         JOIN FETCH o.restaurant r
         WHERE r.restaurantId = :restaurantId
-        AND (:status IS NULL
-             OR o.orderStatus = :status
-             OR (:status = org.example.datn.domain.enums.OrderStatus.READY_FOR_PICKUP))
+        AND (:status IS NULL OR o.orderStatus = :status)
         AND (:keyword IS NULL OR :keyword = '' OR
                CAST(o.orderId AS string) LIKE LOWER(CONCAT('%', :keyword, '%')) OR 
                LOWER(c.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')))
