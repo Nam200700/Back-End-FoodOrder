@@ -704,7 +704,7 @@ public class OrderService {
 
         notificationService.notifyUser(order.getCustomer().getUserId(),
                 NotificationType.SHIPPER_ASSIGNED, order.getOrderId());
-        webSocketService.broadcastOrderStatus(order);
+        broadcastOrderStatusAfterCommit(order);
         return enrichOne(order, orderMapper.toResponse(order));
     }
 
@@ -722,7 +722,7 @@ public class OrderService {
         order.setOrderStatus(PICKED_UP);
         order.setPickedUpAt(DateTimeUtils.now());
         orderRepository.save(order);
-        webSocketService.broadcastOrderStatus(order);
+        broadcastOrderStatusAfterCommit(order);
         return enrichOne(order, orderMapper.toResponse(order));
     }
 
@@ -733,7 +733,7 @@ public class OrderService {
         validateTransition(order.getOrderStatus(), DELIVERING);
         order.setOrderStatus(DELIVERING);
         orderRepository.save(order);
-        webSocketService.broadcastOrderStatus(order);
+        broadcastOrderStatusAfterCommit(order);
         return enrichOne(order, orderMapper.toResponse(order));
     }
 
@@ -836,6 +836,30 @@ public class OrderService {
     private Order loadWithItems(Long orderId) {
         return orderRepository.findByIdWithItems(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+    }
+
+    /**
+     * Phát sự kiện đổi trạng thái đơn cho {@code /topic/order/{id}} SAU KHI transaction commit.
+     * Vì sao: khách đang theo dõi đơn nhận event WS → refetch ngay /orders/{id}. Nếu broadcast
+     * TRONG transaction (trước commit), refetch chạy trước khi dữ liệu commit xong → đọc trúng
+     * trạng thái CŨ, khách phải reload mới thấy đúng. Đẩy sang afterCommit thì refetch luôn thấy
+     * trạng thái mới. Nếu gọi ngoài transaction thì broadcast luôn.
+     */
+    private void broadcastOrderStatusAfterCommit(Order order) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    try {
+                        webSocketService.broadcastOrderStatus(order);
+                    } catch (Exception e) {
+                        log.error("Lỗi broadcast trạng thái đơn {} sau commit", order.getOrderId(), e);
+                    }
+                }
+            });
+        } else {
+            webSocketService.broadcastOrderStatus(order);
+        }
     }
 
     /** Cấp voucher đền bù (loại ORDER_CANCELLED đang active) cho khách khi hủy KHÔNG do lỗi khách. */
