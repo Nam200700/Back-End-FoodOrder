@@ -50,7 +50,7 @@ spring:
   #            scope: email, profile
 
 server:
-  port: 8080
+  port: 3000
   # Ứng dụng luôn chạy sau nginx ở môi trường thật (nginx nhận HTTPS rồi proxy sang HTTP
   # nội bộ). Bật cờ này để Spring đọc X-Forwarded-Proto/Host mà nginx gửi kèm, nhờ đó
   # request.isSecure() trả về đúng và cookie tự bật cờ Secure. Ở máy dev không có proxy
